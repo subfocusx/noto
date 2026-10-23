@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"noto/backend/internal/model"
 )
@@ -23,7 +24,12 @@ func (s *Service) Delete(ctx context.Context, rel string) error {
 		return newErr(ErrInvalidPath, "a note path is required")
 	}
 	release := s.acquireLocks(lockKeys(norm))
-	defer release()
+	released := false
+	defer func() {
+		if !released {
+			release()
+		}
+	}()
 	abs, err := s.resolve(norm)
 	if err != nil {
 		return err
@@ -39,6 +45,14 @@ func (s *Service) Delete(ctx context.Context, rel string) error {
 	if err := movePath(abs, dest); err != nil {
 		return newErr(ErrInternal, "cannot move the entry to the trash")
 	}
+	// The revision of the deleted note is read before the metadata rows
+	// are dropped, so that the event can carry it.
+	var revision int64
+	var updatedAt time.Time
+	if stored, found, err := s.store.GetNote(ctx, norm); err == nil && found {
+		revision = stored.Revision
+		updatedAt = stored.UpdatedAt
+	}
 	entries, err := s.collectTrashEntries(trashID, norm)
 	if err != nil {
 		return err
@@ -50,6 +64,16 @@ func (s *Service) Delete(ctx context.Context, rel string) error {
 		_ = s.store.DeleteNote(ctx, e.originalPath)
 		s.removeFromIndex(ctx, e.originalPath)
 	}
+	// The hook runs after the entry is in the trash, the trash rows are
+	// written and the index is cleaned, and after the locks were released.
+	release()
+	released = true
+	s.fireHooks(ctx, NoteEvent{
+		Path:      norm,
+		Revision:  revision,
+		UpdatedAt: updatedAt,
+		Op:        NoteOpDeleted,
+	})
 	return nil
 }
 
@@ -144,7 +168,12 @@ func (s *Service) Restore(ctx context.Context, trashPath string) (model.Node, er
 		return model.Node{}, newErr(ErrNotFound, "the trash entry does not exist")
 	}
 	release := s.acquireLocks(lockKeys(originalRel))
-	defer release()
+	released := false
+	defer func() {
+		if !released {
+			release()
+		}
+	}()
 	dst, err := s.resolve(originalRel)
 	if err != nil {
 		return model.Node{}, err
@@ -188,7 +217,22 @@ func (s *Service) Restore(ctx context.Context, trashPath string) (model.Node, er
 	if err := s.cleanupTrashID(ctx, trashID); err != nil {
 		return model.Node{}, err
 	}
-	return s.nodeFor(ctx, originalRel)
+	node, err := s.nodeFor(ctx, originalRel)
+	if err != nil {
+		return model.Node{}, err
+	}
+	// The hook runs after the entry is back on the disk, the index and the
+	// metadata are written and the trash records are cleaned, and after the
+	// locks were released.
+	release()
+	released = true
+	s.fireHooks(ctx, NoteEvent{
+		Path:      originalRel,
+		Revision:  node.Revision,
+		UpdatedAt: node.UpdatedAt,
+		Op:        NoteOpRestored,
+	})
+	return node, nil
 }
 
 // cleanupTrashID removes the trash records of a restore operation and the

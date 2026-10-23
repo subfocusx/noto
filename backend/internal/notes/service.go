@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,6 +36,11 @@ type Service struct {
 	// note at its old location.
 	movedMu sync.Mutex
 	moved   map[string]time.Time
+
+	// hooks holds the registered note hooks. It has its own lock so that
+	// the registration never interferes with the locks of the notes tree.
+	hooksMu sync.RWMutex
+	hooks   []Hook
 }
 
 // NewService creates a service for the given configuration and store.
@@ -81,113 +85,6 @@ func (s *Service) Config() config.Config { return s.cfg }
 
 // Store returns the underlying store.
 func (s *Service) Store() port.Store { return s.store }
-
-// pathLock returns the mutex guarding a single path.
-func (s *Service) pathLock(rel string) *sync.Mutex {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	m, ok := s.locks[rel]
-	if !ok {
-		m = &sync.Mutex{}
-		s.locks[rel] = m
-	}
-	return m
-}
-
-// lockKeys returns the hierarchical lock keys of a path: the ancestor
-// folders of the path (the root of the subtree first) and the path itself.
-//
-// Locking the whole chain of a path makes a write inside a folder and a
-// rename or move of that folder mutually exclusive.
-func lockKeys(rel string) []string {
-	if rel == "" {
-		return nil
-	}
-	segments := strings.Split(rel, "/")
-	keys := make([]string, 0, len(segments))
-	for i := 1; i < len(segments); i++ {
-		keys = append(keys, strings.Join(segments[:i], "/"))
-	}
-	return append(keys, rel)
-}
-
-// lockKeyOrder returns the global order of the path locks. The locks are
-// always taken from the root of the tree to the leaf, so two operations can
-// never deadlock.
-func lockKeyOrder(key string) string {
-	return fmt.Sprintf("%04d|%s", strings.Count(key, "/"), key)
-}
-
-// acquireLocks takes the hierarchical locks of the given path groups in the
-// global lock order and returns the function that releases them.
-func (s *Service) acquireLocks(groups ...[]string) func() {
-	paths := make([]string, 0, len(groups))
-	for _, group := range groups {
-		paths = append(paths, group...)
-	}
-	seen := make(map[string]bool, len(paths))
-	unique := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if p == "" || seen[p] {
-			continue
-		}
-		seen[p] = true
-		unique = append(unique, p)
-	}
-	sort.Slice(unique, func(i, j int) bool {
-		return lockKeyOrder(unique[i]) < lockKeyOrder(unique[j])
-	})
-	held := make([]*sync.Mutex, 0, len(unique))
-	for _, p := range unique {
-		m := s.pathLock(p)
-		m.Lock()
-		held = append(held, m)
-	}
-	return func() {
-		for i := len(held) - 1; i >= 0; i-- {
-			held[i].Unlock()
-		}
-	}
-}
-
-// markMoved records that the given paths were moved away.
-func (s *Service) markMoved(paths ...string) {
-	now := time.Now()
-	s.movedMu.Lock()
-	defer s.movedMu.Unlock()
-	if s.moved == nil {
-		s.moved = map[string]time.Time{}
-	}
-	for _, p := range paths {
-		if p == "" {
-			continue
-		}
-		s.moved[p] = now
-	}
-	// The map must not grow without a limit.
-	if len(s.moved) > 4096 {
-		for p, t := range s.moved {
-			if now.Sub(t) > time.Minute {
-				delete(s.moved, p)
-			}
-		}
-	}
-}
-
-// wasMoved reports whether the path was moved away recently.
-func (s *Service) wasMoved(rel string) bool {
-	s.movedMu.Lock()
-	defer s.movedMu.Unlock()
-	t, ok := s.moved[rel]
-	if !ok {
-		return false
-	}
-	if time.Since(t) > 5*time.Minute {
-		delete(s.moved, rel)
-		return false
-	}
-	return true
-}
 
 // nodeID derives a stable identifier from a path.
 func nodeID(rel string) string {
@@ -362,100 +259,4 @@ func (s *Service) ensureFolder(ctx context.Context, rel string) (model.Node, err
 	}
 	node = mergeStored(node, stored, found)
 	return s.syncNode(ctx, node)
-}
-
-// writeFileAtomic writes data to a temporary file in the same directory and
-// renames it over the target. Missing parent directories are created.
-func writeFileAtomic(target string, data []byte) error {
-	return writeFileAtomicMode(target, data, true)
-}
-
-// writeFileAtomicNoMkdir writes data to a temporary file in the same
-// directory and renames it over the target. The parent directory must
-// already exist, a missing parent is never re-created.
-func writeFileAtomicNoMkdir(target string, data []byte) error {
-	return writeFileAtomicMode(target, data, false)
-}
-
-// writeFileAtomicMode implements the atomic file replacement.
-func writeFileAtomicMode(target string, data []byte, createDirs bool) error {
-	dir := filepath.Dir(target)
-	if createDirs {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	} else if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		if err == nil {
-			err = os.ErrNotExist
-		}
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".noto-tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmpName, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, target)
-}
-
-// movePath moves a file or directory from src to dst.
-func movePath(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-	// Fall back to a copy when the trash directory lives on another volume.
-	if err := copyPath(src, dst); err != nil {
-		return err
-	}
-	return os.RemoveAll(src)
-}
-
-// copyPath recursively copies src to dst.
-func copyPath(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		data, err := os.ReadFile(src)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(dst, data, 0o644)
-	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if err := copyPath(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -64,7 +64,12 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 		return model.Node{}, err
 	}
 	release := s.acquireLocks(lockKeys(rel))
-	defer release()
+	released := false
+	defer func() {
+		if !released {
+			release()
+		}
+	}()
 	abs, err := s.resolve(rel)
 	if err != nil {
 		return model.Node{}, err
@@ -87,7 +92,21 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 	if err := s.indexFile(ctx, rel, ""); err != nil {
 		return model.Node{}, err
 	}
-	return s.syncNode(ctx, node)
+	synced, err := s.syncNode(ctx, node)
+	if err != nil {
+		return model.Node{}, err
+	}
+	// The hook runs after the file, the index and the metadata are
+	// consistent and after the locks were released.
+	release()
+	released = true
+	s.fireHooks(ctx, NoteEvent{
+		Path:      rel,
+		Revision:  synced.Revision,
+		UpdatedAt: synced.UpdatedAt,
+		Op:        NoteOpCreated,
+	})
+	return synced, nil
 }
 
 // ensureMarkdownSuffix appends the ".md" suffix when it is missing.
@@ -196,7 +215,12 @@ func (s *Service) Write(ctx context.Context, rel, content string, revision int64
 		return WriteResult{}, newErr(ErrInvalidName, "notes must use the .md extension")
 	}
 	release := s.acquireLocks(lockKeys(norm))
-	defer release()
+	released := false
+	defer func() {
+		if !released {
+			release()
+		}
+	}()
 
 	// The path is resolved after the lock was taken: a concurrent rename or
 	// move may have changed it in the meantime.
@@ -211,6 +235,9 @@ func (s *Service) Write(ctx context.Context, rel, content string, revision int64
 		return WriteResult{}, newErr(ErrNotFound, "the parent folder does not exist")
 	}
 	_, statErr := os.Stat(abs)
+	// existed tells whether the note was already on the disk. It decides
+	// between the "created" and the "updated" event.
+	existed := statErr == nil
 	if statErr != nil {
 		// The note does not exist any more. A note that is known to the
 		// store was moved or deleted, so the write is a conflict.
@@ -271,7 +298,23 @@ func (s *Service) Write(ctx context.Context, rel, content string, revision int64
 	if err := s.store.UpsertNote(ctx, node); err != nil {
 		return WriteResult{}, newErr(ErrInternal, "cannot persist the note metadata")
 	}
-	return WriteResult{Path: norm, Revision: node.Revision, UpdatedAt: node.UpdatedAt}, nil
+	res := WriteResult{Path: norm, Revision: node.Revision, UpdatedAt: node.UpdatedAt}
+	op := NoteOpUpdated
+	if !existed {
+		op = NoteOpCreated
+	}
+	// The hook is called after the whole sequence (disk, index, metadata)
+	// and after the locks were released, so that it always observes a
+	// consistent state.
+	release()
+	released = true
+	s.fireHooks(ctx, NoteEvent{
+		Path:      norm,
+		Revision:  node.Revision,
+		UpdatedAt: node.UpdatedAt,
+		Op:        op,
+	})
+	return res, nil
 }
 
 // readLocked reads a note without taking the path lock.
@@ -294,197 +337,4 @@ func (s *Service) readLocked(ctx context.Context, rel string) (model.NoteContent
 		out.UpdatedAt = node.UpdatedAt
 	}
 	return out, nil
-}
-
-// Rename renames a file or folder.
-func (s *Service) Rename(ctx context.Context, rel, newName string) (model.Node, error) {
-	norm, err := normalizeRel(rel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if norm == "" {
-		return model.Node{}, newErr(ErrInvalidPath, "a note path is required")
-	}
-	if err := validateName(newName); err != nil {
-		return model.Node{}, err
-	}
-	abs, err := s.resolve(norm)
-	if err != nil {
-		return model.Node{}, err
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return model.Node{}, newErr(ErrNotFound, "note not found")
-	}
-	newRel, err := joinRel(parentOf(norm), newName)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if newRel == norm {
-		return s.nodeFor(ctx, norm)
-	}
-	return s.relocate(ctx, norm, newRel, abs, info.IsDir())
-}
-
-// Move moves a file or folder into another folder.
-func (s *Service) Move(ctx context.Context, rel, newParentPath string) (model.Node, error) {
-	norm, err := normalizeRel(rel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if norm == "" {
-		return model.Node{}, newErr(ErrInvalidPath, "a note path is required")
-	}
-	abs, err := s.resolve(norm)
-	if err != nil {
-		return model.Node{}, err
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return model.Node{}, newErr(ErrNotFound, "note not found")
-	}
-	parent, err := s.prepareParent(ctx, newParentPath, true)
-	if err != nil {
-		return model.Node{}, err
-	}
-	newRel, err := joinRel(parent, baseOf(norm))
-	if err != nil {
-		return model.Node{}, err
-	}
-	if newRel == norm {
-		return s.nodeFor(ctx, norm)
-	}
-	if info.IsDir() {
-		if parent == norm || strings.HasPrefix(parent, norm+"/") {
-			return model.Node{}, newErr(ErrInvalidPath, "a folder cannot be moved into itself")
-		}
-	}
-	return s.relocate(ctx, norm, newRel, abs, info.IsDir())
-}
-
-// relocate moves an entry on disk and updates every database row and index
-// entry of the affected subtree.
-func (s *Service) relocate(ctx context.Context, fromRel, toRel string, abs string, isDir bool) (model.Node, error) {
-	// The lock of the whole chain of the source and of the target is taken
-	// first, so that a concurrent write inside the folder cannot split the
-	// tree in two.
-	release := s.acquireLocks(lockKeys(fromRel), lockKeys(toRel), lockKeys(parentOf(toRel)), lockKeys(parentOf(fromRel)))
-	defer release()
-
-	// Both paths are resolved again after the lock was taken.
-	fromAbs, err := s.resolve(fromRel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if _, err := os.Lstat(fromAbs); err != nil {
-		return model.Node{}, newErr(ErrNotFound, "note not found")
-	}
-	toAbs, err := s.resolve(toRel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if _, err := os.Lstat(toAbs); err == nil {
-		return model.Node{}, newErr(ErrDuplicateName, "an entry with this name already exists")
-	}
-	descendants, err := s.collectSubtree(fromRel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	if err := movePath(fromAbs, toAbs); err != nil {
-		return model.Node{}, newErr(ErrInternal, "cannot move the entry")
-	}
-	// The old paths must not be re-created by a late write.
-	movedPaths := make([]string, 0, len(descendants))
-	for _, d := range descendants {
-		movedPaths = append(movedPaths, d)
-	}
-	s.markMoved(movedPaths...)
-	for _, d := range descendants {
-		suffix := strings.TrimPrefix(d, fromRel)
-		newPath := toRel + suffix
-		if err := s.rekey(ctx, d, newPath); err != nil {
-			return model.Node{}, err
-		}
-	}
-	return s.nodeFor(ctx, toRel)
-}
-
-// collectSubtree returns the relative paths of the entry and all of its
-// descendants, parents before children.
-func (s *Service) collectSubtree(rel string) ([]string, error) {
-	abs, err := s.resolve(rel)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	err = filepath.Walk(abs, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		r := s.relativeTo(p)
-		if r == "" {
-			return nil
-		}
-		out = append(out, r)
-		return nil
-	})
-	if err != nil {
-		return nil, newErr(ErrInternal, "cannot read the notes directory")
-	}
-	return out, nil
-}
-
-// rekey updates the database row and the index entry of a moved path.
-func (s *Service) rekey(ctx context.Context, oldPath, newPath string) error {
-	_ = s.store.MoveNote(ctx, oldPath, newPath)
-	if _, found, err := s.store.GetNote(ctx, oldPath); err == nil && found {
-		_ = s.store.DeleteNote(ctx, oldPath)
-	}
-	abs, err := s.resolve(newPath)
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return newErr(ErrInternal, "cannot stat the moved entry")
-	}
-	node := s.statNode(abs, info)
-	node.Path = newPath
-	node.Name = baseOf(newPath)
-	node.ParentPath = parentOf(newPath)
-	if stored, found, err := s.store.GetNote(ctx, newPath); err == nil && found {
-		node = mergeStored(node, stored, true)
-	}
-	s.removeFromIndex(ctx, oldPath)
-	if node.Type == model.NodeFile {
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			return newErr(ErrInternal, "cannot read the moved file")
-		}
-		if err := s.indexFile(ctx, newPath, string(data)); err != nil {
-			return err
-		}
-	}
-	if _, err := s.syncNode(ctx, node); err != nil {
-		return err
-	}
-	return nil
-}
-
-// nodeFor returns the node of an existing path.
-func (s *Service) nodeFor(ctx context.Context, rel string) (model.Node, error) {
-	abs, err := s.resolve(rel)
-	if err != nil {
-		return model.Node{}, err
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return model.Node{}, newErr(ErrNotFound, "note not found")
-	}
-	node := s.statNode(abs, info)
-	stored, found, err := s.store.GetNote(ctx, rel)
-	if err != nil {
-		return model.Node{}, newErr(ErrInternal, "cannot read the node metadata")
-	}
-	return mergeStored(node, stored, found), nil
 }

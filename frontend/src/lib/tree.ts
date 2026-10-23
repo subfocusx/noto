@@ -1,6 +1,6 @@
 // Builds a nested tree from the flat folder/file arrays of GET /api/tree.
 import type { Node, NodeType } from '../types';
-import { compareStrings } from './utils';
+import { compareStrings } from './ordering';
 
 export interface TreeNode {
   node: Node;

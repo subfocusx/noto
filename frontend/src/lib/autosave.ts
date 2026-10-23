@@ -1,7 +1,8 @@
 // Autosave controller: debounced saving with status tracking and a
 // path/revision guard so a response of a previous note is never applied to
 // the note that is currently open.
-import { debounce, errorMessage } from './utils';
+import { debounce } from './debounce';
+import { errorMessage } from './errors';
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 

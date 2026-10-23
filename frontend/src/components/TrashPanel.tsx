@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import { getTrash, restoreNote } from '../api/client';
-import { errorMessage } from '../lib/utils';
+import { getTrash } from '../api/client';
+import { appStore } from '../core/store/appStore';
+import { errorMessage } from '../lib/errors';
 import type { Node } from '../types';
 import { Dialog } from './Dialog';
 
@@ -32,7 +33,8 @@ export function TrashPanel(props: TrashPanelProps) {
   }, [props.open]);
 
   const restore = (entry: Node) => {
-    restoreNote(entry.path)
+    appStore.actions
+      .restoreFromTrash(entry.path)
       .then(() => {
         load();
         props.onRestored();

@@ -1,15 +1,29 @@
 /* Noto service worker.
  * - precached app shell (including the hashed assets of the current build)
- * - network-first strategy for GET /api/* with a cache fallback
+ * - network-only for every /api/* route: private payloads are never cached,
+ *   an offline request fails with an explicit network error instead of
+ *   serving a stale note body
  * - cache-first for static assets
  *
- * `__BUILD_ID__` is replaced with the build timestamp by the Vite plugin in
- * vite.config.ts, so a new build invalidates the old caches.
+ * `__BUILD_ID__` is replaced with the build timestamp by `scripts/copy-dist.mjs`
+ * (run as the `postbuild` step), so a new build invalidates the old caches.
  */
 const VERSION = 'noto-__BUILD_ID__';
 const SHELL_CACHE = `${VERSION}-shell`;
-const API_CACHE = `${VERSION}-api`;
 const ASSET_CACHE = `${VERSION}-assets`;
+// Kept only as a safety net: nothing is ever stored in it, but a leftover
+// cache from an older build (or from a previous version of this worker) is
+// purged on activation and after every successful mutation.
+const PRIVATE_API_CACHE = `${VERSION}-private-api`;
+
+/** Every route that carries private, user specific data. */
+const PRIVATE_API_PREFIXES = [
+  '/api/notes',
+  '/api/tree',
+  '/api/search',
+  '/api/trash',
+  '/api/attachments',
+];
 
 const SHELL = [
   '/',
@@ -69,7 +83,9 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => !key.startsWith(VERSION))
+            // Drop caches of older builds and any legacy `-api` cache that a
+            // previous version of this worker may have created.
+            .filter((key) => !key.startsWith(VERSION) || key.endsWith('-api'))
             .map((key) => caches.delete(key)),
         ),
       )
@@ -81,19 +97,52 @@ self.addEventListener('message', (event) => {
   if (event.data === 'skip-waiting') self.skipWaiting();
 });
 
-async function networkFirst(request) {
-  const cache = await caches.open(API_CACHE);
+/**
+ * A response describing the network failure, shaped like the API error
+ * envelope so the client can report a meaningful message.
+ */
+function networkErrorResponse(privateApi) {
+  const message = privateApi
+    ? 'Noto is offline: the server could not be reached.'
+    : 'The Noto server could not be reached.';
+  return new Response(
+    JSON.stringify({ error: { code: 'network_error', message } }),
+    { status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8' } },
+  );
+}
+
+/**
+ * Network-only for private data. The response is never written to a cache,
+ * so an offline request can only fail — it can never serve stale content.
+ */
+async function networkOnly(request, privateApi) {
   try {
-    const response = await fetch(request);
-    if (response && response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
+    return await fetch(request);
   } catch (err) {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    throw err;
+    return networkErrorResponse(privateApi);
   }
+}
+
+/** Removes any trace of cached private API responses. */
+async function clearPrivateApiCache() {
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((key) => key === PRIVATE_API_CACHE || key.endsWith('-api'))
+      .map((key) => caches.delete(key)),
+  );
+}
+
+/**
+ * A successful mutation invalidates whatever might still be cached for the
+ * private API routes.
+ */
+async function mutate(request, privateApi) {
+  const response = await networkOnly(request, privateApi);
+  if (response && response.ok) {
+    await clearPrivateApiCache();
+  }
+  return response;
 }
 
 async function cacheFirst(request) {
@@ -123,16 +172,35 @@ async function navigationResponse() {
   }
 }
 
+/**
+ * True for the private, user specific API routes. Every /api/* route is
+ * treated as private except the public health probe.
+ */
+function isPrivateApi(pathname) {
+  if (PRIVATE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
+  return pathname.startsWith('/api/') && pathname !== '/api/health';
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request));
+    // Private payloads are never cached; /api/health is public but still
+    // network-only so that no API response survives in a cache.
+    const privateApi = isPrivateApi(url.pathname);
+    if (request.method === 'GET') {
+      event.respondWith(networkOnly(request, privateApi));
+      return;
+    }
+    // Mutations must invalidate any cached private API data.
+    event.respondWith(mutate(request, privateApi));
     return;
   }
+
+  if (request.method !== 'GET') return;
+
   if (request.mode === 'navigate') {
     event.respondWith(navigationResponse());
     return;

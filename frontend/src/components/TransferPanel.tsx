@@ -6,7 +6,7 @@ import {
   importFiles,
   importZip,
 } from '../api/client';
-import { errorMessage } from '../lib/utils';
+import { errorMessage } from '../lib/errors';
 import type { ConflictPolicy, ImportResult } from '../types';
 import { Dialog } from './Dialog';
 

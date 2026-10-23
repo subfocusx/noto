@@ -1,0 +1,316 @@
+// Architectural boundary checks for the frontend source tree.
+// Usage: node scripts/check-boundaries.mjs
+// Pure Node.js (no dependencies, no network). Exits 1 on any violation.
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const FRONTEND_ROOT = resolve(here, '..');
+const SRC_ROOT = resolve(FRONTEND_ROOT, 'src');
+
+// ---------------------------------------------------------------------------
+// Configuration
+//
+// All paths below are POSIX, relative to `frontend/`, and WITHOUT the
+// `.ts`/`.tsx` extension, so that `import '../contract'` and
+// `import './contract.ts'` are treated identically.
+// ---------------------------------------------------------------------------
+
+/** Layer prefixes used by the rules. */
+const LAYERS = {
+  core: 'src/core/',
+  plugins: 'src/plugins/',
+  builtin: 'src/plugins/builtin/',
+  api: 'src/api/',
+  lib: 'src/lib/',
+  components: 'src/components/',
+};
+
+/** The public API client (direct access is restricted for builtin plugins). */
+const API_CLIENT = 'src/api/client';
+
+/** The plugin contract module (types only, the single builtin entry point). */
+const PLUGIN_CONTRACT = 'src/plugins/contract';
+
+/**
+ * Files under `src/plugins/` that `src/components/**` is allowed to import.
+ * Extend this list when a new public plugin entry point is introduced.
+ */
+const ALLOWED_COMPONENT_PLUGIN_IMPORTS = [
+  PLUGIN_CONTRACT,
+  'src/plugins/host',
+  'src/plugins/registry',
+];
+
+/** The only modules `src/plugins/builtin/**` may import from `src/plugins/`. */
+const ALLOWED_BUILTIN_PLUGIN_IMPORTS = [PLUGIN_CONTRACT];
+
+/** Source extensions scanned by the checker. */
+const SCAN_EXTENSIONS = ['.ts', '.tsx'];
+
+// ---------------------------------------------------------------------------
+// Filesystem helpers
+// ---------------------------------------------------------------------------
+
+function toPosix(p) {
+  return p.split(sep).join('/');
+}
+
+/** Strips a trailing `.ts`/`.tsx` extension from a path key. */
+function stripExt(key) {
+  for (const ext of SCAN_EXTENSIONS) {
+    if (key.endsWith(ext)) return key.slice(0, -ext.length);
+  }
+  return key;
+}
+
+function listSourceFiles(dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listSourceFiles(full));
+    } else if (SCAN_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Import parsing
+// ---------------------------------------------------------------------------
+
+const FROM_RE = /\b(import|export)\s+([^;()]*?)\s*from\s*(['"])([^'"]+)\3/g;
+const BARE_IMPORT_RE = /\bimport\s*(['"])([^'"]+)\1/g;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g;
+const REQUIRE_RE = /\brequire\s*\(\s*(['"])([^'"]+)\1\s*\)/g;
+
+function isTypeOnlyClause(clause) {
+  const trimmed = clause.trim();
+  return /^type\s/.test(trimmed) || trimmed === 'type';
+}
+
+/**
+ * Extracts every import-like reference from a source file.
+ * @returns {{specifier: string, typeOnly: boolean, line: number}[]}
+ */
+function parseImports(source) {
+  const found = [];
+  const lineAt = (index) => source.slice(0, index).split('\n').length;
+
+  for (const match of source.matchAll(FROM_RE)) {
+    found.push({
+      specifier: match[4],
+      typeOnly: isTypeOnlyClause(match[2] ?? ''),
+      line: lineAt(match.index),
+    });
+  }
+
+  for (const match of source.matchAll(BARE_IMPORT_RE)) {
+    found.push({ specifier: match[2], typeOnly: false, line: lineAt(match.index) });
+  }
+
+  for (const match of source.matchAll(DYNAMIC_IMPORT_RE)) {
+    found.push({ specifier: match[2], typeOnly: false, line: lineAt(match.index) });
+  }
+
+  for (const match of source.matchAll(REQUIRE_RE)) {
+    found.push({ specifier: match[2], typeOnly: false, line: lineAt(match.index) });
+  }
+
+  const seen = new Set();
+  return found.filter((item) => {
+    const key = `${item.line}:${item.specifier}:${item.typeOnly ? 't' : 'r'}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Resolves a relative specifier to a POSIX path relative to `frontend/`.
+ * Returns null for external packages and for paths outside `src/`.
+ */
+function resolveTarget(filePath, specifier) {
+  if (!specifier.startsWith('.')) return null;
+  const absolute = resolve(dirname(filePath), specifier);
+  const rel = toPosix(relative(FRONTEND_ROOT, absolute));
+  if (!rel || rel.startsWith('..')) return null;
+  if (!rel.startsWith('src/')) return null;
+  return stripExt(rel);
+}
+
+// ---------------------------------------------------------------------------
+// Rules
+// ---------------------------------------------------------------------------
+
+const violations = [];
+
+function report(rule, fileKey, line, message) {
+  violations.push({ rule, fileKey, line, message });
+}
+
+function inLayer(key, prefix) {
+  return key.startsWith(prefix);
+}
+
+/**
+ * @param {string} fileKey POSIX path relative to `frontend/` (no extension)
+ * @param {{specifier: string, typeOnly: boolean, line: number}} imp
+ * @param {string} target POSIX path relative to `frontend/` (no extension)
+ */
+function checkImport(fileKey, imp, target) {
+  const fromPlugins = inLayer(target, LAYERS.plugins);
+  const fromBuiltin = inLayer(target, LAYERS.builtin);
+
+  // R1: core must not depend on plugins at all.
+  if (inLayer(fileKey, LAYERS.core) && fromPlugins) {
+    report(
+      'R1',
+      fileKey,
+      imp.line,
+      `src/core/** must not import from src/plugins/** (imports "${target}")`,
+    );
+  }
+
+  // R2: api/lib/components must not depend on plugins.
+  if (
+    (inLayer(fileKey, LAYERS.api) ||
+      inLayer(fileKey, LAYERS.lib) ||
+      inLayer(fileKey, LAYERS.components)) &&
+    fromPlugins
+  ) {
+    const layer = fileKey.split('/')[1];
+    report(
+      'R2',
+      fileKey,
+      imp.line,
+      `src/${layer}/** must not import from src/plugins/** (imports "${target}")`,
+    );
+  }
+
+  // R4: plugin imports from core and builtin must be type-only.
+  if (
+    fromPlugins &&
+    (inLayer(fileKey, LAYERS.core) || inLayer(fileKey, LAYERS.builtin)) &&
+    !imp.typeOnly
+  ) {
+    report(
+      'R4',
+      fileKey,
+      imp.line,
+      `runtime import of "${target}" is forbidden here; use "import type { ... }"`,
+    );
+  }
+
+  // R3: builtin may only import src/plugins/contract.ts.
+  if (inLayer(fileKey, LAYERS.builtin)) {
+    if (!ALLOWED_BUILTIN_PLUGIN_IMPORTS.includes(target)) {
+      report(
+        'R3',
+        fileKey,
+        imp.line,
+        `src/plugins/builtin/** may only import ${ALLOWED_BUILTIN_PLUGIN_IMPORTS.join(', ')} (imports "${target}")`,
+      );
+    }
+  }
+
+  // R5: contract.ts is a types-only boundary module.
+  if (fileKey === PLUGIN_CONTRACT) {
+    if (inLayer(target, LAYERS.components)) {
+      report(
+        'R5',
+        fileKey,
+        imp.line,
+        `src/plugins/contract.ts must not import from src/components/** (imports "${target}")`,
+      );
+    }
+    if (fromPlugins && !imp.typeOnly) {
+      report(
+        'R5',
+        fileKey,
+        imp.line,
+        `src/plugins/contract.ts must not contain runtime imports of plugins (imports "${target}")`,
+      );
+    }
+  }
+
+  // R6: components may only import the explicitly allowed plugin modules.
+  if (inLayer(fileKey, LAYERS.components) && fromPlugins) {
+    if (!ALLOWED_COMPONENT_PLUGIN_IMPORTS.includes(target)) {
+      report(
+        'R6',
+        fileKey,
+        imp.line,
+        `src/components/** may only import from ${ALLOWED_COMPONENT_PLUGIN_IMPORTS.join(', ')} (imports "${target}")`,
+      );
+    }
+  }
+
+  // R7: builtin plugins are reachable only through src/plugins/**.
+  if (!inLayer(fileKey, LAYERS.plugins) && fromBuiltin) {
+    report(
+      'R7',
+      fileKey,
+      imp.line,
+      `src/plugins/builtin/** must only be imported by src/plugins/** (imports "${target}")`,
+    );
+  }
+
+  // R8: builtin plugins must use the public API facade, not the raw client.
+  if (inLayer(fileKey, LAYERS.builtin) && target === API_CLIENT) {
+    report(
+      'R8',
+      fileKey,
+      imp.line,
+      `src/plugins/builtin/** must not import src/api/client.ts directly; use the public facade`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+function main() {
+  const files = listSourceFiles(SRC_ROOT);
+  let checked = 0;
+
+  for (const file of files) {
+    const fileKey = stripExt(toPosix(relative(FRONTEND_ROOT, file)));
+    const source = readFileSync(file, 'utf8');
+    checked += 1;
+    for (const imp of parseImports(source)) {
+      const target = resolveTarget(file, imp.specifier);
+      if (!target) continue;
+      checkImport(fileKey, imp, target);
+    }
+  }
+
+  violations.sort((a, b) =>
+    a.fileKey === b.fileKey
+      ? a.line - b.line || a.rule.localeCompare(b.rule)
+      : a.fileKey.localeCompare(b.fileKey),
+  );
+
+  if (violations.length === 0) {
+    console.log(`OK: ${checked} файлов проверено, нарушений нет`);
+    process.exit(0);
+  }
+
+  for (const v of violations) {
+    console.error(`${v.fileKey}:${v.line} [${v.rule}] ${v.message}`);
+  }
+  console.error(`FAIL: ${violations.length} нарушений в ${checked} файлах`);
+  process.exit(1);
+}
+
+main();

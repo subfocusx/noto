@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { attachmentRawUrl, deleteAttachment, listAttachments, uploadAttachment } from '../api/client';
-import { errorMessage, formatSize } from '../lib/utils';
+import { errorMessage } from '../lib/errors';
+import { formatSize } from '../lib/format';
 import type { Attachment } from '../types';
 
 interface AttachmentsPanelProps {

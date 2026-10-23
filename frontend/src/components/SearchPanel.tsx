@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { search } from '../api/client';
-import { debounce, errorMessage } from '../lib/utils';
+import { debounce } from '../lib/debounce';
+import { errorMessage } from '../lib/errors';
 import type { SearchHit } from '../types';
 
 interface SearchPanelProps {

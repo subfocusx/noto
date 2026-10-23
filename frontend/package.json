@@ -9,7 +9,10 @@
     "postbuild": "node scripts/copy-dist.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "measure": "node scripts/measure-bundle.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.6.0",

@@ -1,6 +1,6 @@
 // Wiki link resolution: [[Note Name]] -> link to the note with that name.
 import type { Node } from '../types';
-import { compareStrings } from './utils';
+import { compareStrings } from './ordering';
 
 export interface WikiResolver {
   /** Resolve a wiki link target to a note path, or null when unmatched. */

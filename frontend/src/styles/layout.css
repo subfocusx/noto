@@ -1,0 +1,361 @@
+/* ==========================================================================
+   Layout: the shell of the application, the header, the sidebar, the
+   workspace and the responsive behaviour.
+   ========================================================================== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+.app.mode-preview .pane-editor {
+  display: none;
+}
+
+/* -------------------------------------------------------------- app header */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--header-height);
+  flex: none;
+  padding: 0 var(--space-2);
+  padding-left: max(var(--space-2), env(safe-area-inset-left));
+  padding-right: max(var(--space-2), env(safe-area-inset-right));
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.app-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+
+/* The hamburger belongs to the narrow layout only. The selector is more
+   specific than `.icon-button`, so the order of the rules does not matter
+   any more. */
+.app .icon-button.menu-button {
+  display: none;
+}
+
+/* --------------------------------------------------------- breadcrumbs bar */
+
+.app-breadcrumbs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+.app-breadcrumbs .breadcrumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-breadcrumbs .breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.app-breadcrumbs .breadcrumb-item {
+  max-width: 220px;
+}
+
+/* ------------------------------------------------------------------ body */
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.offline-banner,
+.error-banner {
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-base);
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-subtle);
+  color: var(--fg);
+}
+
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- sidebar */
+
+.sidebar-wrap {
+  position: relative;
+  width: var(--sidebar-width);
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow: hidden;
+}
+
+.app.sidebar-collapsed .sidebar-wrap {
+  width: 0;
+  border-right: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  flex: none;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--divider);
+}
+
+.brand {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: var(--space-3);
+}
+
+.sidebar-hint {
+  padding: var(--space-2) var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.sidebar-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--divider);
+}
+
+/* The handle that resizes the sidebar. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  z-index: var(--z-sticky);
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
+  background: var(--accent-subtle);
+}
+
+/* -------------------------------------------------------------- workspace */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-preview {
+  border-left: 1px solid var(--border);
+  background: var(--bg-app);
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-5) var(--space-8);
+}
+
+.pane-preview.only-preview {
+  border-left: 0;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- app footer */
+
+.app-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--footer-height);
+  padding: 2px var(--space-3);
+  padding-bottom: max(2px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.app-footer .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- drawer */
+
+.drawer-backdrop {
+  display: none;
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 820px) {
+  .app .icon-button.menu-button {
+    display: inline-flex;
+  }
+
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 45%);
+    z-index: var(--z-drawer);
+  }
+
+  .sidebar-wrap {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(320px, 86vw);
+    z-index: calc(var(--z-drawer) + 10);
+    transform: translateX(-100%);
+    transition: transform var(--duration-normal) var(--ease-out);
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    box-shadow: var(--shadow-3);
+  }
+
+  .app.drawer-open .sidebar-wrap {
+    transform: translateX(0);
+  }
+
+  /* On a narrow screen the sidebar is an overlay, so the workspace always
+     takes the whole width. */
+  .app.sidebar-collapsed .sidebar-wrap {
+    width: min(320px, 86vw);
+  }
+
+  .workspace {
+    flex-direction: column;
+  }
+
+  .pane-preview {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--space-4) var(--space-3) var(--space-7);
+  }
+
+  .app.mode-split .pane-editor {
+    flex: 1 1 55%;
+    min-height: 0;
+  }
+
+  .app.mode-split .pane-preview {
+    flex: 1 1 45%;
+    min-height: 0;
+  }
+
+  /* The panel of the plugins takes the whole width on a narrow screen: a
+     third of the screen would leave it unreadable. */
+  .noto-plugin-panels {
+    width: 100%;
+    max-height: 45dvh;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    gap: var(--space-1);
+  }
+
+  .app-header-actions {
+    gap: 0;
+  }
+}

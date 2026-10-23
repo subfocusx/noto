@@ -4,8 +4,10 @@
 // all live in the same `CommandRegistry`. The palette is a modal dialog: the
 // focus moves into the search field when it opens and returns to the trigger
 // when it closes.
+import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { CommandRegistry } from '../core/commands/commandRegistry';
+import { Icon } from '../ui/icons';
 
 export interface CommandPaletteProps {
   /** True when the palette is shown. */
@@ -18,6 +20,8 @@ export interface CommandPaletteProps {
   onError?(message: string): void;
   /** Bumped by the host when the content of the registry changes. */
   refreshKey?: number;
+  /** The key combination of the commands, by command id. */
+  shortcuts?: Record<string, string>;
 }
 
 interface PaletteItem {
@@ -25,6 +29,8 @@ interface PaletteItem {
   title: string;
   description?: string;
   shortcut?: string;
+  icon?: string;
+  group?: string;
 }
 
 /** The id of the list of the options. */
@@ -61,12 +67,19 @@ export function CommandPalette(props: CommandPaletteProps) {
     if (!props.open) return;
     const list = props.registry?.list() ?? [];
     setItems(
-      list.map((cmd) => ({
-        id: cmd.id,
-        title: cmd.title,
-        description: cmd.description,
-        shortcut: cmd.shortcut,
-      })),
+      list.map((raw) => {
+        // A command may carry an icon and a group; the registry only knows the
+        // title, the description and the shortcut.
+        const cmd = raw as typeof raw & { icon?: string; group?: string };
+        return {
+          id: cmd.id,
+          title: cmd.title,
+          description: cmd.description,
+          shortcut: cmd.shortcut,
+          icon: cmd.icon,
+          group: cmd.group,
+        };
+      }),
     );
   }, [props.open, props.registry, props.refreshKey]);
 
@@ -85,6 +98,19 @@ export function CommandPalette(props: CommandPaletteProps) {
       previousFocus.current?.focus?.();
     };
   }, [props.open]);
+
+  // Escape closes the palette even when the focus is not in the search field
+  // (the focus moves into the field a tick after the palette appears).
+  useEffect(() => {
+    if (!props.open) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      props.onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [props.open, props.onClose]);
 
   const filtered = useMemo(() => items.filter((item) => matches(item, query)), [items, query]);
   const current = filtered.length > 0 ? Math.min(active, filtered.length - 1) : -1;
@@ -133,6 +159,42 @@ export function CommandPalette(props: CommandPaletteProps) {
     }
   };
 
+  // The options are rendered in groups: a group is only shown when the
+  // commands carry one.
+  const options: ComponentChildren[] = [];
+  let lastGroup: string | undefined;
+  filtered.forEach((item, index) => {
+    if (item.group !== undefined && item.group !== lastGroup) {
+      options.push(
+        <li key={`group-${item.group}`} class="noto-palette-group" role="presentation">
+          {item.group}
+        </li>,
+      );
+    }
+    lastGroup = item.group;
+    const shortcut = props.shortcuts?.[item.id] ?? item.shortcut;
+    options.push(
+      <li
+        key={item.id}
+        id={optionId(index)}
+        role="option"
+        class={`noto-palette-option${index === current ? ' is-active' : ''}`}
+        aria-selected={index === current}
+        onMouseEnter={() => setActive(index)}
+        onClick={() => {
+          void run(item);
+        }}
+      >
+        {item.icon ? <Icon name={item.icon} size={14} /> : null}
+        <span class="noto-palette-option-title">{item.title}</span>
+        {item.description ? (
+          <span class="noto-palette-option-description">{item.description}</span>
+        ) : null}
+        {shortcut ? <kbd class="noto-palette-option-shortcut">{shortcut}</kbd> : null}
+      </li>,
+    );
+  });
+
   if (!props.open) return null;
 
   return (
@@ -176,27 +238,7 @@ export function CommandPalette(props: CommandPaletteProps) {
         ) : null}
 
         <ul class="noto-palette-list" id={LIST_ID} role="listbox" aria-label="Commands">
-          {filtered.map((item, index) => (
-            <li
-              key={item.id}
-              id={optionId(index)}
-              role="option"
-              class={`noto-palette-option${index === current ? ' is-active' : ''}`}
-              aria-selected={index === current}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => {
-                void run(item);
-              }}
-            >
-              <span class="noto-palette-option-title">{item.title}</span>
-              {item.description ? (
-                <span class="noto-palette-option-description">{item.description}</span>
-              ) : null}
-              {item.shortcut ? (
-                <kbd class="noto-palette-option-shortcut">{item.shortcut}</kbd>
-              ) : null}
-            </li>
-          ))}
+          {options}
         </ul>
 
         {filtered.length === 0 ? (

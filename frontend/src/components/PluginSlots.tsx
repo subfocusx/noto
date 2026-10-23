@@ -15,6 +15,7 @@ import type {
   PluginSidebarItem,
   PluginToolbarItem,
 } from '../plugins/contract';
+import { Icon } from '../ui/icons';
 
 /* ----------------------------------------------------------- error boundary */
 
@@ -85,7 +86,7 @@ export function PluginSidebarSlot(props: PluginSidebarSlotProps) {
             >
               {item.icon ? (
                 <span class="noto-plugin-icon" aria-hidden="true">
-                  {item.icon}
+                  <Icon name={item.icon} size={16} />
                 </span>
               ) : null}
               <span class="noto-plugin-label">{item.title}</span>
@@ -181,7 +182,7 @@ export function PluginToolbarSlot(props: PluginToolbarSlotProps) {
           >
             {item.icon ? (
               <span class="noto-plugin-icon" aria-hidden="true">
-                {item.icon}
+                <Icon name={item.icon} size={16} />
               </span>
             ) : null}
             <span class="noto-plugin-label">{item.title}</span>

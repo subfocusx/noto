@@ -83,15 +83,28 @@ network.
 **Application**
 
 - Installable PWA (web manifest, service worker, offline app shell).
-- Light and dark themes, following `prefers-color-scheme` with a manual
-  toggle.
-- Responsive layout with a drawer sidebar and 44 px touch targets on mobile.
+- One design system: semantic CSS tokens, a graphite dark theme and a matching
+  light theme, one icon set (Lucide) and one spacing scale — see
+  [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- The theme can follow the operating system (`System`) or be pinned to light or
+  dark; the choice survives a reload.
+- Responsive layout: a drawer sidebar below 820 px, a resizable sidebar above,
+  no horizontal overflow from 360 px to 1920 px and 44 px touch targets on
+  mobile.
 - Single static Go binary in production — the frontend is embedded.
-- Global command palette on **Ctrl+K** / **Ctrl+P** with eight built-in
+- Global command palette on **Ctrl+K** / **Ctrl+P** with eleven built-in
   commands (new note, new folder, daily note, search, rename note, delete
-  note, toggle theme, open trash) plus every command the plugins contribute.
+  note, toggle theme, open trash, settings, keyboard shortcuts, toggle
+  sidebar) plus every command the plugins contribute.
 - Daily note: one command creates or opens `YYYY-MM-DD.md` in the root of the
   library. The local date is used, and an existing file is never overwritten.
+- Settings dialog: theme, view mode, the width of the sidebar, the font size
+  and the wrapping of the editor, the order of the tree — every switch has a
+  real effect and is remembered.
+- Note tree with icons, a context menu (right click or the `…` button),
+  renaming in place, a list of the recently opened notes and a configurable
+  order (by name or by date of change).
+- Breadcrumbs of the open note above the editor.
 
 **Keyboard shortcuts**
 
@@ -100,6 +113,14 @@ network.
 | `Ctrl+K` / `Ctrl+P` | Open the command palette. |
 | `Ctrl+Shift+F` | Open the note search (also reachable through the search button in the sidebar and through the "Search notes" command of the palette). |
 | `Ctrl+S` | Save the open note explicitly (outside the editor). |
+| `Ctrl+,` | Open the settings. |
+| `Ctrl+/` | Show the list of the shortcuts. |
+| `Ctrl+Alt+N` | Create a note. |
+| `Ctrl+Alt+B` | Collapse or expand the sidebar. |
+| `Ctrl+Alt+T` | Switch between the light and the dark theme. |
+
+The full list lives in one place (`frontend/src/core/commands/shortcuts.ts`) and
+is shown in the dialog of the shortcuts.
 
 ---
 

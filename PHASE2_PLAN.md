@@ -96,6 +96,23 @@
 
 ---
 
+## Фаза 4 — премиальный редизайн UI
+
+| ID | Задача | Владелец | Файлы | Статус | Результат / примечания |
+|---|---|---|---|---|---|
+| P4-1 | Аудит интерфейса: корневые причины, а не симптомы | root | `docs/UI_AUDIT.md` | **DONE** | 18 дефектов (13 High / 3 Medium / 2 Low) с привязкой к строкам и причинами (конфликт специфичности, дублирование темы, токен с двумя смыслами, отсутствие focus-visible, глифы вместо иконок); 5 пунктов осознанно отложены |
+| P4-2 | Дизайн-система: токены, темы, типографика, шкалы, слои | root | `frontend/src/styles/{tokens,base,layout,components,markdown,plugin}.css`, `docs/DESIGN_SYSTEM.md` | **DONE** | `styles.css` (19 КБ) разбит на 6 слоёв; тема объявлена один раз (системная + явные light/dark); 60+ семантических токенов; `prefers-reduced-motion`; единое кольцо фокуса |
+| P4-3 | Единый набор иконок (Lucide) вместо юникод-глифов | worker + root | `frontend/src/ui/icons.tsx`, `frontend/package.json` | **DONE** | `lucide-preact` + реестр из 21 иконки с `strokeWidth 1.75` и `currentColor`; неизвестное имя → нейтральная точка; все глифы (⌕ ＋ ▤ ✎ ↔ ✕ ☰ ☾ ☀ 🗑 🖼) заменены |
+| P4-4 | Раскладка оболочки: сетка, без переполнений, drawer на мобильном | worker + root | `frontend/src/styles/layout.css`, `frontend/src/components/App*.tsx` | **DONE** | Закрыты D1 (бургер на десктопе), D8 (вложенный скролл), D9 (переполнение при панелях плагинов), D10 (100vh/100dvh), D11; матрица вьюпортов 360–1920 px без горизонтального скролла |
+| P4-5 | Дерево заметок: иконки, иерархия, состояния, контекстное меню, inline-rename | worker | `frontend/src/components/{Sidebar,TreeRow,TreeContextMenu,RecentNotesPanel}.tsx` | **DONE** | Кликабельная папка, иконки, ограниченный отступ, единая высота строк, меню по правому клику и кнопке `…`, переименование на месте с валидацией, список недавних, сортировка по имени/дате |
+| P4-6 | Вторичные экраны: диалоги, палитра, поиск, настройки, шпаргалка | worker | `frontend/src/components/{Dialog,NoteDialogs,CommandPalette,SearchPanel,SettingsDialog,ShortcutHelp}.tsx` | **DONE** | Фокус-ловушка и Escape в диалогах, группировка и `kbd` в палитре, состояния поиска, диалог настроек (тема/режим/ширина/шрифт/перенос/сортировка), шпаргалка из единого реестра сочетаний |
+| P4-7 | Единый источник сочетаний клавиш и пользовательские предпочтения | root | `frontend/src/core/commands/shortcuts.ts`, `frontend/src/core/settings/prefs.ts`, `frontend/src/core/store/**` | **DONE** | `SHORTCUTS` — один источник для обработчика, палитры и справки; `prefs.ts` (localStorage `noto-prefs-v1`) с валидацией и наследованием старого ключа `noto-theme` |
+| P4-8 | Хлебные крошки, состояние сохранения, пустые состояния | worker + root | `frontend/src/components/{NoteBreadcrumbs,EmptyState,AppFooter}.tsx` | **DONE** | Крошки пути с переходом в папку, единый компонент пустого состояния, переоформленный статус сохранения |
+| P4-9 | Тесты фазы 4 | root | `frontend/src/__tests__/{prefs,shortcuts,tree-sort,icons}.test.ts(x)`, `e2e/specs/{viewport,settings,a11y}.spec.ts` | **DONE** | 4 unit-файла (34 кейса) + 3 E2E-файла (матрица вьюпортов, настройки, клавиатура) |
+| P4-10 | Проверка, замеры и документация | root | `docs/{UI_AUDIT,DESIGN_SYSTEM}.md`, `README.md`, `IMPLEMENTATION_STATUS.md` | **DONE** | Прогон `verify.ps1` + Playwright; entry chunk 107,48 kB (gzip 32,25 kB) при бюджете 32 kB; 123 чанка (+4 ленивых) |
+
+---
+
 ## Журнал проверок (по мере выполнения)
 
 | Дата/время | Что прогонялось | Результат |
@@ -106,3 +123,4 @@
 | фаза 3 (root, `scripts/verify.ps1 -ReportPath .tools\final-verify.md`) | boundaries · build · vet · go test -race · smoke · typecheck · vitest · bundle · measure | **все PASS**; отчёт сохранён в `.tools\final-verify.md` |
 | фаза 3 (root) | `npx playwright test --reporter=list` | **24 passed / 18 skipped / 0 failed** |
 | фаза 3 (root) | метрики бандла | entry 81,44 kB (gzip 25,33 kB); codemirror 528,76 kB; всего 119 JS-чанков, 1 728 kB raw / 633 kB gzip |
+| фаза 4 (root, `scripts/verify.ps1 -E2E -Bench -ReportPath .tools\phase4-verify.md`) | boundaries · build · vet · go test -race · smoke · typecheck · vitest · bundle · measure · bench · e2e | **все PASS**; отчёт в `.tools\phase4-verify.md`; vitest 24 файла / **322 теста**; E2E **57 passed / 19 skipped / 0 failed**; entry chunk 108,20 kB (gzip 32,39 kB), 123 чанка (4 ленивых) |

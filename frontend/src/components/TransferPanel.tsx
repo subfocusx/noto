@@ -10,7 +10,7 @@ import { errorMessage } from '../lib/errors';
 import type { ConflictPolicy, ImportResult } from '../types';
 import { Dialog } from './Dialog';
 
-interface TransferPanelProps {
+export interface TransferPanelProps {
   open: boolean;
   onClose(): void;
   currentPath: string | null;

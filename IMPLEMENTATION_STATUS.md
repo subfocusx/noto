@@ -57,6 +57,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 7 | Full check run, live start, fixes | done | see "Verification log" below |
 | 8 | Phase 2: modularisation, PWA privacy, plugin platform | partial | see "Phase 2 status" below |
 | 9 | Phase 3: performance, backups, reconciliation, command palette | done | see "Phase 3 status" below |
+| 10 | Phase 4: premium UI redesign, design system, accessibility, UX | done | see "Phase 4 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -105,6 +106,38 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 The tree endpoint is 2.3x - 2.9x faster; the number of allocations drops by
 43 %. `Service.Reindex` still has the same N+1 pattern and was out of the
 scope of the card (about 7.7 s for 2000 notes).
+
+## Phase 4 status (premium UI redesign)
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P4-1 | Audit of the interface: 18 defects with their cause (not only the symptom), 5 points consciously postponed | done | `docs/UI_AUDIT.md` |
+| P4-2 | Design system: the monolithic `styles.css` (19 KB) was split into six layers (`tokens`, `base`, `layout`, `components`, `markdown`, `plugin`); the theme is declared once (explicit light/dark + the system theme); 60+ semantic tokens; `prefers-reduced-motion`; one focus ring | done | `frontend/src/styles/`, `docs/DESIGN_SYSTEM.md` |
+| P4-3 | One icon set: `lucide-preact` with a registry of 21 icons (`frontend/src/ui/icons.tsx`), the same stroke width and `currentColor`; every unicode glyph was replaced. An unknown icon name falls back to a neutral dot | done | `frontend/src/ui/icons.tsx`, `frontend/package.json` |
+| P4-4 | The shell: CSS grid/flex layout, a resizable and collapsible sidebar, a drawer below 820 px, no horizontal overflow from 360 to 1920 px, no clipped controls | done | `frontend/src/styles/layout.css`, `e2e/specs/viewport.spec.ts` |
+| P4-5 | The note tree: icons, a clickable folder, a limited indent, one row height, the states, a context menu (right click or the `…` button), renaming in place with validation, the list of the recent notes, the order by name or by date | done | `frontend/src/components/{Sidebar,TreeRow,TreeContextMenu,RecentNotesPanel}.tsx` |
+| P4-6 | The secondary screens: the dialogs with a focus trap and Escape, the palette with groups and `kbd`, the search with its states, the settings dialog, the shortcut help | done | `frontend/src/components/{Dialog,NoteDialogs,CommandPalette,SearchPanel,SettingsDialog,ShortcutHelp}.tsx` |
+| P4-7 | One source of truth for the keyboard shortcuts (`core/commands/shortcuts.ts`) and the preferences of the user (`core/settings/prefs.ts`, `localStorage` `noto-prefs-v1`, with the validation and the inheritance of the old key `noto-theme`) | done | `frontend/src/core/commands/shortcuts.ts`, `frontend/src/core/settings/prefs.ts` |
+| P4-8 | The breadcrumbs of the open note, the shared empty state, the reworked save status | done | `frontend/src/components/{NoteBreadcrumbs,EmptyState,AppFooter}.tsx` |
+| P4-9 | Tests: 4 unit files (preferences, shortcuts, the order of the tree, the icons) and 3 E2E files (the matrix of the viewports, the settings, the keyboard operation) | done | `frontend/src/__tests__/`, `e2e/specs/{viewport,settings,a11y}.spec.ts` |
+| P4-10 | The public contract of the plugins was not broken; the `icon` of a contribution is now the name of an icon of the registry (an unknown name is still safe) | done | `docs/PLUGIN_API.md`, `docs/DESIGN_SYSTEM.md` |
+
+### Measured effect of the redesign
+
+| Measurement | before (phase 3) | after (phase 4) |
+| --- | --- | --- |
+| Entry chunk, raw | 81,45 kB | 107,48 kB |
+| Entry chunk, gzip | 25,33 kB | 32,25 kB |
+| JS chunks | 119 | 123 (4 lazy: the settings, the shortcuts, the rarely used panels, the search) |
+| CSS, raw / gzip | 13,74 kB / 3,05 kB | 34,65 kB / 6,25 kB |
+| Frontend unit tests | 293 | 322 (+29) |
+| E2E | 24 passed / 18 skipped | 57 passed / 19 skipped |
+
+The entry chunk grew by 6,9 kB gzip: the icon set, six new components (the tree
+rows, the context menu, the recent notes, the breadcrumbs, the settings, the
+shortcut help) and the state of the preferences. The budget of the plan was
+32 kB gzip — the result is 0,25 kB above it; the four rarely used overlays were
+moved into lazy chunks to stay near the budget.
 
 ## Definition of Done
 

@@ -53,6 +53,20 @@ export async function gotoApp(page: Page): Promise<void> {
   await expect(page.getByTestId('empty-state')).toBeVisible();
 }
 
+/**
+ * Opens the drawer of the notes when the layout is narrow.
+ *
+ * Below 820 px the sidebar is an overlay, so the buttons inside it are only
+ * reachable after the drawer was opened.
+ */
+export async function openSidebarIfNeeded(page: Page): Promise<void> {
+  const menu = page.getByRole('button', { name: 'Toggle navigation' });
+  if (await menu.isVisible().catch(() => false)) {
+    await menu.click();
+    await expect(page.locator('.app.drawer-open')).toHaveCount(1);
+  }
+}
+
 /** The autosave status indicator in the header. */
 export function saveStatus(page: Page): Locator {
   return page.getByTestId('save-status');

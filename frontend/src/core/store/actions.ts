@@ -18,10 +18,38 @@ import { createAutosave, type AutosaveController, type AutosaveStatus } from '..
 import { deleteDraft, getDraft, isDraftNewer, putDraft, type Draft } from '../../lib/drafts';
 import { errorMessage } from '../../lib/errors';
 import type { Node, NoteContent } from '../../types';
-import { getSnapshot, patchNote, refs, update } from './state';
-import type { DialogState, ViewMode } from './types';
+import {
+  pushRecent as pushRecentPath,
+  removeRecent as removeRecentPath,
+  savePrefs,
+  type ThemePreference,
+  type TreeSort,
+} from '../settings/prefs';
+import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
+import type { ContextMenuState, DialogState, ViewMode } from './types';
 
 const AUTOSAVE_DELAY = 800;
+
+/**
+ * Writes the visual state into the storage of the user.
+ *
+ * The preferences are the only part of the state that survives a reload, so
+ * every change of the theme, the mode, the sidebar or the tree writes them.
+ */
+function persistPrefs(): void {
+  const state = getSnapshot();
+  savePrefs({
+    theme: state.env.theme,
+    mode: state.ui.mode,
+    sidebarCollapsed: state.ui.sidebarCollapsed,
+    sidebarWidth: state.ui.sidebarWidth,
+    treeSort: state.ui.treeSort,
+    editorFontSize: state.ui.editorFontSize,
+    editorWrap: state.ui.editorWrap,
+    expandedFolders: [...state.ui.expanded],
+    recentPaths: state.ui.recentPaths,
+  });
+}
 
 /* --------------------------------------------------------------- autosave */
 
@@ -94,6 +122,7 @@ export function toggleFolder(path: string): void {
     else next.add(path);
     return { ...prev, ui: { ...prev.ui, expanded: next } };
   });
+  persistPrefs();
 }
 
 /** Expands every folder on the way to `path`. */
@@ -152,6 +181,12 @@ export async function openNote(path: string): Promise<void> {
       await deleteDraft(path).catch(() => undefined);
     }
     expandTo(path);
+    // The note joins the list of the recently opened notes.
+    update((prev) => ({
+      ...prev,
+      ui: { ...prev.ui, recentPaths: pushRecentPath(prev.ui.recentPaths, path) },
+    }));
+    persistPrefs();
   } catch (err) {
     refs.loadingPath = null;
     patchNote({ status: 'error', saveError: errorMessage(err) });
@@ -348,10 +383,21 @@ export async function confirmDialog(): Promise<void> {
 
 export function setMode(mode: ViewMode): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, mode } }));
+  persistPrefs();
 }
 
 export function setSearchOpen(open: boolean): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, searchOpen: open } }));
+}
+
+/** Opens or closes the command palette. */
+export function setPaletteOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, paletteOpen: open } }));
+}
+
+/** Switches the command palette. */
+export function togglePalette(): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, paletteOpen: !prev.ui.paletteOpen } }));
 }
 
 export function toggleDrawer(): void {
@@ -362,6 +408,89 @@ export function closeDrawer(): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, drawerOpen: false } }));
 }
 
+/** Opens a folder in the tree (it stays open). */
+export function expandFolder(path: string): void {
+  update((prev) => {
+    if (prev.ui.expanded.has(path)) return prev;
+    const next = new Set(prev.ui.expanded);
+    next.add(path);
+    return { ...prev, ui: { ...prev.ui, expanded: next } };
+  });
+  persistPrefs();
+}
+
+/** Collapses or expands the sidebar of the notes. */
+export function setSidebarCollapsed(collapsed: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, sidebarCollapsed: collapsed } }));
+  persistPrefs();
+}
+
+export function toggleSidebar(): void {
+  setSidebarCollapsed(!getSnapshot().ui.sidebarCollapsed);
+}
+
+/** Changes the width of the sidebar; the value is clamped. */
+export function setSidebarWidth(width: number): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, sidebarWidth: width } }));
+  persistPrefs();
+}
+
+/** Changes the sort order of the tree. */
+export function setTreeSort(sort: TreeSort): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, treeSort: sort } }));
+  persistPrefs();
+}
+
+/** Changes the font size of the editor. */
+export function setEditorFontSize(size: number): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, editorFontSize: size } }));
+  persistPrefs();
+}
+
+/** Turns the wrapping of the long lines in the editor on or off. */
+export function setEditorWrap(wrap: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, editorWrap: wrap } }));
+  persistPrefs();
+}
+
+/** Opens the context menu of the tree. */
+export function openContextMenu(menu: ContextMenuState): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, contextMenu: menu } }));
+}
+
+/** Closes the context menu of the tree. */
+export function closeContextMenu(): void {
+  update((prev) =>
+    prev.ui.contextMenu ? { ...prev, ui: { ...prev.ui, contextMenu: null } } : prev,
+  );
+}
+
+export function setSettingsOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, settingsOpen: open } }));
+}
+
+export function setShortcutHelpOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, shortcutHelpOpen: open } }));
+}
+
+/** Adds a note to the list of the recently opened notes. */
+export function addRecent(path: string): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, recentPaths: pushRecentPath(prev.ui.recentPaths, path) },
+  }));
+  persistPrefs();
+}
+
+/** Removes a note from the list of the recently opened notes. */
+export function removeRecent(path: string): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, recentPaths: removeRecentPath(prev.ui.recentPaths, path) },
+  }));
+  persistPrefs();
+}
+
 /* ------------------------------------------------------------ environment */
 
 /** Reflects the connectivity of the browser. */
@@ -369,22 +498,40 @@ export function setOnline(online: boolean): void {
   update((prev) => (prev.env.online === online ? prev : { ...prev, env: { ...prev.env, online } }));
 }
 
-/** Writes the theme into the document and into the local storage. */
-export function applyTheme(theme: 'light' | 'dark'): void {
+/**
+ * Writes the theme into the document.
+ *
+ * An explicit choice is written as `data-theme`; the `system` theme removes
+ * the attribute, so the stylesheet follows the operating system.
+ */
+export function applyTheme(theme: ThemePreference): void {
   if (typeof document !== 'undefined') {
-    document.documentElement.dataset.theme = theme;
-  }
-  try {
-    localStorage.setItem('noto-theme', theme);
-  } catch {
-    /* storage unavailable */
+    if (theme === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
   }
 }
 
+/** Sets the theme of the user: an explicit choice or the system theme. */
+export function setTheme(theme: ThemePreference): void {
+  const effective = resolveTheme(theme);
+  update((prev) => ({ ...prev, env: { ...prev.env, theme, effectiveTheme: effective } }));
+  applyTheme(theme);
+  persistPrefs();
+}
+
+/** Reflects the theme of the operating system (only for the `system` theme). */
+export function setEffectiveTheme(theme: 'light' | 'dark'): void {
+  update((prev) =>
+    prev.env.effectiveTheme === theme
+      ? prev
+      : { ...prev, env: { ...prev.env, effectiveTheme: theme } },
+  );
+}
+
+/** Switches between the light and the dark theme. */
 export function toggleTheme(): void {
-  const next = getSnapshot().env.theme === 'dark' ? 'light' : 'dark';
-  update((prev) => ({ ...prev, env: { ...prev.env, theme: next } }));
-  applyTheme(next);
+  const current = getSnapshot().env.effectiveTheme;
+  setTheme(current === 'dark' ? 'light' : 'dark');
 }
 
 /* ----------------------------------------------------------------- banner */
@@ -421,9 +568,27 @@ export interface AppActions {
   discardDraft(): void;
   setMode(mode: ViewMode): void;
   setSearchOpen(open: boolean): void;
+  setPaletteOpen(open: boolean): void;
+  togglePalette(): void;
   toggleDrawer(): void;
   closeDrawer(): void;
   toggleTheme(): void;
+  setTheme(theme: ThemePreference): void;
+  setEffectiveTheme(theme: 'light' | 'dark'): void;
+  applyTheme(theme: ThemePreference): void;
+  expandFolder(path: string): void;
+  setSidebarCollapsed(collapsed: boolean): void;
+  toggleSidebar(): void;
+  setSidebarWidth(width: number): void;
+  setTreeSort(sort: TreeSort): void;
+  setEditorFontSize(size: number): void;
+  setEditorWrap(wrap: boolean): void;
+  openContextMenu(menu: ContextMenuState): void;
+  closeContextMenu(): void;
+  setSettingsOpen(open: boolean): void;
+  setShortcutHelpOpen(open: boolean): void;
+  addRecent(path: string): void;
+  removeRecent(path: string): void;
   showBanner(message: string): void;
   dismissBanner(): void;
 }
@@ -449,9 +614,27 @@ export const actions: AppActions = {
   discardDraft,
   setMode,
   setSearchOpen,
+  setPaletteOpen,
+  togglePalette,
   toggleDrawer,
   closeDrawer,
   toggleTheme,
+  setTheme,
+  setEffectiveTheme,
+  applyTheme,
+  expandFolder,
+  setSidebarCollapsed,
+  toggleSidebar,
+  setSidebarWidth,
+  setTreeSort,
+  setEditorFontSize,
+  setEditorWrap,
+  openContextMenu,
+  closeContextMenu,
+  setSettingsOpen,
+  setShortcutHelpOpen,
+  addRecent,
+  removeRecent,
   showBanner,
   dismissBanner,
 };

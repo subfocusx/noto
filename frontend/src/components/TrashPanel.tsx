@@ -5,7 +5,7 @@ import { errorMessage } from '../lib/errors';
 import type { Node } from '../types';
 import { Dialog } from './Dialog';
 
-interface TrashPanelProps {
+export interface TrashPanelProps {
   open: boolean;
   onClose(): void;
   onRestored(): void;

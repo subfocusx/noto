@@ -4,6 +4,7 @@
 // need and the subscriber list. The actions (`./actions.ts`) work on top of
 // it, the facade (`./appStore.ts`) exposes both to the outside world.
 import type { AppState, NoteState } from './types';
+import { loadPrefs, type ThemePreference } from '../settings/prefs';
 
 /**
  * Mutable mirrors of the state that asynchronous callbacks need.
@@ -23,10 +24,26 @@ export interface Refs {
   loadingPath: string | null;
 }
 
-function initialTheme(): 'light' | 'dark' {
-  return typeof localStorage !== 'undefined' && localStorage.getItem('noto-theme') === 'light'
-    ? 'light'
-    : 'dark';
+/**
+ * Resolves the theme that is really active.
+ *
+ * The explicit choice of the user always wins; `system` follows the
+ * preference of the operating system.
+ */
+export function resolveTheme(theme: ThemePreference): 'light' | 'dark' {
+  if (theme !== 'system') return theme;
+  try {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+  } catch {
+    /* the browser does not support the query */
+  }
+  return 'dark';
+}
+
+function initialTheme(): ThemePreference {
+  return loadPrefs().theme;
 }
 
 function initialOnline(): boolean {
@@ -34,6 +51,7 @@ function initialOnline(): boolean {
 }
 
 export function createInitialState(): AppState {
+  const prefs = loadPrefs();
   return {
     tree: { folders: [], files: [], loading: true },
     note: {
@@ -46,8 +64,23 @@ export function createInitialState(): AppState {
       saveError: null,
     },
     dialog: { kind: null },
-    ui: { mode: 'split', expanded: new Set<string>(), searchOpen: false, drawerOpen: false },
-    env: { online: initialOnline(), theme: initialTheme() },
+    ui: {
+      mode: prefs.mode,
+      expanded: new Set<string>(prefs.expandedFolders),
+      searchOpen: false,
+      paletteOpen: false,
+      drawerOpen: false,
+      sidebarCollapsed: prefs.sidebarCollapsed,
+      sidebarWidth: prefs.sidebarWidth,
+      treeSort: prefs.treeSort,
+      editorFontSize: prefs.editorFontSize,
+      editorWrap: prefs.editorWrap,
+      recentPaths: [...prefs.recentPaths],
+      settingsOpen: false,
+      shortcutHelpOpen: false,
+      contextMenu: null,
+    },
+    env: { online: initialOnline(), theme: initialTheme(), effectiveTheme: resolveTheme(initialTheme()) },
     draftOffer: null,
     banner: null,
   };

@@ -31,6 +31,12 @@ export interface AppCommandDeps {
   renameNote(): void;
   /** Deletes the note that is currently open. */
   deleteNote(): void;
+  /** Opens the settings of the application. */
+  openSettings(): void;
+  /** Opens the help of the keyboard shortcuts. */
+  openShortcuts(): void;
+  /** Collapses or expands the sidebar of the notes. */
+  toggleSidebar(): void;
 }
 
 /** A command of the application, before it is registered. */
@@ -87,6 +93,27 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
       title: 'Open trash',
       description: 'Show the deleted notes',
       run: () => deps.openTrash(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}settings`,
+      title: 'Settings',
+      description: 'Theme, view mode, the width of the sidebar and the tree order',
+      shortcut: 'Ctrl+,',
+      run: () => deps.openSettings(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}shortcuts`,
+      title: 'Keyboard shortcuts',
+      description: 'Show every shortcut of the application',
+      shortcut: 'Ctrl+/',
+      run: () => deps.openShortcuts(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}toggle-sidebar`,
+      title: 'Toggle sidebar',
+      description: 'Collapse or expand the panel of the notes',
+      shortcut: 'Ctrl+Alt+B',
+      run: () => deps.toggleSidebar(),
     },
   ];
 }

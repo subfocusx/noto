@@ -412,6 +412,12 @@ export interface PluginSidebarItem {
 }
 ```
 
+`icon` — **имя иконки** из общего реестра (`frontend/src/ui/icons.tsx`):
+`file-text`, `folder`, `folder-open`, `search`, `settings`, `list-tree` и
+другие (полный список — в `docs/DESIGN_SYSTEM.md`). Неизвестное имя не
+является ошибкой: показывается нейтральная точка, поэтому старые значения
+продолжают работать.
+
 ### Пункт контекстного меню (`PluginContextMenuItem`)
 
 ```ts
@@ -437,6 +443,8 @@ export interface PluginToolbarItem {
   run(): void | Promise<void>;
 }
 ```
+
+`icon` — имя иконки из общего реестра, как и у пункта сайдбара.
 
 ### Секция настроек (`PluginSettingsSection`)
 

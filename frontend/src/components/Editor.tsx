@@ -48,6 +48,10 @@ interface EditorProps {
   /** The path the `value` belongs to; values of other notes are ignored. */
   contentPath?: string | null;
   placeholderText?: string;
+  /** The size of the font of the editor, in pixels. */
+  fontSize?: number;
+  /** Whether long lines are wrapped. */
+  wrap?: boolean;
   onChange(value: string): void;
   onSave(): void;
   /** Receives the imperative handle once the editor is created. */
@@ -56,27 +60,50 @@ interface EditorProps {
 
 const EXTERNAL = Annotation.define<boolean>();
 
-const editorTheme = EditorView.theme({
-  '&': {
-    height: '100%',
-    fontSize: '14px',
-    backgroundColor: 'var(--editor-bg)',
-    color: 'var(--editor-fg)',
-  },
-  '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': {
-    fontFamily: 'var(--mono-font)',
-    lineHeight: '1.6',
-    padding: '12px 0',
-  },
-  '.cm-content': { caretColor: 'var(--editor-fg)' },
-  '.cm-gutters': {
-    backgroundColor: 'var(--editor-bg)',
-    color: 'var(--editor-gutter)',
-    border: 'none',
-  },
-  '.cm-activeLine': { backgroundColor: 'var(--editor-active-line)' },
-});
+/** The default size of the font of the editor, in pixels. */
+const DEFAULT_FONT_SIZE = 14;
+
+/**
+ * Builds the theme of the editor from the CSS variables of the application.
+ *
+ * The colours are not hard-coded: the theme follows the light and the dark
+ * theme of the interface without a rebuild of the editor.
+ */
+function buildTheme(fontSize: number): Extension {
+  return EditorView.theme({
+    '&': {
+      height: '100%',
+      fontSize: `${fontSize}px`,
+      backgroundColor: 'var(--bg-app)',
+      color: 'var(--fg)',
+    },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-scroller': {
+      fontFamily: 'var(--mono-font)',
+      lineHeight: '1.6',
+      padding: '12px 0',
+      overflow: 'auto',
+    },
+    '.cm-content': {
+      fontSize: `${fontSize}px`,
+      caretColor: 'var(--accent)',
+    },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+      backgroundColor: 'var(--selection-bg)',
+      color: 'var(--selection-fg)',
+    },
+    '.cm-gutters': {
+      backgroundColor: 'var(--bg-app)',
+      color: 'var(--fg-muted)',
+      border: 'none',
+      fontSize: `${fontSize}px`,
+    },
+    '.cm-activeLine': { backgroundColor: 'var(--bg-hover)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--bg-hover)', color: 'var(--fg)' },
+  });
+}
+
 
 function toggleWrap(mark: string) {
   return (view: EditorView): boolean => {
@@ -117,7 +144,16 @@ export function MarkdownEditor(props: EditorProps) {
   const languagesRequested = useRef(false);
   /** Holds the CodeMirror extensions contributed by plugins. */
   const pluginCompartment = useRef<Compartment | null>(null);
+  /** Holds the theme of the editor, so it can be rebuilt without a reset. */
+  const themeCompartment = useRef<Compartment | null>(null);
+  /** Holds the line wrapping of the editor. */
+  const wrapCompartment = useRef<Compartment | null>(null);
   const pluginExtensions = useRef<Extension[]>([]);
+  /** The values of the theme that are already applied to the view. */
+  const appliedTheme = useRef<{ fontSize: number; wrap: boolean }>({
+    fontSize: props.fontSize ?? DEFAULT_FONT_SIZE,
+    wrap: props.wrap ?? true,
+  });
   /** Subscribers of the plugin facing events. */
   const changeSubscribers = useRef(new Set<(text: string) => void>());
   const selectionSubscribers = useRef(new Set<(sel: EditorRange) => void>());
@@ -125,6 +161,8 @@ export function MarkdownEditor(props: EditorProps) {
   const suppress = useRef(false);
   if (!languagesCompartment.current) languagesCompartment.current = new Compartment();
   if (!pluginCompartment.current) pluginCompartment.current = new Compartment();
+  if (!themeCompartment.current) themeCompartment.current = new Compartment();
+  if (!wrapCompartment.current) wrapCompartment.current = new Compartment();
 
   onChange.current = props.onChange;
   onSave.current = props.onSave;
@@ -180,8 +218,8 @@ export function MarkdownEditor(props: EditorProps) {
       ...historyKeymap,
     ]),
     placeholder(props.placeholderText ?? 'Write something…'),
-    editorTheme,
-    EditorView.lineWrapping,
+    themeCompartment.current!.of(buildTheme(appliedTheme.current.fontSize)),
+    wrapCompartment.current!.of(appliedTheme.current.wrap ? EditorView.lineWrapping : []),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const text = update.state.doc.toString();
@@ -311,6 +349,23 @@ export function MarkdownEditor(props: EditorProps) {
     };
     // The editor is created once; note switches reconfigure the instance.
   }, []);
+
+  // A new font size or a new wrapping only reconfigures the theme of the
+  // view: the document, the history and the cursor stay untouched.
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance) return;
+    const fontSize = props.fontSize ?? DEFAULT_FONT_SIZE;
+    const wrap = props.wrap ?? true;
+    if (appliedTheme.current.fontSize === fontSize && appliedTheme.current.wrap === wrap) return;
+    appliedTheme.current = { fontSize, wrap };
+    instance.dispatch({
+      effects: [
+        themeCompartment.current!.reconfigure(buildTheme(fontSize)),
+        wrapCompartment.current!.reconfigure(wrap ? EditorView.lineWrapping : []),
+      ],
+    });
+  }, [props.fontSize, props.wrap]);
 
   // Reconfigure on note switch: a fresh state releases the history and the
   // document of the previous note, the view itself is kept.

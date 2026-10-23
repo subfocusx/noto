@@ -23,10 +23,31 @@ export function baseNameOf(path: string): string {
 }
 
 /**
+ * The sort order of the tree.
+ *
+ * `name` sorts the entries alphabetically, `modified` puts the recently
+ * changed notes first. The folders are always listed before the notes.
+ */
+export type TreeSort = 'name' | 'modified';
+
+function compareBySort(a: Node, b: Node, sort: TreeSort): number {
+  if (sort === 'modified') {
+    // The timestamps are ISO strings, so a plain comparison is enough.
+    const byTime = b.updatedAt.localeCompare(a.updatedAt);
+    if (byTime !== 0) return byTime;
+  }
+  return compareStrings(a.name, b.name);
+}
+
+/**
  * Groups the flat node lists into folders (top level + nested) and files.
  * Files are returned per parent path so a folder can render its own files.
  */
-export function buildTree(folders: Node[], files: Node[]): {
+export function buildTree(
+  folders: Node[],
+  files: Node[],
+  sort: TreeSort = 'name',
+): {
   roots: TreeFolder[];
   filesByParent: Map<string, Node[]>;
 } {
@@ -37,7 +58,7 @@ export function buildTree(folders: Node[], files: Node[]): {
     filesByParent.set(file.parentPath, list);
   }
   for (const list of filesByParent.values()) {
-    list.sort((a, b) => compareStrings(a.name, b.name));
+    list.sort((a, b) => compareBySort(a, b, sort));
   }
 
   const byPath = new Map<string, TreeFolder>();
@@ -54,11 +75,11 @@ export function buildTree(folders: Node[], files: Node[]): {
     if (parent) parent.children.push({ node: folder, children: entry.children });
     else roots.push(entry);
   }
-  // Every level is sorted by name, not only the root level.
+  // Every level is sorted, not only the root level.
   for (const entry of byPath.values()) {
-    entry.children.sort((a, b) => compareStrings(a.node.name, b.node.name));
+    entry.children.sort((a, b) => compareBySort(a.node, b.node, sort));
   }
-  roots.sort((a, b) => compareStrings(a.node.name, b.node.name));
+  roots.sort((a, b) => compareBySort(a.node, b.node, sort));
   return { roots, filesByParent };
 }
 

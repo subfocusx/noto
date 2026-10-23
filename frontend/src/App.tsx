@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { ComponentType } from 'preact';
 import { AppFooter } from './components/AppFooter';
 import { AppHeader } from './components/AppHeader';
 import { AttachmentsPanel } from './components/AttachmentsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { Dialog } from './components/Dialog';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
+import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
   PluginCommandSlot,
@@ -13,25 +15,27 @@ import {
   PluginSidebarSlot,
   PluginToolbarSlot,
 } from './components/PluginSlots';
-import {
-  PluginManagerPanel,
-  type PluginManagerEntry,
-  type PluginManagerStatus,
-} from './components/PluginManagerPanel';
+import type { PluginManagerEntry, PluginManagerPanelProps, PluginManagerStatus } from './components/PluginManagerPanel';
 import { Preview } from './components/Preview';
-import { SearchPanel } from './components/SearchPanel';
+import type { SearchPanelProps } from './components/SearchPanel';
+import type { SettingsDialogProps } from './components/SettingsDialog';
+import type { ShortcutHelpProps } from './components/ShortcutHelp';
 import { Sidebar } from './components/Sidebar';
-import { TrashPanel } from './components/TrashPanel';
-import { TransferPanel } from './components/TransferPanel';
+import type { TrashPanelProps } from './components/TrashPanel';
+import type { TransferPanelProps } from './components/TransferPanel';
+import { TreeContextMenu } from './components/TreeContextMenu';
 import { createPluginApi } from './core/api/pluginApi';
 import { registerAppCommands, APP_COMMAND_PREFIX } from './core/commands/appCommands';
 import { CommandRegistry } from './core/commands/commandRegistry';
+import { matchesShortcut, SHORTCUTS } from './core/commands/shortcuts';
 import { EventBus } from './core/events/eventBus';
 import { SettingsStore } from './core/settings/settingsStore';
 import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
 import { buildTree } from './lib/tree';
 import { createWikiResolver } from './lib/wiki';
+import { Icon } from './ui/icons';
+import type { Node } from './types';
 import type { PluginEditor, PluginEventMap, PluginState } from './plugins/contract';
 import { PluginHost } from './plugins/host';
 import { builtinPlugins } from './plugins/loader';
@@ -47,6 +51,16 @@ import { PluginRegistry } from './plugins/registry';
  * the built-in plugins are registered with it and the plugin contributions
  * are rendered through the slots of `./components/PluginSlots.tsx`.
  */
+
+/** The shortcuts of the commands of the application, shown in the palette. */
+const PALETTE_SHORTCUTS: Record<string, string> = {
+  'app:new-note': 'Ctrl+Alt+N',
+  'app:search': 'Ctrl+Shift+F',
+  'app:settings': 'Ctrl+,',
+  'app:shortcuts': 'Ctrl+/',
+  'app:toggle-sidebar': 'Ctrl+Alt+B',
+  'app:toggle-theme': 'Ctrl+Alt+T',
+};
 
 /** Maps the state of the registry onto the states of the manager panel. */
 function toManagerStatus(state: PluginState): PluginManagerStatus {
@@ -68,6 +82,21 @@ export function App() {
     return () => appStore.stop();
   }, []);
 
+  /* --------------------------------------------------------------- theme */
+
+  // The chosen theme is written into the document; the `system` theme follows
+  // the operating system, also when it changes while the application is open.
+  useEffect(() => {
+    actions.applyTheme(env.theme);
+    if (env.theme !== 'system') return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => actions.setEffectiveTheme(query.matches ? 'light' : 'dark');
+    onChange();
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, [actions, env.theme]);
+
   /* ------------------------------------------------------------- plugins */
 
   const hostRef = useRef<PluginHost | null>(null);
@@ -81,7 +110,9 @@ export function App() {
   const [pluginVersion, setPluginVersion] = useState(0);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  // The state of the palette lives in the store, so the keyboard handler can
+  // read it at any moment without a stale closure.
+  const paletteOpen = ui.paletteOpen;
   const [commandRegistry, setCommandRegistry] = useState<CommandRegistry | null>(null);
 
   /** The path of the note that is open; the plugins read it through the editor. */
@@ -173,6 +204,9 @@ export function App() {
         }
         appStore.actions.openDialog({ kind: 'delete', node });
       },
+      openSettings: () => appStore.actions.setSettingsOpen(true),
+      openShortcuts: () => appStore.actions.setShortcutHelpOpen(true),
+      toggleSidebar: () => appStore.actions.toggleSidebar(),
     });
 
     const host = new PluginHost({
@@ -338,38 +372,170 @@ export function App() {
 
   /* ----------------------------------------------------------- shortcuts */
 
-  // Ctrl+K / Ctrl+P open the command palette; the search is one of its
-  // commands and stays reachable through Ctrl+Shift+F.
+  // The shortcuts come from one list (`./core/commands/shortcuts.ts`), so the
+  // handler, the palette and the help dialog can never disagree.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod) return;
-      const key = event.key.toLowerCase();
       const inEditor = Boolean((event.target as HTMLElement | null)?.closest?.('.cm-editor'));
-      if (key === 'k' || key === 'p') {
-        event.preventDefault();
-        setPaletteOpen((open) => !open);
-        return;
+
+      // Escape closes the open overlay. The handler of the shell is used on
+      // purpose: it is registered when the application starts, so Escape works
+      // even in the moment when an overlay has just appeared and its own
+      // listener is not mounted yet. The state is read from the store, so the
+      // handler never works with an outdated value.
+      const snapshot = appStore.getSnapshot();
+      if (event.key === 'Escape') {
+        if (snapshot.ui.paletteOpen) {
+          event.preventDefault();
+          actions.setPaletteOpen(false);
+          return;
+        }
+        if (snapshot.ui.searchOpen) {
+          event.preventDefault();
+          actions.setSearchOpen(false);
+          return;
+        }
+        if (snapshot.ui.settingsOpen) {
+          event.preventDefault();
+          actions.setSettingsOpen(false);
+          return;
+        }
+        if (snapshot.ui.shortcutHelpOpen) {
+          event.preventDefault();
+          actions.setShortcutHelpOpen(false);
+          return;
+        }
       }
-      if (key === 'f' && event.shiftKey) {
-        event.preventDefault();
-        actions.setSearchOpen(true);
-        return;
-      }
-      if (key === 's' && !inEditor) {
-        event.preventDefault();
-        actions.explicitSave();
+
+      for (const shortcut of SHORTCUTS) {
+        if (!matchesShortcut(event, shortcut.keys)) continue;
+        // The shortcuts of the editor belong to CodeMirror itself.
+        if (shortcut.group === 'Редактор') return;
+        switch (shortcut.id) {
+          case 'palette':
+          case 'palette.secondary':
+            event.preventDefault();
+            actions.togglePalette();
+            return;
+          case 'search':
+            event.preventDefault();
+            actions.setSearchOpen(true);
+            return;
+          case 'shortcutHelp':
+            event.preventDefault();
+            actions.setShortcutHelpOpen(true);
+            return;
+          case 'settings':
+            event.preventDefault();
+            actions.setSettingsOpen(true);
+            return;
+          case 'newNote':
+            event.preventDefault();
+            actions.openDialog({ kind: 'create-file', parentPath: '', value: 'note.md' });
+            return;
+          case 'save':
+            if (!inEditor) {
+              event.preventDefault();
+              actions.explicitSave();
+            }
+            return;
+          case 'toggleSidebar':
+            event.preventDefault();
+            actions.toggleSidebar();
+            return;
+          case 'toggleTheme':
+            event.preventDefault();
+            actions.toggleTheme();
+            return;
+          default:
+            return;
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [actions]);
 
+  /* ------------------------------------------- the rarely used dialogs */
+
+  // The dialogs of the settings, of the shortcuts and the panels of the
+  // trash, of the import/export and of the plugins are opened rarely, so they
+  // are loaded on demand: they stay out of the entry chunk.
+  const [lazyPanels, setLazyPanels] = useState<{
+    TrashPanel: ComponentType<TrashPanelProps>;
+    TransferPanel: ComponentType<TransferPanelProps>;
+    PluginManagerPanel: ComponentType<PluginManagerPanelProps>;
+  } | null>(null);
+
+  const needLazyPanels =
+    pluginsOpen || dialog.kind === 'trash' || dialog.kind === 'transfer';
+
+  useEffect(() => {
+    if (!needLazyPanels || lazyPanels) return;
+    let cancelled = false;
+    void import('./components/LazyPanels').then((module) => {
+      if (cancelled) return;
+      setLazyPanels({
+        TrashPanel: module.TrashPanel,
+        TransferPanel: module.TransferPanel,
+        PluginManagerPanel: module.PluginManagerPanel,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [needLazyPanels, lazyPanels]);
+
+  const [lazyOverlays, setLazyOverlays] = useState<{
+    SearchPanel: ComponentType<SearchPanelProps>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!ui.searchOpen || lazyOverlays) return;
+    let cancelled = false;
+    void import('./components/LazyOverlays').then((module) => {
+      if (cancelled) return;
+      setLazyOverlays({ SearchPanel: module.SearchPanel });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ui.searchOpen, lazyOverlays]);
+
+  const [SettingsDialogComponent, setSettingsDialogComponent] = useState<
+    ComponentType<SettingsDialogProps> | null
+  >(null);
+  const [ShortcutHelpComponent, setShortcutHelpComponent] = useState<
+    ComponentType<ShortcutHelpProps> | null
+  >(null);
+
+  useEffect(() => {
+    if (!ui.settingsOpen || SettingsDialogComponent) return;
+    let cancelled = false;
+    void import('./components/SettingsDialog').then((module) => {
+      if (!cancelled) setSettingsDialogComponent(() => module.SettingsDialog);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ui.settingsOpen, SettingsDialogComponent]);
+
+  useEffect(() => {
+    if (!ui.shortcutHelpOpen || ShortcutHelpComponent) return;
+    let cancelled = false;
+    void import('./components/ShortcutHelp').then((module) => {
+      if (!cancelled) setShortcutHelpComponent(() => module.ShortcutHelp);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ui.shortcutHelpOpen, ShortcutHelpComponent]);
+
   /* ----------------------------------------------------------- derived */
 
   const { roots, filesByParent } = useMemo(
-    () => buildTree(tree.folders, tree.files),
-    [tree.folders, tree.files],
+    () => buildTree(tree.folders, tree.files, ui.treeSort),
+    [tree.folders, tree.files, ui.treeSort],
   );
 
   const wikiResolver = useMemo(() => createWikiResolver(tree.files), [tree.files]);
@@ -445,8 +611,36 @@ export function App() {
     editorRef.current?.insert(markdown);
   };
 
+  /** Opens the context menu of the tree. */
+  const openTreeContextMenu = (payload: {
+    path: string;
+    isFolder: boolean;
+    x: number;
+    y: number;
+  }) => {
+    actions.openContextMenu(payload);
+  };
+
+  /** The node of the tree that the context menu belongs to. */
+  const contextNode = useMemo(() => {
+    const menu = ui.contextMenu;
+    if (!menu) return null;
+    if (menu.isFolder) return tree.folders.find((folder) => folder.path === menu.path) ?? null;
+    return tree.files.find((file) => file.path === menu.path) ?? null;
+  }, [ui.contextMenu, tree.folders, tree.files]);
+
+  /** Renames a note directly in the tree. */
+  const renameInline = async (node: Node, name: string) => {
+    if (!name || name === node.name) return;
+    try {
+      await actions.renameNode(node, name);
+    } catch (err) {
+      actions.showBanner(err instanceof Error ? err.message : 'Could not rename the note');
+    }
+  };
+
   return (
-    <div class={`app mode-${ui.mode}${ui.drawerOpen ? ' drawer-open' : ''}`}>
+    <div class={`app mode-${ui.mode}${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <AppHeader
         title={note.path ? note.path.split('/').pop()! : 'Noto'}
         status={note.status}
@@ -454,11 +648,14 @@ export function App() {
         mode={ui.mode}
         drawerOpen={ui.drawerOpen}
         theme={env.theme}
+        effectiveTheme={env.effectiveTheme}
         onToggleDrawer={actions.toggleDrawer}
         onSetMode={actions.setMode}
         onToggleTheme={actions.toggleTheme}
         onOpenAttachments={() => actions.openDialog({ kind: 'attachments' })}
       />
+
+      <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />
 
       {!env.online ? (
         <div class="offline-banner" role="status" data-testid="offline-banner">
@@ -505,6 +702,15 @@ export function App() {
             onOpenTransfer={() => actions.openDialog({ kind: 'transfer' })}
             onRefresh={() => void actions.refreshTree()}
             loading={tree.loading}
+            recentPaths={ui.recentPaths}
+            onOpenRecent={(path) => void openNote(path)}
+            onRemoveRecent={actions.removeRecent}
+            onContextMenu={openTreeContextMenu}
+            onRenameInline={(node, name) => renameInline(node, name)}
+            collapsed={ui.sidebarCollapsed}
+            onToggleCollapse={actions.toggleSidebar}
+            sidebarWidth={ui.sidebarWidth}
+            onResizeWidth={actions.setSidebarWidth}
           />
 
           <div class="noto-plugin-sidebar-area">
@@ -522,7 +728,7 @@ export function App() {
               type="button"
               class="text-button"
               aria-label="Open command palette"
-              onClick={() => setPaletteOpen(true)}
+              onClick={() => actions.setPaletteOpen(true)}
             >
               Commands
             </button>
@@ -536,6 +742,8 @@ export function App() {
               value={note.content}
               path={note.path ?? ''}
               contentPath={note.contentPath}
+              fontSize={ui.editorFontSize}
+              wrap={ui.editorWrap}
               onChange={actions.editContent}
               onSave={actions.explicitSave}
               onHandle={(handle) => {
@@ -544,6 +752,7 @@ export function App() {
             />
             {!note.path ? (
               <div class="empty-state" data-testid="empty-state">
+                <Icon name="file-text" size={32} class="empty-state-icon" />
                 <h2>No note selected</h2>
                 <p>Pick a note in the sidebar or create a new one.</p>
               </div>
@@ -569,33 +778,41 @@ export function App() {
         onRetrySave={actions.explicitSave}
       />
 
-      <SearchPanel
-        open={ui.searchOpen}
-        onClose={() => actions.setSearchOpen(false)}
-        onOpenNote={(path) => void openNote(path)}
-      />
+      {lazyOverlays && ui.searchOpen ? (
+        <lazyOverlays.SearchPanel
+          open={ui.searchOpen}
+          onClose={() => actions.setSearchOpen(false)}
+          onOpenNote={(path) => void openNote(path)}
+        />
+      ) : null}
 
-      <TrashPanel
-        open={dialog.kind === 'trash'}
-        onClose={actions.closeDialog}
-        onRestored={() => void actions.refreshTree()}
-      />
+      {lazyPanels && dialog.kind === 'trash' ? (
+        <lazyPanels.TrashPanel
+          open={dialog.kind === 'trash'}
+          onClose={actions.closeDialog}
+          onRestored={() => void actions.refreshTree()}
+        />
+      ) : null}
 
-      <TransferPanel
-        open={dialog.kind === 'transfer'}
-        onClose={actions.closeDialog}
-        currentPath={note.path}
-        onImported={() => void actions.refreshTree()}
-      />
+      {lazyPanels && dialog.kind === 'transfer' ? (
+        <lazyPanels.TransferPanel
+          open={dialog.kind === 'transfer'}
+          onClose={actions.closeDialog}
+          currentPath={note.path}
+          onImported={() => void actions.refreshTree()}
+        />
+      ) : null}
 
       <Dialog title="Plugins" open={pluginsOpen} onClose={() => setPluginsOpen(false)}>
-        <PluginManagerPanel
-          plugins={pluginEntries}
-          onEnable={(id) => void enablePlugin(id)}
-          onDisable={(id) => void disablePlugin(id)}
-          onOpenSettings={(id) => setSettingsPluginId(id)}
-          onResetSettings={(id) => void resetPluginSettings(id)}
-        />
+        {lazyPanels ? (
+          <lazyPanels.PluginManagerPanel
+            plugins={pluginEntries}
+            onEnable={(id) => void enablePlugin(id)}
+            onDisable={(id) => void disablePlugin(id)}
+            onOpenSettings={(id) => setSettingsPluginId(id)}
+            onResetSettings={(id) => void resetPluginSettings(id)}
+          />
+        ) : null}
         <PluginCommandSlot commands={pluginCommands} />
       </Dialog>
 
@@ -632,7 +849,8 @@ export function App() {
         open={paletteOpen}
         registry={commandRegistry}
         refreshKey={pluginVersion}
-        onClose={() => setPaletteOpen(false)}
+        shortcuts={PALETTE_SHORTCUTS}
+        onClose={() => actions.setPaletteOpen(false)}
         onError={(message) => actions.showBanner(message)}
       />
 
@@ -646,6 +864,87 @@ export function App() {
         onRestoreDraft={actions.restoreDraft}
         onDiscardDraft={actions.discardDraft}
       />
+
+      {ui.contextMenu && contextNode ? (
+        <TreeContextMenu
+          path={ui.contextMenu.path}
+          isFolder={ui.contextMenu.isFolder}
+          x={ui.contextMenu.x}
+          y={ui.contextMenu.y}
+          onClose={actions.closeContextMenu}
+          onRename={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            actions.openDialog({ kind: 'rename', node, value: node.name });
+          }}
+          onMove={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            actions.openDialog({ kind: 'move', node, value: node.parentPath });
+          }}
+          onDelete={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            actions.openDialog({ kind: 'delete', node });
+          }}
+          onCreateFile={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            actions.openDialog({ kind: 'create-file', parentPath: node.path, value: 'note.md' });
+          }}
+          onCreateFolder={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            actions.openDialog({ kind: 'create-folder', parentPath: node.path, value: 'New folder' });
+          }}
+        />
+      ) : null}
+
+      {ui.settingsOpen && SettingsDialogComponent ? (
+        <SettingsDialogComponent
+          open={ui.settingsOpen}
+        onClose={() => actions.setSettingsOpen(false)}
+        theme={env.theme}
+        mode={ui.mode}
+        sidebarCollapsed={ui.sidebarCollapsed}
+        sidebarWidth={ui.sidebarWidth}
+        treeSort={ui.treeSort}
+        editorFontSize={ui.editorFontSize}
+        editorWrap={ui.editorWrap}
+        online={env.online}
+        version="0.1.0"
+        onTheme={(theme) => actions.setTheme(theme)}
+        onMode={(mode) => actions.setMode(mode)}
+        onSidebarCollapsed={(collapsed) => actions.setSidebarCollapsed(collapsed)}
+        onSidebarWidth={(width) => actions.setSidebarWidth(width)}
+        onTreeSort={(sort) => actions.setTreeSort(sort)}
+        onEditorFontSize={(size) => actions.setEditorFontSize(size)}
+        onEditorWrap={(wrap) => actions.setEditorWrap(wrap)}
+        onOpenPlugins={() => {
+          actions.setSettingsOpen(false);
+          setPluginsOpen(true);
+        }}
+        onOpenShortcuts={() => {
+          actions.setSettingsOpen(false);
+          actions.setShortcutHelpOpen(true);
+        }}
+        onOpenTrash={() => {
+          actions.setSettingsOpen(false);
+          actions.openDialog({ kind: 'trash' });
+        }}
+        onOpenTransfer={() => {
+          actions.setSettingsOpen(false);
+          actions.openDialog({ kind: 'transfer' });
+        }}
+        />
+      ) : null}
+
+      {ui.shortcutHelpOpen && ShortcutHelpComponent ? (
+        <ShortcutHelpComponent
+          open={ui.shortcutHelpOpen}
+          onClose={() => actions.setShortcutHelpOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

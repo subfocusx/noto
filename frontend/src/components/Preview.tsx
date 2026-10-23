@@ -57,7 +57,7 @@ export function Preview(props: PreviewProps) {
 
   if (failed) {
     return (
-      <div class="preview" data-testid="preview" role="alert">
+      <div class="preview error-text" data-testid="preview" role="alert">
         {UNAVAILABLE}
       </div>
     );

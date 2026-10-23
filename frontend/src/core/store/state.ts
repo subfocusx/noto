@@ -53,7 +53,7 @@ function initialOnline(): boolean {
 export function createInitialState(): AppState {
   const prefs = loadPrefs();
   return {
-    tree: { folders: [], files: [], loading: true },
+    tree: { folders: [], files: [], loading: true, noteTotal: 0, folderTotal: 0 },
     note: {
       path: null,
       content: '',
@@ -81,8 +81,12 @@ export function createInitialState(): AppState {
       contextMenu: null,
       rightPanelVisible: prefs.rightPanelVisible,
       rightPanelPinned: prefs.rightPanelPinned,
+      rightPanelWidth: prefs.rightPanelWidth,
+      recentCollapsed: prefs.recentCollapsed,
+      treeShowCounts: prefs.treeShowCounts,
       vaultConfigured: false,
       vaultPath: '',
+      vaultFixed: false,
       vaultBusy: false,
     },
     env: { online: initialOnline(), theme: initialTheme(), effectiveTheme: resolveTheme(initialTheme()) },

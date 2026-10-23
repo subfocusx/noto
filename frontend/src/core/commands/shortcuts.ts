@@ -74,6 +74,12 @@ export const SHORTCUTS: ShortcutDef[] = [
     group: 'Файлы',
   },
   {
+    id: 'duplicateNote',
+    keys: 'Ctrl+D',
+    label: 'Дублировать заметку',
+    group: 'Файлы',
+  },
+  {
     id: 'toggleSidebar',
     keys: 'Ctrl+Alt+B',
     label: 'Свернуть или развернуть панель заметок',

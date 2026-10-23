@@ -15,6 +15,7 @@ import (
 
 	"noto/backend/internal/api"
 	"noto/backend/internal/config"
+	"noto/backend/internal/model"
 	"noto/backend/internal/notes"
 	"noto/backend/internal/testutil"
 	"noto/backend/internal/vault"
@@ -22,6 +23,13 @@ import (
 
 // vaultServer starts a test server that can switch its vault.
 func vaultServer(t *testing.T) (*httptest.Server, config.Config) {
+	t.Helper()
+	return newVaultServer(t, false)
+}
+
+// newVaultServer starts a test server whose storage is optionally fixed by
+// the environment.
+func newVaultServer(t *testing.T, fixed bool) (*httptest.Server, config.Config) {
 	t.Helper()
 	t.Setenv(vault.EnvFile, filepath.Join(t.TempDir(), "vault.json"))
 	base := testutil.NewTestConfig(t)
@@ -55,6 +63,7 @@ func vaultServer(t *testing.T) (*httptest.Server, config.Config) {
 	if err != nil {
 		t.Fatalf("new api: %v", err)
 	}
+	srv.SetVaultFixed(fixed)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, base
@@ -65,6 +74,7 @@ type vaultStatus struct {
 	Configured bool   `json:"configured"`
 	Path       string `json:"path"`
 	NotesDir   string `json:"notesDir"`
+	Fixed      bool   `json:"fixed"`
 }
 
 // getJSON sends a GET request and decodes the JSON answer.
@@ -136,6 +146,61 @@ func TestVaultGetReportsTheDefaultDirectory(t *testing.T) {
 	}
 	if st.NotesDir != base.NotesDir {
 		t.Fatalf("unexpected notes directory: %q", st.NotesDir)
+	}
+	if st.Fixed {
+		t.Fatal("the storage is reported as fixed, but the environment did not fix it")
+	}
+}
+
+// TestVaultGetReportsAFixedStorage makes sure that a storage that was fixed by
+// the environment is reported as a normal state.
+func TestVaultGetReportsAFixedStorage(t *testing.T) {
+	ts, _ := newVaultServer(t, true)
+	var st vaultStatus
+	res := getJSON(t, ts.URL+"/api/vault", &st)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: %d", res.StatusCode)
+	}
+	if !st.Fixed {
+		t.Fatal("the storage is not reported as fixed")
+	}
+}
+
+// TestVaultOfAFixedStorageIsRefused makes sure that a fixed storage cannot
+// be changed and that the dedicated error code is used.
+func TestVaultOfAFixedStorageIsRefused(t *testing.T) {
+	ts, _ := newVaultServer(t, true)
+
+	res := postJSON(t, ts.URL+"/api/vault", vaultBody(t, t.TempDir()), nil)
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unexpected status of the vault selection: %d", res.StatusCode)
+	}
+	var apiErr model.APIError
+	if err := json.NewDecoder(res.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode the error envelope: %v", err)
+	}
+	if apiErr.Error.Code != notes.CodeVaultFixed {
+		t.Fatalf("unexpected error code: %q", apiErr.Error.Code)
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/api/vault", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	del, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	defer func() { _ = del.Body.Close() }()
+	if del.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unexpected status of the vault deletion: %d", del.StatusCode)
+	}
+	var apiErr2 model.APIError
+	if err := json.NewDecoder(del.Body).Decode(&apiErr2); err != nil {
+		t.Fatalf("decode the error envelope: %v", err)
+	}
+	if apiErr2.Error.Code != notes.CodeVaultFixed {
+		t.Fatalf("unexpected error code: %q", apiErr2.Error.Code)
 	}
 }
 

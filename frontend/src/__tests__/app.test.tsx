@@ -76,19 +76,18 @@ describe('app shell', () => {
     expect(view.getByTestId('empty-state')).toBeTruthy();
   });
 
-  it('opens a note and shows its preview', async () => {
+  it('opens a note in the editor', async () => {
     const view = render(<App />);
     await waitFor(() => expect(view.getByText('journal')).toBeTruthy());
     fireEvent.click(view.getByLabelText('Expand journal'));
     fireEvent.click(view.getByText('a.md'));
-    await waitFor(() => expect(view.getByTestId('preview').innerHTML).toContain('<h1>hello</h1>'));
+    await waitFor(() => expect(view.getByTestId('markdown-editor')).toBeTruthy());
     expect(view.queryByTestId('empty-state')).toBeNull();
   });
 
-  it('switches the view mode', async () => {
+  it('has no view mode control', async () => {
     const view = render(<App />);
-    const previewButton = view.getByText('preview');
-    fireEvent.click(previewButton);
-    expect(view.getByText('preview').getAttribute('aria-pressed')).toBe('true');
+    expect(view.queryByLabelText('View mode')).toBeNull();
+    expect(view.queryByText('View mode')).toBeNull();
   });
 });

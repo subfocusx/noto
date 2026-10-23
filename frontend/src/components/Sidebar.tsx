@@ -4,9 +4,12 @@
 // of the views (all notes, recent, trash), the tree of the notes and the
 // footer with the secondary actions.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import { Icon } from '../ui/icons';
+import { ColumnResizer } from './ColumnResizer';
+import { AppHeader } from './AppHeader';
 import { RecentNotesPanel } from './RecentNotesPanel';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from './TreeRow';
@@ -64,6 +67,24 @@ export interface SidebarProps {
   treeSort?: 'name' | 'modified';
   /** Called when the user asks for the dialog of the choice of the storage. */
   onChooseVault?: () => void;
+  /** True when the storage is fixed by the environment and cannot be changed. */
+  vaultFixed?: boolean;
+  /** The total number of the folders of the vault. */
+  folderTotal?: number;
+  /** False when the counters of the tree are hidden. */
+  showCounts?: boolean;
+  /** The total number of the notes of the vault. */
+  noteTotal?: number;
+  /** True when the list of the recent notes is collapsed. */
+  recentCollapsed?: boolean;
+  /** Called when the user folds or unfolds the list of the recent notes. */
+  onToggleRecent?: () => void;
+  /** The contributions of the plugins, shown above the footer. */
+  children?: ComponentChildren;
+  /** The name of the open note, shown in the header of the column. */
+  noteTitle?: string;
+  /** False when the application works offline. */
+  online?: boolean;
 }
 
 /** The smallest width of the sidebar, in pixels. */
@@ -106,6 +127,26 @@ export function Sidebar(props: SidebarProps) {
     [props.knownPaths, nodesByPath],
   );
 
+  /**
+   * The number of the notes of every folder.
+   *
+   * The counter is counted by the server (recursively, so a folder shows the
+   * notes of its subfolders as well) and only travels with the tree.
+   */
+  const noteCountsByPath = useMemo(() => {
+    const map = new Map<string, number>();
+    if (props.showCounts === false) return map;
+    const walk = (folders: TreeFolder[]): void => {
+      for (const folder of folders) {
+        const count = folder.node.noteCount;
+        if (typeof count === 'number') map.set(folder.node.path, count);
+        walk(folder.children);
+      }
+    };
+    walk(props.folders);
+    return map;
+  }, [props.folders, props.showCounts]);
+
   const noteCount = useMemo(() => {
     if (props.noteCount !== undefined) return props.noteCount;
     let count = 0;
@@ -124,25 +165,6 @@ export function Sidebar(props: SidebarProps) {
     }
     wrap.style.setProperty('--sidebar-width', `${props.sidebarWidth}px`);
   }, [props.sidebarWidth]);
-
-  const startResize = (event: PointerEvent): void => {
-    const wrap = navRef.current?.parentElement;
-    if (!wrap || !props.onResizeWidth) return;
-    const rect = wrap.getBoundingClientRect();
-    const startX = event.clientX;
-    const startWidth = rect.width;
-
-    const move = (moveEvent: PointerEvent): void => {
-      const width = startWidth + (moveEvent.clientX - startX);
-      props.onResizeWidth?.(Math.max(MIN_WIDTH, Math.round(width)));
-    };
-    const stop = (): void => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
-  };
 
   /** The end of a drag: every highlight disappears. */
   const endDrag = (): void => {
@@ -185,6 +207,12 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <nav ref={navRef} class="sidebar" aria-label="Notes">
+      <AppHeader
+        title={props.noteTitle ?? 'Noto'}
+        vaultName={props.vaultName}
+        online={props.online}
+      />
+
       <div class="vault-header">
         <span class="vault-header-icon">
           <Icon name="folder" size={15} />
@@ -194,9 +222,17 @@ export function Sidebar(props: SidebarProps) {
           <button
             type="button"
             class="vault-header-path"
-            title={props.vaultPath}
+            title={
+              props.vaultFixed
+                ? 'The storage is fixed by the environment (NOTO_VAULT_FIXED)'
+                : props.vaultPath
+            }
             aria-label="Change the storage of the notes"
-            onClick={props.onChooseVault}
+            aria-disabled={props.vaultFixed ? 'true' : undefined}
+            onClick={() => {
+              if (props.vaultFixed) return;
+              props.onChooseVault?.();
+            }}
           >
             {props.vaultPath || 'Choose a folder…'}
           </button>
@@ -266,6 +302,18 @@ export function Sidebar(props: SidebarProps) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">
             <span>Explorer</span>
+            <span class="sidebar-section-counts">
+              {props.folderTotal !== undefined && props.folderTotal > 0 ? (
+                <span class="tree-count" title="Folders">
+                  {props.folderTotal}
+                </span>
+              ) : null}
+              {props.noteTotal !== undefined && props.noteTotal > 0 ? (
+                <span class="tree-count" title="Notes">
+                  {props.noteTotal}
+                </span>
+              ) : null}
+            </span>
           </div>
 
           {drag.path ? (
@@ -327,6 +375,7 @@ export function Sidebar(props: SidebarProps) {
                 onDragStart={setDrag}
                 onDragEnd={endDrag}
                 onDropOnFolder={(_node, targetParentPath) => dropOn(targetParentPath)}
+                noteCountsByPath={noteCountsByPath}
               />
             ))}
             {rootFiles.map((file) => (
@@ -357,6 +406,8 @@ export function Sidebar(props: SidebarProps) {
             <RecentNotesPanel
               paths={props.recentPaths}
               knownPaths={knownPaths}
+              collapsed={props.recentCollapsed}
+              onToggleCollapsed={props.onToggleRecent}
               onOpen={(path) => (props.onOpenRecent ?? props.onSelect)(path)}
               onRemove={(path) => props.onRemoveRecent?.(path)}
             />
@@ -364,17 +415,10 @@ export function Sidebar(props: SidebarProps) {
         ) : null}
       </div>
 
+      {props.children ? <div class="noto-plugin-sidebar-area">{props.children}</div> : null}
+
       <div class="sidebar-footer">
         <span class="muted">{noteCount} notes</span>
-        <button
-          type="button"
-          class="icon-button"
-          title="Search notes"
-          aria-label="Search notes"
-          onClick={props.onOpenSearch}
-        >
-          <Icon name="search" size={15} />
-        </button>
         <button
           type="button"
           class="icon-button"
@@ -401,19 +445,18 @@ export function Sidebar(props: SidebarProps) {
             aria-label={props.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             onClick={props.onToggleCollapse}
           >
-            <Icon name="panel-right" size={15} />
+            <Icon name="panel-left" size={15} />
           </button>
         ) : null}
       </div>
 
       {props.onResizeWidth ? (
-        <div
-          class="sidebar-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          tabIndex={0}
-          onPointerDown={startResize}
+        <ColumnResizer
+          side="left"
+          label="Resize sidebar"
+          min={MIN_WIDTH}
+          max={420}
+          onResize={props.onResizeWidth}
         />
       ) : null}
     </nav>

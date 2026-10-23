@@ -13,6 +13,10 @@ export interface Node {
   revision: number;
   createdAt: string;
   updatedAt: string;
+  /** The number of the notes under the folder (counted recursively). */
+  noteCount?: number;
+  /** The number of the direct child folders of the folder. */
+  folderCount?: number;
 }
 
 export interface NoteContent {
@@ -48,6 +52,10 @@ export interface ImportResult {
 export interface TreeResponse {
   folders: Node[];
   files: Node[];
+  /** The total number of the notes of the tree. */
+  noteTotal?: number;
+  /** The total number of the folders of the tree. */
+  folderTotal?: number;
 }
 
 export interface TrashResponse {

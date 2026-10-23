@@ -249,7 +249,7 @@ func runServer(ctx context.Context) error {
 	}
 	// A storage that was fixed by the environment cannot be changed at
 	// runtime, but the user does not have to choose a folder either.
-	vaultFixed := vaultPath == "" && storageFixedByEnv()
+	vaultFixed := vaultFixedByEnv()
 	listenAddr, err := resolveListenAddr(cfg)
 	if err != nil {
 		return err
@@ -329,6 +329,10 @@ func runServer(ctx context.Context) error {
 // over the stored vault configuration, so that a test or a CI job can run the
 // server in a temporary directory. Such a run uses the default layout and not
 // the layout of a vault.
+//
+// The environment only chooses the default location of the data and of the
+// notes. It does not fix the storage: the storage is only fixed when the
+// variable NOTO_VAULT_FIXED is set.
 func resolveVault(cfg config.Config, logger *slog.Logger) (string, config.Config, error) {
 	if _, ok := os.LookupEnv("NOTO_DATA_DIR"); ok {
 		return "", cfg, nil
@@ -352,14 +356,24 @@ func resolveVault(cfg config.Config, logger *slog.Logger) (string, config.Config
 	return newCfg.NotesDir, newCfg, nil
 }
 
-// storageFixedByEnv reports whether the directory of the notes was fixed by
-// the environment. Such a run (a test or a CI job) uses the default layout.
-func storageFixedByEnv() bool {
-	if _, ok := os.LookupEnv("NOTO_DATA_DIR"); ok {
+// vaultFixedByEnv reports whether the storage of the notes was fixed by the
+// environment. Only the variable NOTO_VAULT_FIXED fixes the storage: any
+// value except the empty string, "0" and "false" enables the fix.
+//
+// The variables NOTO_DATA_DIR and NOTO_NOTES_DIR only choose the default
+// location of the data and of the notes. They never fix the storage, so the
+// user can still change the vault at runtime.
+func vaultFixedByEnv() bool {
+	value := strings.TrimSpace(os.Getenv("NOTO_VAULT_FIXED"))
+	if value == "" {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "0", "false":
+		return false
+	default:
 		return true
 	}
-	_, ok := os.LookupEnv("NOTO_NOTES_DIR")
-	return ok
 }
 
 // newServiceFactory builds the factory that creates the notes service. An

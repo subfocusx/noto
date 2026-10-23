@@ -42,7 +42,8 @@ network.
 
 - Real Markdown files on disk — the filesystem is the source of truth, the
   database only mirrors metadata and the search index.
-- Folder and file tree with create, rename, move, delete and restore.
+- Folder and file tree with create, rename, move, duplicate, delete and restore.
+  A duplicate is created next to the original (`note copy.md`, `note copy 2.md`, …).
 - Deletion is a move to a trash directory, so anything can be restored.
 - Optimistic concurrency: every note carries a `revision`; a write with a
   stale revision is rejected with the current server copy instead of
@@ -57,8 +58,9 @@ network.
   `idle` / `saving` / `saved` / `error` status indicator.
 - Unsaved drafts are kept in IndexedDB and can be recovered after a network
   failure or a reload.
-- Sanitised Markdown preview (`marked` + DOMPurify) — raw HTML from notes is
-  never injected into the page.
+- Sanitised Markdown rendering (`marked` + DOMPurify) — raw HTML from notes is
+  never injected into the page. The renderer stays in the repository as a
+  library; the interface itself shows the editor only.
 
 **Search**
 
@@ -92,12 +94,14 @@ network.
   Slate": canvas `#09090b`, accent `#818cf8`) and a matching light theme, one
   icon set (Lucide), locally served Inter and JetBrains Mono, one spacing scale
   — see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
-- The shell of the application follows the prototype: a permanent top bar (brand,
-  search, navigation, the toggles of both columns, the theme), the left column
-  with the vault, the navigation and the tree, the writing surface with the tab
-  strip and the breadcrumbs in the middle, the outline of the note in the right
-  column and the status bar at the bottom. Both columns are toggled from the
-  top bar, so a hidden column can always be brought back.
+- The shell of the application is compact: there is no separate top bar. The
+  brand and the name of the open note live in the header of the left column, the
+  global actions (the toggles of both columns, the theme, the search, the stubs
+  of the graph and the archive) live in the permanent status bar at the bottom,
+  so a hidden column can always be brought back. Both columns are resized with
+  the same control.
+- The tree shows the hierarchy explicitly (guide lines, a uniform step of the
+  indent) and the number of the notes in every folder.
 - Notes and folders can be dragged from one place of the tree to another. The
   rules live on the server: a folder cannot be dropped into itself or into one
   of its own subfolders.
@@ -115,7 +119,7 @@ network.
   sidebar) plus every command the plugins contribute.
 - Daily note: one command creates or opens `YYYY-MM-DD.md` in the root of the
   library. The local date is used, and an existing file is never overwritten.
-- Settings dialog: theme, view mode, the width of the sidebar, the font size
+- Settings dialog: theme, the width of the columns, the font size
   and the wrapping of the editor, the order of the tree — every switch has a
   real effect and is remembered.
 - Note tree with icons, a context menu (right click or the `…` button),
@@ -454,8 +458,9 @@ Every variable is optional. The defaults below come from
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `NOTO_ADDR` | `127.0.0.1:8080` | TCP address the HTTP server listens on. A non-loopback address (including a host-less `:8080`) requires `NOTO_ALLOW_PUBLIC=true`. |
-| `NOTO_DATA_DIR` | `<user config dir>/noto` | Root of all persistent state. On Windows `%AppData%\noto`; on Linux `~/.config/noto`; on macOS `~/Library/Application Support/noto`. |
+| `NOTO_DATA_DIR` | `<user config dir>/noto` | Root of all persistent state. On Windows `%AppData%\noto`; on Linux `~/.config/noto`; on macOS `~/Library/Application Support/noto`. It only chooses the **default** location: the folder of the notes can still be changed at runtime. |
 | `NOTO_NOTES_DIR` | `<NOTO_DATA_DIR>/notes` | Directory holding the Markdown files. |
+| `NOTO_VAULT_FIXED` | *(empty)* | Fixes the storage of the notes: the folder cannot be changed at runtime and the application shows it as a normal state (not as an error). Any value except an empty string, `0` and `false` enables the fix. |
 | `NOTO_ATTACHMENTS_DIR` | `<NOTO_DATA_DIR>/attachments` | Directory holding uploaded binaries. |
 | `NOTO_TRASH_DIR` | `<NOTO_DATA_DIR>/trash` | Directory holding deleted-but-restorable entries. |
 | `NOTO_DB_PATH` | `<NOTO_DATA_DIR>/noto.db` | SQLite database file. |

@@ -11,11 +11,11 @@ import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { Icon } from '../ui/icons';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 
-/** The deepest level that is indented; deeper rows share the last step. */
-const MAX_DEPTH = 8;
-
 /** The width of one indentation step, in pixels. */
-const INDENT_STEP = 14;
+const INDENT_STEP = 16;
+
+/** The width of the column that holds the chevron of a row, in pixels. */
+const RAIL_WIDTH = 20;
 
 /** The state of a drag, shared by every row of the tree. */
 export interface TreeDragState {
@@ -53,6 +53,10 @@ export interface TreeFolderRowProps {
   onDragEnd?(): void;
   /** Called when a node is dropped on a folder. */
   onDropOnFolder?(node: Node, targetParentPath: string): void;
+  /** The number of notes inside the folder, counted recursively. */
+  noteCount?: number;
+  /** The number of notes of every folder, by path. */
+  noteCountsByPath?: Map<string, number>;
 }
 
 export interface TreeNoteRowProps {
@@ -88,8 +92,29 @@ interface InlineRename {
 }
 
 /** The padding of the row, in pixels. */
-function indentOf(depth: number): number {
-  return Math.min(depth, MAX_DEPTH) * INDENT_STEP;
+export function indentOf(depth: number): number {
+  return depth * INDENT_STEP;
+}
+
+/**
+ * The vertical lines that show the ancestors of a row.
+ *
+ * Every level of the tree gets its own line, so the nesting is readable and
+ * not only felt through the indentation.
+ */
+function IndentGuides(props: { depth: number }) {
+  if (props.depth <= 0) return null;
+  return (
+    <span class="tree-indent-guides" aria-hidden="true">
+      {Array.from({ length: props.depth }, (_, level) => (
+        <span
+          key={level}
+          class="tree-indent-guide"
+          style={{ left: `${level * INDENT_STEP + INDENT_STEP / 2}px` }}
+        />
+      ))}
+    </span>
+  );
 }
 
 /**
@@ -297,6 +322,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   const rename = useInlineRename(node, props.onRenameInline);
   const [over, setOver] = useState(false);
   const isDragging = props.draggingPath === node.path;
+  const count = props.noteCountsByPath?.get(node.path) ?? props.noteCount ?? 0;
 
   // The highlight of a drop target disappears with the drag itself.
   useEffect(() => {
@@ -335,16 +361,19 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
         onDragLeave={() => setOver(false)}
         onDrop={handleDrop}
       >
-        <button
-          type="button"
-          class="tree-toggle"
-          aria-expanded={isOpen}
-          aria-label={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
-          title={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
-          onClick={() => props.onToggle(node.path)}
-        >
-          <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={14} />
-        </button>
+        <IndentGuides depth={props.depth} />
+        <span class="tree-rail" style={{ width: `${RAIL_WIDTH}px` }}>
+          <button
+            type="button"
+            class="tree-toggle"
+            aria-expanded={isOpen}
+            aria-label={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
+            title={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
+            onClick={() => props.onToggle(node.path)}
+          >
+            <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={14} />
+          </button>
+        </span>
         {rename.renaming ? (
           <RenameInput rename={rename} label={`Rename ${node.name}`} />
         ) : (
@@ -361,6 +390,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             <TreeName name={node.name} />
           </button>
         )}
+        {count > 0 ? <span class="tree-count">{count}</span> : null}
         <RowActions
           node={node}
           isFolder
@@ -400,6 +430,8 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               onDragStart={props.onDragStart}
               onDragEnd={props.onDragEnd}
               onDropOnFolder={props.onDropOnFolder}
+              noteCount={props.noteCountsByPath?.get(child.node.path)}
+              noteCountsByPath={props.noteCountsByPath}
             />
           ))}
           {files.map((file) => (
@@ -449,6 +481,8 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
         onDragStart={handleDragStart}
         onDragEnd={() => props.onDragEnd?.()}
       >
+        <IndentGuides depth={props.depth} />
+        <span class="tree-rail" style={{ width: `${RAIL_WIDTH}px` }} />
         {rename.renaming ? (
           <RenameInput rename={rename} label={`Rename ${file.name}`} />
         ) : (

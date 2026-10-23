@@ -1,10 +1,17 @@
 import type { AutosaveStatus } from '../lib/autosave';
+import { IconButton } from '../ui/tooltip';
 
 export interface AppFooterProps {
   /** The message of the last save error, if any. */
   saveError: string | null;
   /** The state of the autosave. */
   status: AutosaveStatus;
+  /** The readable label of the state of the autosave. */
+  statusLabel?: string;
+  /** Opens or closes the navigation drawer of a narrow screen. */
+  onToggleDrawer?(): void;
+  /** True when the drawer of a narrow screen is open. */
+  drawerOpen?: boolean;
   /** The path of the open note. */
   currentPath: string;
   /** Tries to save the note again. */
@@ -21,6 +28,24 @@ export interface AppFooterProps {
   writable?: boolean;
   /** The path of the vault; shown in the title of the path. */
   vaultPath?: string;
+  /** Shows or hides the left column (the vault and the tree of the notes). */
+  onToggleSidebar?(): void;
+  /** True when the left column is visible. */
+  sidebarVisible?: boolean;
+  /** Shows or hides the right column (the outline of the note). */
+  onTogglePanel?(): void;
+  /** True when the right column is visible. */
+  panelVisible?: boolean;
+  /** Switches between the light and the dark theme. */
+  onToggleTheme?(): void;
+  /** The theme that is really active. */
+  theme?: 'light' | 'dark';
+  /** Opens the search palette. */
+  onOpenSearch?(): void;
+  /** Opens the graph of the vault. */
+  onOpenGraph?(): void;
+  /** Opens the archive of the vault. */
+  onOpenArchive?(): void;
 }
 
 /** Groups the digits of a number with a thin space: `1 248`. */
@@ -33,15 +58,65 @@ function group(value: number): string {
 /**
  * The status bar of the application.
  *
- * The left side shows the path of the open note, the right side the state of
- * the document: the position of the cursor, the counters and the format.
+ * The bar is permanent: it holds the global actions of the application, so a
+ * collapsed column can always be opened again, and the state of the document:
+ * the path of the note, the position of the cursor, the counters and the
+ * format.
  */
 export function AppFooter(props: AppFooterProps) {
+  const graphReady = props.onOpenGraph !== undefined;
+  const archiveReady = props.onOpenArchive !== undefined;
   return (
     <footer class="app-footer">
+      <div class="app-footer-actions" role="group" aria-label="Global actions">
+        <IconButton
+          label="Toggle navigation"
+          icon="menu"
+          class="menu-button"
+          pressed={props.drawerOpen}
+          onClick={() => props.onToggleDrawer?.()}
+        />
+        <IconButton
+          label="Toggle notes panel"
+          icon="panel-left"
+          pressed={props.sidebarVisible}
+          onClick={() => props.onToggleSidebar?.()}
+        />
+        <IconButton
+          label="Toggle outline panel"
+          icon="panel-right"
+          pressed={props.panelVisible}
+          onClick={() => props.onTogglePanel?.()}
+        />
+        <IconButton
+          label="Toggle theme"
+          icon={props.theme === 'dark' ? 'sun' : 'moon'}
+          onClick={() => props.onToggleTheme?.()}
+        />
+        <IconButton label="Search notes" icon="search" onClick={() => props.onOpenSearch?.()} />
+        <IconButton
+          label="Graph"
+          icon="network"
+          ariaDisabled={!graphReady}
+          title={graphReady ? 'Graph' : 'Not implemented yet'}
+          onClick={() => props.onOpenGraph?.()}
+        />
+        <IconButton
+          label="Archive"
+          icon="archive"
+          ariaDisabled={!archiveReady}
+          title={archiveReady ? 'Archive' : 'Not implemented yet'}
+          onClick={() => props.onOpenArchive?.()}
+        />
+      </div>
       {props.saveError ? (
         <span class="error-text" role="alert">
           {props.saveError}
+        </span>
+      ) : null}
+      {props.statusLabel ? (
+        <span class={`status status-${props.status}`} data-testid="save-status" role="status">
+          {props.statusLabel}
         </span>
       ) : null}
       {props.status === 'error' ? (

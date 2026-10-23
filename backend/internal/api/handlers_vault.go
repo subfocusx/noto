@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"noto/backend/internal/model"
 	"noto/backend/internal/notes"
 	"noto/backend/internal/vault"
 )
@@ -17,6 +18,9 @@ type vaultStatus struct {
 	Path string `json:"path"`
 	// NotesDir is the directory that holds the Markdown notes.
 	NotesDir string `json:"notesDir"`
+	// Fixed reports whether the storage was fixed by the environment. Such a
+	// storage cannot be changed at runtime.
+	Fixed bool `json:"fixed"`
 }
 
 // vaultRequest is the body of the vault selection endpoint.
@@ -39,11 +43,29 @@ func (s *Server) handleGetVault(w http.ResponseWriter, r *http.Request) {
 		Configured: path != "",
 		Path:       path,
 		NotesDir:   notesDir,
+		Fixed:      s.vaultIsFixed(),
 	})
+}
+
+// writeVaultFixedError answers a request that tried to change a storage that
+// was fixed by the environment. The fixed storage is a normal state and not
+// an internal error, so the dedicated code is used.
+func writeVaultFixedError(w http.ResponseWriter) {
+	body := model.APIError{Error: model.ErrorBody{
+		Code:    notes.CodeVaultFixed,
+		Message: "the storage is fixed by the environment",
+	}}
+	writeJSON(w, http.StatusBadRequest, body)
 }
 
 // handleSetVault selects a new vault and switches the service to it.
 func (s *Server) handleSetVault(w http.ResponseWriter, r *http.Request) {
+	// The fixed storage is checked before the body, so that the answer is
+	// always the same, whatever the body is.
+	if s.vaultIsFixed() {
+		writeVaultFixedError(w)
+		return
+	}
 	var req vaultRequest
 	if err := decodeJSON(w, r, maxJSONBody, &req); err != nil {
 		writeError(w, s.log, err)
@@ -56,10 +78,6 @@ func (s *Server) handleSetVault(w http.ResponseWriter, r *http.Request) {
 	layout, err := vault.Resolve(req.Path)
 	if err != nil {
 		writeError(w, s.log, vaultError(err))
-		return
-	}
-	if s.vaultIsFixed() {
-		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the storage is fixed by the environment", notes.ErrBadRequest))
 		return
 	}
 	if s.factory == nil {
@@ -97,7 +115,7 @@ func (s *Server) handleSetVault(w http.ResponseWriter, r *http.Request) {
 // back to the default layout.
 func (s *Server) handleDeleteVault(w http.ResponseWriter, r *http.Request) {
 	if s.vaultIsFixed() {
-		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the storage is fixed by the environment", notes.ErrBadRequest))
+		writeVaultFixedError(w)
 		return
 	}
 	if s.factory == nil {

@@ -10,6 +10,55 @@ describe('the icon registry', () => {
     }
   });
 
+  it('knows the icons of the compact shell', () => {
+    for (const name of [
+      'copy',
+      'network',
+      'archive',
+      'chevron-up',
+      'panel-left',
+      'dots-vertical',
+      'bookmark',
+    ] as const) {
+      expect(isIconName(name)).toBe(true);
+      expect(ICONS[name]).toBeDefined();
+    }
+  });
+
+  it('knows exactly the expected names', () => {
+    expect(ICON_NAMES).toEqual([
+      'archive',
+      'bookmark',
+      'chevron-down',
+      'chevron-right',
+      'chevron-up',
+      'circle',
+      'copy',
+      'dots-vertical',
+      'file-plus',
+      'file-text',
+      'folder',
+      'folder-open',
+      'folder-plus',
+      'image',
+      'menu',
+      'moon',
+      'more-horizontal',
+      'move',
+      'network',
+      'panel-left',
+      'panel-right',
+      'pencil',
+      'plus',
+      'refresh-cw',
+      'search',
+      'sun',
+      'trash',
+      'upload',
+      'x',
+    ]);
+  });
+
   it('does not know an unknown name', () => {
     expect(isIconName('definitely-not-an-icon')).toBe(false);
   });

@@ -14,6 +14,13 @@ export interface VaultInfo {
   path: string;
   /** The directory with the notes inside the folder of the storage. */
   notesDir: string;
+  /**
+   * True when the storage cannot be changed at runtime.
+   *
+   * The environment may fix the folder of the notes (for example in a
+   * container); the picker then only shows the storage, it never changes it.
+   */
+  fixed: boolean;
 }
 
 /** One directory of the disk. */

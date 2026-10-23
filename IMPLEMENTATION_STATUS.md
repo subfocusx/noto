@@ -184,6 +184,51 @@ lazily, because it is needed once.
 The rules of the drag and drop live on the server, like in SiYuan and in Joplin:
 the client is not trusted.
 
+## Phase 6 status (the compact shell)
+
+The interface was compacted on the advice of the user: the top bar was
+dismantled, the actions were moved to the permanent status bar and to the
+footer of the left column, and the defects the user saw in phase 5 (D30–D39)
+were closed.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P6-1 | The top bar is gone as a separate strip: the brand and the name of the open note live in the header of the left column, the search, Graph, Archive, the theme and the toggles of both columns live in the permanent status bar. A hidden column can always be brought back | done | `frontend/src/App.tsx`, `frontend/src/components/{AppHeader,AppFooter,Sidebar}.tsx`, `frontend/src/styles/layout.css` |
+| P6-2 | The icon instead of the text: the context menu of the tree, the footer of the column and the status bar. Every icon-only control has `aria-label` and `title`; the shared helper is `frontend/src/ui/tooltip.tsx` | done | `frontend/src/ui/tooltip.tsx`, `frontend/src/components/{TreeContextMenu,PluginSlots,AppFooter}.tsx` |
+| P6-3 | The storage fixed by the environment is a normal state, not a banner: the flag `NOTO_VAULT_FIXED=1` (and only it) fixes the storage, `GET /api/vault` returns `fixed`, `POST`/`DELETE` answer with the dedicated code `vault_fixed` | done | `backend/cmd/noto/main.go`, `backend/internal/api/handlers_vault.go`, `docs/VAULT.md` |
+| P6-4 | The tree shows the hierarchy explicitly: the step of the indent is 16 px, every level draws a guide line, the rail of the chevron and of the icon is aligned, the folders show the number of their notes (counted recursively on the server) and the section EXPLORER shows the totals | done | `frontend/src/components/{TreeRow,Sidebar}.tsx`, `backend/internal/api/handlers_notes.go` |
+| P6-5 | The tabs are flat: 2 px underline of the accent, no rounded corners, 32 px of height, the close button only of the active tab, a dot for the unsaved changes | done | `frontend/src/components/EditorTabs.tsx`, `frontend/src/styles/layout.css` |
+| P6-6 | Both columns are resized with the same control (`ColumnResizer`); the width of the right column is stored in the preferences (`rightPanelWidth`, 200–480 px) | done | `frontend/src/components/ColumnResizer.tsx`, `frontend/src/core/settings/prefs.ts` |
+| P6-7 | The section Recent folds with an icon, the search became a button, Graph and Archive became honest stubs in the status bar | done | `frontend/src/components/{RecentNotesPanel,AppFooter}.tsx` |
+| P6-8 | The modes split and preview are removed from the interface; the type `ViewMode` and the old value in the preferences stay, `Preview.tsx` stays in the repository with its tests of the sanitizing | done | `frontend/src/App.tsx`, `frontend/src/components/SettingsDialog.tsx`, `frontend/src/__tests__/preview-lazy.test.tsx` |
+| P6-9 | The duplication of a note (new): `POST /api/notes/duplicate` copies the note next to the original (`note copy.md`, `note copy 2.md`, …), the command `app:duplicate-note` and the shortcut `Ctrl+D` | done | `backend/internal/notes/notes.go`, `frontend/src/api/notes.ts`, `frontend/src/core/commands/appCommands.ts` |
+| P6-10 | The tests: the unit files of the tree, the menu, the recent notes, the tabs and the status bar; the E2E of the shell, the tree, the storage and the viewports | done | `frontend/src/__tests__/`, `e2e/specs/{shell,tree-interaction,vault,viewport}.spec.ts` |
+| P6-11 | The documentation: the defects D30–D39 in `docs/UI_AUDIT.md`, the new shell in `docs/DESIGN_SYSTEM.md`, the storage in `docs/VAULT.md`, the API of the counters and of the duplication in `docs/API.md`, `.env.example` | done | `docs/`, `.env.example` |
+
+### Measured effect of the phase 6
+
+| Measurement | after phase 5 | after phase 6 |
+| --- | --- | --- |
+| Entry chunk, raw | 119,50 kB | 125,95 kB |
+| Entry chunk, gzip | 35,66 kB | 37,19 kB |
+| Frontend unit tests | 330 | 368 (+38) |
+| E2E | 79 passed / 23 skipped | 89 passed / 27 skipped |
+| `scripts/verify.ps1 -E2E -Bench` | 11/11 PASS | 11/11 PASS |
+
+The entry chunk grew by 1,5 kB gzip: the helper of the icon-only buttons, the
+shared resizer of the columns, the counters of the tree and the new icons. The
+preview was removed from the interface, but its renderer stayed in a lazy chunk
+and does not weigh on the entry.
+
+### What was borrowed from the reference projects (phase 6)
+
+| Project | Licence | What was taken |
+|---|---|---|
+| `usememos/memos` | MIT | the pattern of the icon-only controls with the accessible name, the counters of the tree with `tabular-nums`, the compact footer that shows only the non-zero counters |
+| `Vinzent03/obsidian-git` | MIT | the rule of the icon instead of the duplicated text, the `aria-label` and the tooltip of every icon-only control |
+| `laurent22/joplin` | AGPL-3.0 | only the ideas were read: the uniform step of the indent. **No code was copied** |
+| `siyuan-note/siyuan` | AGPL-3.0 | only the ideas were read: the compact status bar. **No code was copied** |
+
 ## Definition of Done
 
 | # | Criterion | Status | Evidence |
@@ -294,6 +339,18 @@ enforcement, the live `ctx.editor`, `ctx.onEditor` and the event
 `editor.available` came from. The documents describe the state of the working
 tree at the time of writing; the numbers above are from a run against that
 same state.
+
+### Phase 6 (2026-10-23)
+
+The compact shell and the defects D30–D39 (see `docs/UI_AUDIT.md`).
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Verification script | `.\scripts\verify.ps1 -E2E -Bench -ReportPath .tools\phase6-verify.md` | **11/11 PASS** (boundaries, build, vet, `go test -race`, HTTP smoke, `tsc`, Vitest, production build, bundle report, Go benchmarks, Playwright) |
+| Backend tests | `go test ./... -count=1` (`backend`) | all packages `ok` (the new tests: the duplication of a note, the counters of the tree, the fixed storage) |
+| Frontend unit tests | `npm test` (`frontend`) | 28 test files, **368 tests passed**, 0 failed |
+| Bundle size | `npm run measure` (`frontend`) | entry chunk 125,95 kB (gzip 37,19 kB) |
+| End-to-end | `npx playwright test` | **89 passed, 27 skipped, 0 failed** — two servers: the main one fixes the storage (`NOTO_VAULT_FIXED=1`), the second one allows the real change of the folder |
 
 ## Security findings and fixes
 

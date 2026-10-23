@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { gotoApp, treeFile, treeFolder } from '../helpers/app';
+import {
+  expandFolder,
+  folderRow,
+  gotoApp,
+  treeFile,
+  treeFolder,
+} from '../helpers/app';
 
 /**
  * The tree of the notes: the long names, the drag and drop and the context
@@ -54,6 +60,78 @@ test.describe('the tree of the notes', () => {
     expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth);
     // The row is a single line high.
     expect(metrics.height).toBeLessThan(metrics.lineHeight * 1.6);
+  });
+
+  test('the folders show the number of their notes and the nesting is visible', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
+
+    await gotoApp(page);
+
+    // A folder with a note and a subfolder with another note.
+    await page.evaluate(async () => {
+      await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: '', name: 'counters' }),
+      });
+      await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: 'counters', name: 'inner' }),
+      });
+      await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: 'counters', name: 'one.md' }),
+      });
+      await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: 'counters/inner', name: 'two.md' }),
+      });
+    });
+    await page.reload();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+
+    const folder = treeFolder(page, 'counters');
+    await expect(folder).toBeVisible();
+
+    // The counter of the folder counts the notes of the subfolders as well.
+    const counter = folderRow(page, 'counters').locator('.tree-count');
+    await expect(counter).toHaveText('2');
+
+    // The nesting is shown with a guide line, not only with an indent.
+    await expandFolder(page, 'counters');
+    await expect(treeFolder(page, 'inner')).toBeVisible();
+    await expect(folderRow(page, 'inner').locator('.tree-indent-guides')).toHaveCount(1);
+  });
+
+  test('the recent notes can be folded', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
+
+    await gotoApp(page);
+
+    // A note is opened, so that it lands in the recent notes.
+    await page.evaluate(async () => {
+      await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: '', name: 'recent-note.md' }),
+      });
+    });
+    await page.reload();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+
+    await treeFile(page, 'recent-note.md').click();
+
+    const toggle = page.getByRole('button', { name: 'Collapse recent notes' });
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+
+    await expect(page.getByRole('button', { name: 'Expand recent notes' })).toBeVisible();
+    await expect(page.locator('.recent-list')).toHaveCount(0);
   });
 
   test('a note can be dropped on another folder', async ({ page }, testInfo) => {

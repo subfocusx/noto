@@ -31,6 +31,12 @@ export interface AppCommandDeps {
   renameNote(): void;
   /** Deletes the note that is currently open. */
   deleteNote(): void;
+  /**
+   * Copies the note that is currently open.
+   *
+   * The callback is optional: the shell wires it when the store is ready.
+   */
+  duplicateNote?(): void | Promise<void>;
   /** Opens the settings of the application. */
   openSettings(): void;
   /** Opens the help of the keyboard shortcuts. */
@@ -87,6 +93,13 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
       title: 'Delete note',
       description: 'Move the note that is open into the trash',
       run: () => deps.deleteNote(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}duplicate-note`,
+      title: 'Duplicate note',
+      description: 'Copy the note that is open and open the copy',
+      shortcut: 'Ctrl+D',
+      run: () => deps.duplicateNote?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}open-trash`,

@@ -25,6 +25,17 @@ const PORT = 8099;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 /**
+ * A second server, started without `NOTO_VAULT_FIXED`.
+ *
+ * The main server fixes the storage of the notes (the flag `NOTO_VAULT_FIXED`
+ * is set), so the storage cannot be changed there. The test of the real
+ * change of the storage needs a server that allows it, and it gets its own
+ * port and its own data directory.
+ */
+const SWITCH_PORT = 8098;
+const SWITCH_URL = `http://127.0.0.1:${SWITCH_PORT}`;
+
+/**
  * Every run gets its own data directory so that repeated runs do not collide with
  * notes left over from a previous run (the backend rejects duplicate sibling names).
  */
@@ -77,8 +88,27 @@ export default defineConfig({
         NOTO_ADDR: `127.0.0.1:${PORT}`,
         NOTO_DATA_DIR: DATA_DIR,
         NOTO_ALLOW_PUBLIC: 'false',
+        // The storage of the test run is fixed by the environment: the
+        // application shows it as a normal state and refuses to change it.
+        NOTO_VAULT_FIXED: '1',
       },
       url: `${BASE_URL}/api/health`,
+      reuseExistingServer: false,
+      timeout: 180_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      // The second server does not fix the storage, so the test of the real
+      // change of the storage can run against it.
+      command: `"${GO_BIN}" run ./cmd/noto`,
+      cwd: path.join(__dirname, 'backend'),
+      env: {
+        NOTO_ADDR: `127.0.0.1:${SWITCH_PORT}`,
+        NOTO_DATA_DIR: path.join(os.tmpdir(), 'noto-e2e-switch', RUN_ID),
+        NOTO_ALLOW_PUBLIC: 'false',
+      },
+      url: `${SWITCH_URL}/api/health`,
       reuseExistingServer: false,
       timeout: 180_000,
       stdout: 'pipe',

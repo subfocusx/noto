@@ -13,8 +13,6 @@ export interface SettingsDialogProps {
   onClose(): void;
   /** The theme of the application. */
   theme: 'light' | 'dark' | 'system';
-  /** The layout of the editor. */
-  mode: 'editor' | 'split' | 'preview';
   /** True when the sidebar is collapsed. */
   sidebarCollapsed: boolean;
   /** The width of the sidebar, in pixels. */
@@ -31,8 +29,6 @@ export interface SettingsDialogProps {
   version?: string;
   /** Called when the theme changes. */
   onTheme(theme: 'light' | 'dark' | 'system'): void;
-  /** Called when the layout of the editor changes. */
-  onMode(mode: 'editor' | 'split' | 'preview'): void;
   /** Called when the sidebar is collapsed or expanded. */
   onSidebarCollapsed(collapsed: boolean): void;
   /** Called when the width of the sidebar changes. */
@@ -55,13 +51,10 @@ export interface SettingsDialogProps {
 
 /** The themes of the application. */
 const THEMES = ['light', 'dark', 'system'] as const;
-/** The layouts of the editor. */
-const MODES = ['editor', 'split', 'preview'] as const;
 /** The orders of the tree. */
 const SORTS = ['name', 'modified'] as const;
 
 type Theme = (typeof THEMES)[number];
-type Mode = (typeof MODES)[number];
 type Sort = (typeof SORTS)[number];
 
 /** True when the value is one of the themes. */
@@ -69,18 +62,25 @@ function isTheme(value: string): value is Theme {
   return (THEMES as readonly string[]).includes(value);
 }
 
-/** True when the value is one of the layouts. */
-function isMode(value: string): value is Mode {
-  return (MODES as readonly string[]).includes(value);
-}
-
 /** True when the value is one of the orders of the tree. */
 function isSort(value: string): value is Sort {
   return (SORTS as readonly string[]).includes(value);
 }
 
+/**
+ * The props of the earlier releases.
+ *
+ * The view mode is gone from the interface: the editor is the only view. The
+ * old props are still accepted (and ignored), so that a caller of the
+ * previous contract keeps working.
+ */
+type LegacySettingsDialogProps = {
+  mode?: unknown;
+  onMode?: unknown;
+};
+
 /** The settings of the application. */
-export function SettingsDialog(props: SettingsDialogProps) {
+export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialogProps) {
   return (
     <Dialog
       title="Settings"
@@ -113,25 +113,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <option value="light">Light</option>
             <option value="dark">Dark</option>
             <option value="system">System</option>
-          </select>
-        </div>
-
-        <div class="settings-row">
-          <div class="settings-row-label">
-            <span>View mode</span>
-            <span>How the note and its preview are shown</span>
-          </div>
-          <select
-            aria-label="View mode"
-            value={props.mode}
-            onChange={(event) => {
-              const value = (event.target as HTMLSelectElement).value;
-              if (isMode(value)) props.onMode(value);
-            }}
-          >
-            <option value="editor">Editor</option>
-            <option value="split">Split</option>
-            <option value="preview">Preview</option>
           </select>
         </div>
 

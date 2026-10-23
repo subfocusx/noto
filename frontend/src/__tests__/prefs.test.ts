@@ -6,6 +6,9 @@ import {
   LEGACY_THEME_KEY,
   PREFS_KEY,
   RECENT_LIMIT,
+  RIGHT_PANEL_WIDTH_DEFAULT,
+  RIGHT_PANEL_WIDTH_MAX,
+  RIGHT_PANEL_WIDTH_MIN,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
   loadPrefs,
@@ -71,6 +74,43 @@ describe('preferences', () => {
     expect(normalizePrefs({ editorFontSize: 99 }).editorFontSize).toBe(EDITOR_FONT_SIZE_MAX);
   });
 
+  it('uses the defaults of the new preferences', () => {
+    const prefs = loadPrefs();
+    expect(prefs.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_DEFAULT);
+    expect(prefs.recentCollapsed).toBe(false);
+    expect(prefs.treeShowCounts).toBe(true);
+  });
+
+  it('clamps the width of the right column', () => {
+    expect(normalizePrefs({ rightPanelWidth: 10 }).rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_MIN);
+    expect(normalizePrefs({ rightPanelWidth: 5000 }).rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_MAX);
+    expect(normalizePrefs({ rightPanelWidth: 320 }).rightPanelWidth).toBe(320);
+    expect(normalizePrefs({ rightPanelWidth: 'wide' }).rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_DEFAULT);
+  });
+
+  it('reads the new preferences from the storage', () => {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({ rightPanelWidth: 240, recentCollapsed: true, treeShowCounts: false }),
+    );
+    const prefs = loadPrefs();
+    expect(prefs.rightPanelWidth).toBe(240);
+    expect(prefs.recentCollapsed).toBe(true);
+    expect(prefs.treeShowCounts).toBe(false);
+  });
+
+  it('keeps the old preferences working', () => {
+    // The preferences of the earlier releases have no new field: the defaults
+    // fill the gaps and nothing is lost.
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: 'light', mode: 'split' }));
+    const prefs = loadPrefs();
+    expect(prefs.theme).toBe('light');
+    expect(prefs.mode).toBe('split');
+    expect(prefs.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_DEFAULT);
+    expect(prefs.recentCollapsed).toBe(false);
+    expect(prefs.treeShowCounts).toBe(true);
+  });
+
   it('reads the theme of the old storage format', () => {
     localStorage.setItem(LEGACY_THEME_KEY, 'light');
     expect(loadPrefs().theme).toBe('light');
@@ -88,6 +128,14 @@ describe('preferences', () => {
     expect(raw).toBeTruthy();
     expect(loadPrefs().theme).toBe('light');
     expect(loadPrefs().mode).toBe('preview');
+  });
+
+  it('writes the new preferences back', () => {
+    savePrefs({ ...DEFAULT_PREFS, rightPanelWidth: 240, recentCollapsed: true, treeShowCounts: false });
+    const prefs = loadPrefs();
+    expect(prefs.rightPanelWidth).toBe(240);
+    expect(prefs.recentCollapsed).toBe(true);
+    expect(prefs.treeShowCounts).toBe(false);
   });
 
   it('keeps the most recent notes first and without duplicates', () => {

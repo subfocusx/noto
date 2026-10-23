@@ -7,6 +7,7 @@ import {
   createFile,
   createFolder,
   deleteNote,
+  duplicateNote as duplicateNoteApi,
   getNote,
   getTree,
   getVault,
@@ -21,6 +22,7 @@ import { deleteDraft, getDraft, isDraftNewer, putDraft, type Draft } from '../..
 import { errorMessage } from '../../lib/errors';
 import type { Node, NoteContent } from '../../types';
 import {
+  clampRightPanelWidth,
   pushRecent as pushRecentPath,
   removeRecent as removeRecentPath,
   savePrefs,
@@ -52,6 +54,9 @@ function persistPrefs(): void {
     recentPaths: state.ui.recentPaths,
     rightPanelVisible: state.ui.rightPanelVisible,
     rightPanelPinned: state.ui.rightPanelPinned,
+    rightPanelWidth: state.ui.rightPanelWidth,
+    recentCollapsed: state.ui.recentCollapsed,
+    treeShowCounts: state.ui.treeShowCounts,
   });
 }
 
@@ -110,7 +115,13 @@ export async function refreshTree(): Promise<void> {
     const res = await getTree();
     update((prev) => ({
       ...prev,
-      tree: { ...prev.tree, folders: res.folders ?? [], files: res.files ?? [] },
+      tree: {
+        ...prev.tree,
+        folders: res.folders ?? [],
+        files: res.files ?? [],
+        noteTotal: res.noteTotal ?? res.files?.length ?? 0,
+        folderTotal: res.folderTotal ?? res.folders?.length ?? 0,
+      },
     }));
   } catch (err) {
     showBanner(errorMessage(err));
@@ -251,6 +262,22 @@ async function createFileNode(parentPath: string, name: string): Promise<void> {
   const node = await createFile(parentPath, name);
   await refreshTree();
   if (node?.path) await openNote(node.path);
+}
+
+/**
+ * Copies the note and opens the copy.
+ *
+ * The copy is created by the server; the tree is read again and the new note
+ * is opened like any other note of the tree.
+ */
+export async function duplicateNote(path: string): Promise<void> {
+  try {
+    const copy = await duplicateNoteApi(path);
+    await refreshTree();
+    if (copy?.path) await openNote(copy.path);
+  } catch (err) {
+    showBanner(errorMessage(err));
+  }
 }
 
 export async function renameNode(node: Node, newName: string): Promise<void> {
@@ -496,6 +523,24 @@ export function setRightPanelPinned(pinned: boolean): void {
   persistPrefs();
 }
 
+/** Changes the width of the right column; the value is clamped. */
+export function setRightPanelWidth(width: number): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, rightPanelWidth: clampRightPanelWidth(width) } }));
+  persistPrefs();
+}
+
+/** Collapses or expands the list of the recent notes. */
+export function setRecentCollapsed(collapsed: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, recentCollapsed: collapsed } }));
+  persistPrefs();
+}
+
+/** Shows or hides the number of the notes next to a folder of the tree. */
+export function setTreeShowCounts(show: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, treeShowCounts: show } }));
+  persistPrefs();
+}
+
 /* ----------------------------------------------------------------- vault */
 
 /** Reads the state of the storage of the notes. */
@@ -508,6 +553,7 @@ export async function loadVault(): Promise<void> {
         ...prev.ui,
         vaultConfigured: info.configured,
         vaultPath: info.path ?? '',
+        vaultFixed: info.fixed === true,
       },
     }));
   } catch (err) {
@@ -537,6 +583,12 @@ export async function chooseVault(path: string): Promise<void> {
     await refreshTree();
   } catch (err) {
     update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: false } }));
+    // A fixed storage is a normal state of the environment, not a failure.
+    if (err instanceof ApiError && err.code === 'vault_fixed') {
+      update((prev) => ({ ...prev, ui: { ...prev.ui, vaultFixed: true } }));
+      showBanner('The storage is fixed by the environment (NOTO_VAULT_FIXED).');
+      return;
+    }
     showBanner(errorMessage(err));
     throw err;
   }
@@ -659,8 +711,12 @@ export interface AppActions {
   setRightPanelVisible(visible: boolean): void;
   toggleRightPanel(): void;
   setRightPanelPinned(pinned: boolean): void;
+  setRightPanelWidth(width: number): void;
+  setRecentCollapsed(collapsed: boolean): void;
+  setTreeShowCounts(show: boolean): void;
   loadVault(): Promise<void>;
   chooseVault(path: string): Promise<void>;
+  duplicateNote(path: string): Promise<void>;
   addRecent(path: string): void;
   removeRecent(path: string): void;
   showBanner(message: string): void;
@@ -710,8 +766,12 @@ export const actions: AppActions = {
   setRightPanelVisible,
   toggleRightPanel,
   setRightPanelPinned,
+  setRightPanelWidth,
+  setRecentCollapsed,
+  setTreeShowCounts,
   loadVault,
   chooseVault,
+  duplicateNote,
   addRecent,
   removeRecent,
   showBanner,

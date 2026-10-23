@@ -17,7 +17,19 @@ export interface VaultPickerProps {
   onChoose(path: string): void;
   /** Called when the user closes the picker without choosing a folder. */
   onClose(): void;
+  /**
+   * True when the storage is fixed by the environment.
+   *
+   * A fixed storage cannot be changed at runtime: the picker then only shows
+   * the storage and the button that confirms the choice stays disabled.
+   */
+  fixed?: boolean;
+  /** True while the storage is being read or changed. */
+  busy?: boolean;
 }
+
+/** The message that explains that the storage cannot be changed. */
+export const VAULT_FIXED_MESSAGE = 'The storage is fixed by the environment (NOTO_VAULT_FIXED).';
 
 /**
  * The dialog of the choice of the folder with the notes.
@@ -96,7 +108,13 @@ export function VaultPicker(props: VaultPickerProps) {
             />
           </label>
 
-          {error ? (
+          {props.fixed ? (
+            <p class="vault-fixed-note" role="note" data-testid="vault-fixed-note">
+              {VAULT_FIXED_MESSAGE}
+            </p>
+          ) : null}
+
+          {error && !props.fixed ? (
             <p class="error-text" role="alert">
               {error}
             </p>
@@ -141,10 +159,19 @@ export function VaultPicker(props: VaultPickerProps) {
           <button
             type="button"
             class="button primary"
-            disabled={!path.trim()}
-            onClick={() => props.onChoose(path.trim())}
+            disabled={!path.trim() || props.fixed === true || props.busy === true}
+            aria-disabled={props.fixed === true ? 'true' : undefined}
+            aria-busy={props.busy === true ? 'true' : undefined}
+            title={props.fixed === true ? VAULT_FIXED_MESSAGE : undefined}
+            data-testid="vault-picker-confirm"
+            onClick={() => {
+              // A fixed storage is never changed and a busy storage is not
+              // changed twice.
+              if (props.fixed === true || props.busy === true) return;
+              props.onChoose(path.trim());
+            }}
           >
-            Use this folder
+            {props.busy === true ? 'Working…' : 'Use this folder'}
           </button>
         </footer>
       </div>

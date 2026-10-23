@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"noto/backend/internal/model"
 	"noto/backend/internal/notes"
 )
 
@@ -17,6 +18,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// treeFolder is a folder of the tree listing. It carries the counters of the
+// notes and of the subfolders below the folder.
+type treeFolder struct {
+	model.Node
+	// NoteCount is the number of notes under the folder, recursively.
+	NoteCount int `json:"noteCount"`
+	// FolderCount is the number of the direct child folders.
+	FolderCount int `json:"folderCount"`
+}
+
 // handleTree returns the flat folder and file lists.
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	folders, files, err := s.service().Tree(r.Context())
@@ -24,10 +35,41 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
+	out := make([]treeFolder, 0, len(folders))
+	for _, f := range folders {
+		out = append(out, treeFolder{Node: f})
+	}
+	// The counters are computed from the lists of the listing, so that the
+	// tree does not need an extra query and no column is needed.
+	notesByFolder := map[string]int{}
+	foldersByParent := map[string]int{}
+	for _, f := range files {
+		for parent := f.ParentPath; parent != ""; parent = parentOfPath(parent) {
+			notesByFolder[parent]++
+		}
+	}
+	for _, f := range out {
+		foldersByParent[f.ParentPath]++
+	}
+	for i := range out {
+		out[i].NoteCount = notesByFolder[out[i].Path]
+		out[i].FolderCount = foldersByParent[out[i].Path]
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"folders": folders,
-		"files":   files,
+		"folders":     out,
+		"files":       files,
+		"noteTotal":   len(files),
+		"folderTotal": len(folders),
 	})
+}
+
+// parentOfPath returns the parent path of a slash separated relative path.
+func parentOfPath(rel string) string {
+	i := strings.LastIndex(rel, "/")
+	if i < 0 {
+		return ""
+	}
+	return rel[:i]
 }
 
 // createRequest is the body of the folder and file creation endpoints.
@@ -176,6 +218,32 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	node, err := s.service().Restore(r.Context(), req.TrashPath)
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, node)
+}
+
+// duplicateRequest is the body of the duplicate endpoint.
+type duplicateRequest struct {
+	// Path is the relative path of the note that is copied.
+	Path string `json:"path"`
+}
+
+// handleDuplicate copies a note next to the original and answers with the
+// node of the copy. The content of the note is never written to the logs.
+func (s *Server) handleDuplicate(w http.ResponseWriter, r *http.Request) {
+	var req duplicateRequest
+	if err := decodeJSON(w, r, maxJSONBody, &req); err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	if strings.TrimSpace(req.Path) == "" {
+		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path field is required", notes.ErrBadRequest))
+		return
+	}
+	node, err := s.service().Duplicate(r.Context(), req.Path)
 	if err != nil {
 		writeError(w, s.log, err)
 		return

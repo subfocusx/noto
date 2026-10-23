@@ -4,6 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { MarkdownEditor, type EditorHandle } from '../components/Editor';
 import { PluginManagerPanel, type PluginManagerEntry } from '../components/PluginManagerPanel';
 import {
+  PluginCommandSlot,
   PluginContextMenuSlot,
   PluginPanelSlot,
   PluginSidebarSlot,
@@ -188,6 +189,33 @@ describe('plugin slots', () => {
 
     fireEvent.click(screen.getByLabelText('Alpha'));
     expect(onSelect).toHaveBeenCalled();
+  });
+
+  it('shows the sidebar and the toolbar items as icon-only buttons', () => {
+    render(
+      <div>
+        <PluginSidebarSlot items={[{ id: 'a', title: 'Alpha', onSelect: () => undefined }]} />
+        <PluginToolbarSlot items={[{ id: 'b', title: 'Beta', run: () => undefined }]} />
+      </div>,
+    );
+
+    for (const label of ['Alpha', 'Beta']) {
+      const button = screen.getByLabelText(label);
+      expect(button.className).toContain('noto-plugin-button-icon');
+      expect(button.getAttribute('title')).toBe(label);
+    }
+  });
+
+  it('keeps the text of the commands of the plugins', () => {
+    render(
+      <PluginCommandSlot
+        commands={[{ id: 'a', title: 'Do it', run: () => undefined }]}
+      />,
+    );
+
+    const button = screen.getByLabelText('Do it');
+    expect(button.className).not.toContain('noto-plugin-button-icon');
+    expect(button.textContent).toContain('Do it');
   });
 
   it('renders the toolbar items of the plugins', () => {

@@ -20,6 +20,9 @@ const (
 	CodeUnsupportedMedia = "unsupported_media_type"
 	CodeForbidden        = "forbidden"
 	CodeInternal         = "internal"
+	// CodeVaultFixed reports that the storage of the notes was fixed by the
+	// environment and cannot be changed at runtime.
+	CodeVaultFixed = "vault_fixed"
 )
 
 // Sentinel errors. They are wrapped by *Error and can be tested with
@@ -36,6 +39,7 @@ var (
 	ErrUnsupportedMedia = errors.New("unsupported_media_type")
 	ErrForbidden        = errors.New("forbidden")
 	ErrInternal         = errors.New("internal")
+	ErrVaultFixed       = errors.New("vault_fixed")
 )
 
 // Error is the typed error of the notes package. It carries the stable API
@@ -111,6 +115,8 @@ func Code(err error) string {
 		return CodeForbidden
 	case errors.Is(err, ErrBadRequest):
 		return CodeBadRequest
+	case errors.Is(err, ErrVaultFixed):
+		return CodeVaultFixed
 	default:
 		return CodeInternal
 	}

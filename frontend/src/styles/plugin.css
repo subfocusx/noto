@@ -60,6 +60,31 @@
   white-space: nowrap;
 }
 
+/* The buttons of the sidebar and of the toolbar show an icon only: the name
+   of the action stays in the `aria-label` and in the tooltip of the button.
+   The label is hidden from the screen, but it stays readable by the
+   assistive technology. */
+.noto-plugin-button-icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+}
+
+.noto-plugin-button-icon .noto-plugin-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .noto-plugin-shortcut {
   margin-left: auto;
   font-family: var(--font-mono);

@@ -5,7 +5,7 @@
 // historic, flat import surface alive so that every existing
 // `from './api/client'` import keeps working.
 export { API_BASE, ApiError, isAbortError, request } from './http';
-export { deleteNote, getNote, moveNote, renameNote, saveNote } from './notes';
+export { deleteNote, duplicateNote, getNote, moveNote, renameNote, saveNote } from './notes';
 export { createFile, createFolder, getTree } from './tree';
 export { reindex, search } from './search';
 export { attachmentRawUrl, deleteAttachment, listAttachments, uploadAttachment } from './attachments';

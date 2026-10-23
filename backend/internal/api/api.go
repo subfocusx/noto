@@ -45,9 +45,9 @@ type Server struct {
 	vaultPath  string
 	vaultNotes string
 	// vaultFixed reports that the storage was fixed by the environment (the
-	// tests and the CI runs use it). Such a storage cannot be changed at
-	// runtime, but it is a storage, so the application does not ask the user
-	// for a folder.
+	// variable NOTO_VAULT_FIXED enables it). Such a storage cannot be
+	// changed at runtime, but it is a storage, so the application does not
+	// ask the user for a folder.
 	vaultFixed bool
 
 	log *slog.Logger
@@ -106,8 +106,9 @@ func (s *Server) SetVaultPath(path string) {
 }
 
 // SetVaultFixed reports that the storage of the notes was fixed by the
-// environment. A fixed storage cannot be changed at runtime, but the
-// application treats it as a chosen one: the user is not asked for a folder.
+// environment (the variable NOTO_VAULT_FIXED enables it). A fixed storage
+// cannot be changed at runtime, but the application treats it as a chosen
+// one: the user is not asked for a folder.
 func (s *Server) SetVaultFixed(fixed bool) {
 	s.vaultMu.Lock()
 	defer s.vaultMu.Unlock()
@@ -176,6 +177,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/notes", s.handlePutNote)
 	s.mux.HandleFunc("POST /api/notes/rename", s.handleRename)
 	s.mux.HandleFunc("POST /api/notes/move", s.handleMove)
+	s.mux.HandleFunc("POST /api/notes/duplicate", s.handleDuplicate)
 	s.mux.HandleFunc("DELETE /api/notes", s.handleDelete)
 	s.mux.HandleFunc("POST /api/notes/restore", s.handleRestore)
 	s.mux.HandleFunc("GET /api/trash", s.handleTrash)

@@ -131,14 +131,21 @@ curl http://127.0.0.1:8080/api/health
 ### `GET /api/tree`
 
 Returns every note and folder as two flat arrays. The client builds the
-hierarchy. Trashed entries are excluded.
+hierarchy. Trashed entries are excluded. The answer also carries the counters
+of the tree: the number of the notes and of the folders of the whole vault and
+the number of the notes below every folder (counted recursively).
 
 ```json
 {
-  "folders": [ { "path": "journal", "name": "journal", "type": "folder", "parentPath": "", "id": "…", "size": 0, "modTime": "2026-01-02T10:00:00Z", "revision": 1, "createdAt": "2026-01-01T09:00:00Z", "updatedAt": "2026-01-02T10:00:00Z" } ],
-  "files":   [ { "path": "journal/note.md", "name": "note.md", "type": "file", "parentPath": "journal", "id": "…", "size": 42, "modTime": "2026-01-02T10:00:00Z", "revision": 3, "createdAt": "2026-01-01T09:00:00Z", "updatedAt": "2026-01-02T10:00:00Z" } ]
+  "folders": [ { "path": "journal", "name": "journal", "type": "folder", "parentPath": "", "id": "…", "size": 0, "modTime": "2026-01-02T10:00:00Z", "revision": 1, "createdAt": "2026-01-01T09:00:00Z", "updatedAt": "2026-01-02T10:00:00Z", "noteCount": 3, "folderCount": 1 } ],
+  "files":   [ { "path": "journal/note.md", "name": "note.md", "type": "file", "parentPath": "journal", "id": "…", "size": 42, "modTime": "2026-01-02T10:00:00Z", "revision": 3, "createdAt": "2026-01-01T09:00:00Z", "updatedAt": "2026-01-02T10:00:00Z" } ],
+  "noteTotal": 3,
+  "folderTotal": 2
 }
 ```
+
+`noteCount` of a folder counts the notes of the folder and of its subfolders;
+`folderCount` counts the direct subfolders. An empty folder reports `0`.
 
 ### `POST /api/folders`
 
@@ -216,6 +223,19 @@ fail with `invalid_name`.
 Response `200` with the updated `Node`. Moving a folder into itself or into
 one of its descendants fails with `invalid_path`.
 
+### `POST /api/notes/duplicate`
+
+```json
+{ "path": "journal/a.md" }
+```
+
+Copies the note next to the original and answers `200` with the `Node` of the
+copy. The name of the copy is derived from the name of the original: `a.md`
+becomes `a copy.md`; when the name is taken, a number is added (`a copy 2.md`,
+`a copy 3.md`, …). The content of the copy is identical, the original stays
+untouched. A path that does not exist fails with `not_found`, a folder fails
+with `invalid_path`.
+
 ### `DELETE /api/notes?path=journal/a.md`
 
 Moves the entry (or a whole folder subtree) to the trash directory.
@@ -249,11 +269,13 @@ Response `200` with the restored `Node`.
 Returns the state of the storage of the notes.
 
 ```json
-{ "configured": true, "path": "D:\\Notes", "notesDir": "D:\\Notes" }
+{ "configured": true, "path": "D:\\Notes", "notesDir": "D:\\Notes", "fixed": false }
 ```
 
 `path` is empty when the default layout is used and the storage was not fixed
-by the environment. See [`docs/VAULT.md`](VAULT.md) for the whole model.
+by the environment. `fixed` reports that the storage cannot be changed at
+runtime (the variable `NOTO_VAULT_FIXED` is set). See
+[`docs/VAULT.md`](VAULT.md) for the whole model.
 
 ### `POST /api/vault`
 
@@ -272,9 +294,14 @@ Errors: `400 bad_request` (no path), `400 invalid_path` (the path is not
 usable), `404 not_found` (there is no such directory), `500 internal` (the
 storage could not be opened; the saved configuration is restored).
 
-When the storage was fixed by the environment (`NOTO_DATA_DIR` /
-`NOTO_NOTES_DIR`), the request is refused with `400 bad_request` and the
-message `the storage is fixed by the environment`.
+When the storage was fixed by the environment (`NOTO_VAULT_FIXED`), the request
+is refused with `400 vault_fixed` and the message `the storage is fixed by the
+environment`. The dedicated code lets the application tell "it is not allowed"
+from "something went wrong": the client shows the fixed storage as a normal
+state and never as an error banner.
+
+The variables `NOTO_DATA_DIR` and `NOTO_NOTES_DIR` only choose the default
+location of the data and of the notes; they do not fix the storage.
 
 ### `DELETE /api/vault`
 

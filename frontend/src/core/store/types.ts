@@ -32,6 +32,10 @@ export interface TreeState {
   folders: Node[];
   files: Node[];
   loading: boolean;
+  /** The total number of the notes of the vault. */
+  noteTotal: number;
+  /** The total number of the folders of the vault. */
+  folderTotal: number;
 }
 
 /** The note that is currently open. */
@@ -82,10 +86,18 @@ export interface UiState {
   rightPanelVisible: boolean;
   /** True when the right panel stays open on narrow screens. */
   rightPanelPinned: boolean;
+  /** The width of the right column in pixels. */
+  rightPanelWidth: number;
+  /** True when the list of the recent notes is collapsed. */
+  recentCollapsed: boolean;
+  /** True when the tree shows the number of the notes of a folder. */
+  treeShowCounts: boolean;
   /** True when the storage of the notes has been chosen. */
   vaultConfigured: boolean;
   /** The path of the storage of the notes. */
   vaultPath: string;
+  /** True when the storage cannot be changed at runtime. */
+  vaultFixed: boolean;
   /** True while the storage is being read or changed. */
   vaultBusy: boolean;
 }

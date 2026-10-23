@@ -6,10 +6,17 @@
 //
 // The icons are Lucide icons (the `lucide-preact` package). They are imported
 // one by one, so the bundler only ships the icons that are really used.
+//
+// The registry grows with the interface: a name is never removed, because a
+// plugin may refer to an icon by its name.
 import {
+  Archive,
+  Bookmark,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Circle,
+  Copy,
   FilePlus,
   FileText,
   Folder,
@@ -19,7 +26,10 @@ import {
   Menu,
   Moon,
   MoreHorizontal,
+  MoreVertical,
   Move,
+  Network,
+  PanelLeft,
   PanelRight,
   Pencil,
   Plus,
@@ -41,9 +51,14 @@ import type { ComponentType } from 'preact';
  * not an error — the icon falls back to a neutral dot.
  */
 export const ICONS = {
+  archive: Archive,
+  bookmark: Bookmark,
   circle: Circle,
   'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
+  'chevron-up': ChevronUp,
+  copy: Copy,
+  'dots-vertical': MoreVertical,
   'file-plus': FilePlus,
   'file-text': FileText,
   folder: Folder,
@@ -54,6 +69,8 @@ export const ICONS = {
   moon: Moon,
   'more-horizontal': MoreHorizontal,
   move: Move,
+  network: Network,
+  'panel-left': PanelLeft,
   'panel-right': PanelRight,
   pencil: Pencil,
   plus: Plus,

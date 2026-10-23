@@ -69,7 +69,12 @@ export interface PluginSidebarSlotProps {
   items: PluginSidebarItem[];
 }
 
-/** The sidebar entries of the plugins. */
+/**
+ * The sidebar entries of the plugins.
+ *
+ * The entries are icon-only buttons: the name of the entry stays in the
+ * `aria-label` and in the tooltip of the button.
+ */
 export function PluginSidebarSlot(props: PluginSidebarSlotProps) {
   if (props.items.length === 0) return null;
   return (
@@ -79,7 +84,7 @@ export function PluginSidebarSlot(props: PluginSidebarSlotProps) {
           <PluginErrorBoundary label={item.title}>
             <button
               type="button"
-              class="noto-plugin-button"
+              class="noto-plugin-button noto-plugin-button-icon"
               title={item.title}
               aria-label={item.title}
               onClick={() => item.onSelect()}
@@ -164,7 +169,12 @@ export interface PluginToolbarSlotProps {
   items: PluginToolbarItem[];
 }
 
-/** The buttons the plugins added to the editor toolbar. */
+/**
+ * The buttons the plugins added to the editor toolbar.
+ *
+ * The buttons are icon-only: the name of the action stays in the `aria-label`
+ * and in the tooltip of the button.
+ */
 export function PluginToolbarSlot(props: PluginToolbarSlotProps) {
   if (props.items.length === 0) return null;
   return (
@@ -173,7 +183,7 @@ export function PluginToolbarSlot(props: PluginToolbarSlotProps) {
         <PluginErrorBoundary key={item.id} label={item.title}>
           <button
             type="button"
-            class="noto-plugin-button"
+            class="noto-plugin-button noto-plugin-button-icon"
             title={item.title}
             aria-label={item.title}
             onClick={() => {

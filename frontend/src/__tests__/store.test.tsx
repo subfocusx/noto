@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/preact';
 import { App } from '../App';
-import { getNote, saveNote } from '../api/client';
+import { duplicateNote, getNote, getVault, saveNote } from '../api/client';
 import { appStore } from '../core/store/appStore';
+import { loadPrefs, RIGHT_PANEL_WIDTH_MAX, RIGHT_PANEL_WIDTH_MIN } from '../core/settings/prefs';
 
 vi.mock('../api/client', () => ({
   ApiError: class ApiError extends Error {},
@@ -20,6 +21,18 @@ vi.mock('../api/client', () => ({
   renameNote: vi.fn(async () => ({})),
   moveNote: vi.fn(async () => ({})),
   deleteNote: vi.fn(async () => ({ ok: true })),
+  duplicateNote: vi.fn(async () => ({
+    id: 'a copy.md',
+    name: 'a copy.md',
+    path: 'a copy.md',
+    type: 'file',
+    parentPath: '',
+    size: 0,
+    modTime: '',
+    revision: 1,
+    createdAt: '',
+    updatedAt: '',
+  })),
   search: vi.fn(async () => []),
   listAttachments: vi.fn(async () => []),
   getTrash: vi.fn(async () => ({ entries: [] })),
@@ -91,5 +104,59 @@ describe('app store', () => {
     appStore.actions.setMode('editor');
     expect(listener).not.toHaveBeenCalled();
     appStore.reset();
+  });
+
+  it('clamps the width of the right column and writes it back', () => {
+    appStore.actions.setRightPanelWidth(10);
+    expect(appStore.getSnapshot().ui.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_MIN);
+    appStore.actions.setRightPanelWidth(5000);
+    expect(appStore.getSnapshot().ui.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_MAX);
+    appStore.actions.setRightPanelWidth(320);
+    expect(appStore.getSnapshot().ui.rightPanelWidth).toBe(320);
+    expect(loadPrefs().rightPanelWidth).toBe(320);
+  });
+
+  it('remembers the collapsed recent notes and the counts of the tree', () => {
+    appStore.actions.setRecentCollapsed(true);
+    appStore.actions.setTreeShowCounts(false);
+    expect(appStore.getSnapshot().ui.recentCollapsed).toBe(true);
+    expect(appStore.getSnapshot().ui.treeShowCounts).toBe(false);
+    const prefs = loadPrefs();
+    expect(prefs.recentCollapsed).toBe(true);
+    expect(prefs.treeShowCounts).toBe(false);
+    appStore.actions.setRecentCollapsed(false);
+    appStore.actions.setTreeShowCounts(true);
+  });
+
+  it('reads the fixed flag of the storage', async () => {
+    vi.mocked(getVault).mockResolvedValueOnce({
+      configured: true,
+      path: 'C:\\notes',
+      notesDir: 'C:\\notes',
+      fixed: true,
+    });
+    await appStore.actions.loadVault();
+    expect(appStore.getSnapshot().ui.vaultFixed).toBe(true);
+    expect(appStore.getSnapshot().ui.vaultPath).toBe('C:\\notes');
+    vi.mocked(getVault).mockResolvedValueOnce({
+      configured: true,
+      path: 'C:\\notes',
+      notesDir: 'C:\\notes',
+      fixed: false,
+    });
+    await appStore.actions.loadVault();
+    expect(appStore.getSnapshot().ui.vaultFixed).toBe(false);
+  });
+
+  it('duplicates the open note and opens the copy', async () => {
+    const view = render(<App />);
+    await appStore.actions.openNote('a.md');
+    await waitFor(() => expect(appStore.getSnapshot().note.content).toBe('# hello'));
+
+    await appStore.actions.duplicateNote('a.md');
+
+    expect(vi.mocked(duplicateNote)).toHaveBeenCalledWith('a.md');
+    await waitFor(() => expect(appStore.getSnapshot().note.path).toBe('a copy.md'));
+    view.unmount();
   });
 });

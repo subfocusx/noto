@@ -43,6 +43,12 @@ export interface Prefs {
   rightPanelVisible: boolean;
   /** True when the right panel is pinned open even on narrow screens. */
   rightPanelPinned: boolean;
+  /** The width of the right column in pixels. */
+  rightPanelWidth: number;
+  /** True when the list of the recent notes is collapsed. */
+  recentCollapsed: boolean;
+  /** True when the tree shows the number of the notes of a folder. */
+  treeShowCounts: boolean;
 }
 
 /** The smallest font size of the editor. */
@@ -63,6 +69,15 @@ export const SIDEBAR_WIDTH_MAX = 480;
 /** The default width of the sidebar. */
 export const SIDEBAR_WIDTH_DEFAULT = 280;
 
+/** The smallest width of the right column. */
+export const RIGHT_PANEL_WIDTH_MIN = 200;
+
+/** The biggest width of the right column. */
+export const RIGHT_PANEL_WIDTH_MAX = 480;
+
+/** The default width of the right column. */
+export const RIGHT_PANEL_WIDTH_DEFAULT = 280;
+
 /** The number of the notes in the list of the recent notes. */
 export const RECENT_LIMIT = 20;
 
@@ -79,11 +94,20 @@ export const DEFAULT_PREFS: Prefs = {
   recentPaths: [],
   rightPanelVisible: true,
   rightPanelPinned: false,
+  rightPanelWidth: RIGHT_PANEL_WIDTH_DEFAULT,
+  recentCollapsed: false,
+  treeShowCounts: true,
 };
 
 function clampWidth(value: number): number {
   if (!Number.isFinite(value)) return SIDEBAR_WIDTH_DEFAULT;
   return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(value)));
+}
+
+/** Clamps the width of the right column to its limits. */
+export function clampRightPanelWidth(value: number): number {
+  if (!Number.isFinite(value)) return RIGHT_PANEL_WIDTH_DEFAULT;
+  return Math.min(RIGHT_PANEL_WIDTH_MAX, Math.max(RIGHT_PANEL_WIDTH_MIN, Math.round(value)));
 }
 
 function stringList(value: unknown): string[] {
@@ -141,6 +165,12 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     recentPaths: stringList(source.recentPaths).slice(0, RECENT_LIMIT),
     rightPanelVisible: source.rightPanelVisible !== false,
     rightPanelPinned: source.rightPanelPinned === true,
+    rightPanelWidth:
+      typeof source.rightPanelWidth === 'number'
+        ? clampRightPanelWidth(source.rightPanelWidth)
+        : RIGHT_PANEL_WIDTH_DEFAULT,
+    recentCollapsed: source.recentCollapsed === true,
+    treeShowCounts: source.treeShowCounts !== false,
   };
 }
 

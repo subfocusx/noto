@@ -397,6 +397,34 @@ button.vault-header-path:hover {
   cursor: pointer;
 }
 
+/* The column that holds the chevron of a row: it keeps the icons of the
+   folders and of the notes aligned, even when a row has no chevron. */
+.tree-rail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: var(--row-height);
+}
+
+/* The vertical lines that show the ancestors of a row. */
+.tree-indent-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.tree-indent-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
 .tree-toggle:hover {
   color: var(--fg);
   background: var(--bg-container-high);
@@ -420,6 +448,18 @@ button.vault-header-path:hover {
   white-space: nowrap;
   font-size: var(--text-base);
   color: inherit;
+}
+
+/* The number of notes inside a folder, on the right of the row. */
+.tree-count {
+  flex: none;
+  min-width: 3ch;
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  text-align: right;
 }
 
 .tree-file-button {
@@ -478,6 +518,12 @@ button.vault-header-path:hover {
 
 .tree-row:hover .tree-actions,
 .tree-row:focus-within .tree-actions {
+  opacity: 1;
+}
+
+/* The actions of the open note are always visible. */
+.tree-file.selected > .tree-row .tree-actions,
+.tree-row.selected .tree-actions {
   opacity: 1;
 }
 
@@ -561,7 +607,11 @@ button.vault-header-path:hover {
 .context-menu {
   position: fixed;
   z-index: var(--z-overlay);
-  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
   padding: var(--space-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -569,13 +619,16 @@ button.vault-header-path:hover {
   box-shadow: var(--shadow-3);
 }
 
+/* The entries of the menu are icons: their name is carried by the accessible
+   label and by the native tooltip of the button. */
 .context-menu-item {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  width: 100%;
-  height: var(--control-md);
-  padding: 0 var(--space-2);
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
@@ -598,6 +651,7 @@ button.vault-header-path:hover {
 }
 
 .context-menu-separator {
+  width: 22px;
   height: 1px;
   margin: var(--space-1) 0;
   background: var(--border);
@@ -621,6 +675,19 @@ button.vault-header-path:hover {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-muted);
+}
+
+/* The header of a collapsible section is a button. */
+button.sidebar-section-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-section-toggle:hover {
+  color: var(--fg);
 }
 
 .recent-list {

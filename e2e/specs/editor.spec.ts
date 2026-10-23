@@ -34,10 +34,10 @@ test.describe('editor', () => {
 
     await typeInEditor(page, MARKDOWN);
 
-    // The preview renders the markdown while it is typed.
-    const preview = page.getByTestId('preview');
-    await expect(preview.locator('h1')).toHaveText('E2E Заголовок');
-    await expect(preview).toContainText('Это тестовая заметка с кириллицей');
+    // The interface shows the editor only: the preview is not a part of it any
+    // more (the safe renderer of the Markdown stays in the repository and is
+    // covered by the unit tests).
+    await expect(page.getByTestId('preview')).toHaveCount(0);
 
     // Autosave (800 ms debounce) reports "Saved".
     await waitForSaved(page);
@@ -104,7 +104,7 @@ test.describe('editor', () => {
     expect(writes).toEqual([]);
   });
 
-  test('the preview never executes injected script or event handlers', async ({ page }) => {
+  test('the injected script of a note never reaches the document', async ({ page }) => {
     await gotoApp(page);
 
     const folder = 'E2E XSS Folder';
@@ -124,24 +124,22 @@ test.describe('editor', () => {
     // The payload really is part of the note source.
     expect(await editorText(page)).toContain('window.__x=1');
 
-    // Switch to preview only mode.
-    await page.getByRole('group', { name: 'View mode' }).getByRole('button', { name: 'preview' }).click();
-
-    const preview = page.getByTestId('preview');
-    await expect(preview).toBeVisible();
-
-    // No script element survives in the preview DOM.
-    await expect(preview.locator('script')).toHaveCount(0);
-
-    // No event handler attribute survives in the preview DOM.
-    const handlerAttributes = await preview.evaluate((root) =>
-      Array.from(root.querySelectorAll('*')).flatMap((el) =>
-        Array.from(el.attributes)
-          .filter((attr) => attr.name.toLowerCase().startsWith('on'))
-          .map((attr) => `${el.tagName.toLowerCase()}@${attr.name}`),
-      ),
-    );
-    expect(handlerAttributes).toEqual([]);
+    // The editor shows the source as text: no script element and no event
+    // handler ever reach the interface. (The safe renderer of the Markdown is
+    // covered by the unit tests of the component.)
+    const dangerous = await page.evaluate(() => {
+      const app = document.querySelector('.app') ?? document.body;
+      return {
+        scripts: app.querySelectorAll('script').length,
+        handlers: Array.from(app.querySelectorAll('*')).flatMap((element) =>
+          Array.from(element.attributes)
+            .filter((attr) => attr.name.toLowerCase().startsWith('on'))
+            .map((attr) => `${element.tagName.toLowerCase()}@${attr.name}`),
+        ),
+      };
+    });
+    expect(dangerous.scripts).toBe(0);
+    expect(dangerous.handlers).toEqual([]);
 
     // Nothing executed: give the asynchronous <img> error handler a chance to fire.
     await page.waitForTimeout(1500);

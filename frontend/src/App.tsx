@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
 import { AppFooter } from './components/AppFooter';
-import { AppHeader } from './components/AppHeader';
 import { AttachmentsPanel } from './components/AttachmentsPanel';
 import { CommandPalette } from './components/CommandPalette';
+import { ColumnResizer } from './components/ColumnResizer';
 import { Dialog } from './components/Dialog';
 import { EditorTabs } from './components/EditorTabs';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
@@ -18,7 +18,6 @@ import {
   PluginToolbarSlot,
 } from './components/PluginSlots';
 import type { PluginManagerEntry, PluginManagerPanelProps, PluginManagerStatus } from './components/PluginManagerPanel';
-import { Preview } from './components/Preview';
 import type { SearchPanelProps } from './components/SearchPanel';
 import type { VaultPickerProps } from './components/VaultPicker';
 import type { SettingsDialogProps } from './components/SettingsDialog';
@@ -37,7 +36,6 @@ import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
 import { extractHeadings } from './lib/outline';
 import { buildTree } from './lib/tree';
-import { createWikiResolver } from './lib/wiki';
 import { Icon } from './ui/icons';
 import type { Node } from './types';
 import type { PluginEditor, PluginEventMap, PluginState } from './plugins/contract';
@@ -221,6 +219,14 @@ export function App() {
       openSettings: () => appStore.actions.setSettingsOpen(true),
       openShortcuts: () => appStore.actions.setShortcutHelpOpen(true),
       toggleSidebar: () => appStore.actions.toggleSidebar(),
+      duplicateNote: () => {
+        const { note } = appStore.getSnapshot();
+        if (!note.path) {
+          appStore.actions.showBanner('Open a note first — there is nothing to duplicate');
+          return;
+        }
+        void appStore.actions.duplicateNote(note.path);
+      },
     });
 
     const host = new PluginHost({
@@ -488,6 +494,16 @@ export function App() {
               actions.explicitSave();
             }
             return;
+          case 'duplicateNote': {
+            event.preventDefault();
+            const { note: openNoteState } = appStore.getSnapshot();
+            if (!openNoteState.path) {
+              actions.showBanner('Open a note first — there is nothing to duplicate');
+              return;
+            }
+            void actions.duplicateNote(openNoteState.path);
+            return;
+          }
           case 'toggleSidebar':
             event.preventDefault();
             actions.toggleSidebar();
@@ -601,8 +617,6 @@ export function App() {
     () => buildTree(tree.folders, tree.files, ui.treeSort),
     [tree.folders, tree.files, ui.treeSort],
   );
-
-  const wikiResolver = useMemo(() => createWikiResolver(tree.files), [tree.files]);
 
   /** The headings of the open note: the outline of the right column. */
   const headings = useMemo(() => extractHeadings(note.content), [note.content]);
@@ -771,33 +785,7 @@ export function App() {
   };
 
   return (
-    <div class={`app mode-${ui.mode}${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}>
-      <AppHeader
-        title={note.path ? note.path.split('/').pop()! : 'Noto'}
-        status={note.status}
-        statusLabel={statusLabel}
-        mode={ui.mode}
-        drawerOpen={ui.drawerOpen}
-        theme={env.theme}
-        effectiveTheme={env.effectiveTheme}
-        onToggleDrawer={actions.toggleDrawer}
-        onSetMode={actions.setMode}
-        onToggleTheme={actions.toggleTheme}
-        onOpenAttachments={() => actions.openDialog({ kind: 'attachments' })}
-        onOpenSearch={() => actions.setSearchOpen(true)}
-        onToggleSidebar={actions.toggleSidebar}
-        onTogglePanel={() => {
-          // On a narrow screen the panel is a drawer over the editor, on a
-          // wide one it is a column next to the editor.
-          if (narrow) setPanelOverlayOpen((open) => !open);
-          else actions.toggleRightPanel();
-        }}
-        sidebarVisible={!ui.sidebarCollapsed}
-        panelVisible={narrow ? panelOverlayOpen : ui.rightPanelVisible}
-        vaultName={vaultName}
-        online={env.online}
-      />
-
+    <div class={`app${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}>
       {!env.online ? (
         <div class="offline-banner" role="status" data-testid="offline-banner">
           Offline — changes are kept locally and will be retried.
@@ -858,35 +846,43 @@ export function App() {
             onRenameInline={(node, name) => renameInline(node, name)}
             vaultName={vaultName}
             vaultPath={ui.vaultPath}
+            vaultFixed={ui.vaultFixed}
             noteCount={tree.files.length}
+            noteTotal={tree.noteTotal}
+            folderTotal={tree.folderTotal}
+            showCounts={ui.treeShowCounts}
             onMoveNode={moveByDrop}
             onChooseVault={() => setVaultPickerOpen(true)}
             collapsed={ui.sidebarCollapsed}
             onToggleCollapse={actions.toggleSidebar}
             sidebarWidth={ui.sidebarWidth}
             onResizeWidth={actions.setSidebarWidth}
-          />
-
-          <div class="noto-plugin-sidebar-area">
+            recentCollapsed={ui.recentCollapsed}
+            onToggleRecent={() => actions.setRecentCollapsed(!ui.recentCollapsed)}
+            noteTitle={note.path ? note.path.split('/').pop()! : 'Noto'}
+            online={env.online}
+          >
             <PluginSidebarSlot items={pluginSidebarItems} />
             <PluginContextMenuSlot items={pluginContextMenuItems} path={note.path ?? ''} />
             <button
               type="button"
-              class="text-button"
+              class="icon-button"
               aria-label="Plugins"
+              title="Plugins"
               onClick={() => setPluginsOpen(true)}
             >
-              Plugins
+              <Icon name="bookmark" size={15} />
             </button>
             <button
               type="button"
-              class="text-button"
+              class="icon-button"
               aria-label="Open command palette"
+              title="Open command palette"
               onClick={() => actions.setPaletteOpen(true)}
             >
-              Commands
+              <Icon name="dots-vertical" size={15} />
             </button>
-          </div>
+          </Sidebar>
         </div>
 
         <main class="workspace">
@@ -940,20 +936,15 @@ export function App() {
               </div>
             ) : null}
           </div>
-          {ui.mode === 'split' || ui.mode === 'preview' ? (
-            <div class={`pane pane-preview${ui.mode === 'preview' ? ' only-preview' : ''}`}>
-              <Preview
-                source={note.content}
-                resolve={wikiResolver}
-                onOpenNote={(path) => void openNote(path)}
-              />
-            </div>
-          ) : null}
           <PluginPanelSlot panels={pluginPanels} />
           </div>
         </main>
 
-        <aside class="panel-wrap" aria-label="Outline of the note">
+        <aside
+          class="panel-wrap"
+          aria-label="Outline of the note"
+          style={{ '--panel-width': `${ui.rightPanelWidth}px` }}
+        >
           <OutlinePanel
             headings={headings}
             activeId={activeHeadingId}
@@ -962,12 +953,22 @@ export function App() {
               if (heading?.line) editorRef.current?.scrollToLine(heading.line);
             }}
           />
+          {narrow ? null : (
+            <ColumnResizer
+              side="right"
+              label="Resize outline panel"
+              min={200}
+              max={480}
+              onResize={actions.setRightPanelWidth}
+            />
+          )}
         </aside>
       </div>
 
       <AppFooter
         saveError={note.saveError}
         status={note.status}
+        statusLabel={statusLabel}
         currentPath={note.path ?? ''}
         onRetrySave={actions.explicitSave}
         wordCount={wordCount}
@@ -976,6 +977,20 @@ export function App() {
         encoding="UTF-8"
         writable
         vaultPath={ui.vaultPath}
+        onToggleSidebar={actions.toggleSidebar}
+        sidebarVisible={!ui.sidebarCollapsed}
+        onTogglePanel={() => {
+          // On a narrow screen the panel is a drawer over the editor, on a
+          // wide one it is a column next to the editor.
+          if (narrow) setPanelOverlayOpen((open) => !open);
+          else actions.toggleRightPanel();
+        }}
+        panelVisible={narrow ? panelOverlayOpen : ui.rightPanelVisible}
+        onToggleTheme={actions.toggleTheme}
+        theme={env.effectiveTheme}
+        onOpenSearch={() => actions.setSearchOpen(true)}
+        onToggleDrawer={actions.toggleDrawer}
+        drawerOpen={ui.drawerOpen}
       />
 
       {lazyOverlays && ui.searchOpen ? (
@@ -1087,6 +1102,11 @@ export function App() {
             actions.closeContextMenu();
             actions.openDialog({ kind: 'delete', node });
           }}
+          onDuplicate={() => {
+            const node = contextNode;
+            actions.closeContextMenu();
+            if (node) void actions.duplicateNote(node.path);
+          }}
           onCreateFile={() => {
             const node = contextNode;
             actions.closeContextMenu();
@@ -1105,7 +1125,6 @@ export function App() {
           open={ui.settingsOpen}
         onClose={() => actions.setSettingsOpen(false)}
         theme={env.theme}
-        mode={ui.mode}
         sidebarCollapsed={ui.sidebarCollapsed}
         sidebarWidth={ui.sidebarWidth}
         treeSort={ui.treeSort}
@@ -1114,7 +1133,6 @@ export function App() {
         online={env.online}
         version="0.1.0"
         onTheme={(theme) => actions.setTheme(theme)}
-        onMode={(mode) => actions.setMode(mode)}
         onSidebarCollapsed={(collapsed) => actions.setSidebarCollapsed(collapsed)}
         onSidebarWidth={(width) => actions.setSidebarWidth(width)}
         onTreeSort={(sort) => actions.setTreeSort(sort)}
@@ -1150,6 +1168,8 @@ export function App() {
         <lazyOverlays.VaultPicker
           open={vaultPickerOpen}
           initialPath={ui.vaultPath}
+          fixed={ui.vaultFixed}
+          busy={ui.vaultBusy}
           onChoose={(path) => {
             void actions.chooseVault(path).then(() => setVaultPickerOpen(false));
           }}

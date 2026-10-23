@@ -136,14 +136,16 @@
   --row-height: 32px;
   --header-height: 48px;
   --footer-height: 24px;
-  --tab-height: 36px;
+  --tab-height: 32px;
   --sidebar-width: 240px;
   --sidebar-width-min: 180px;
   --sidebar-width-max: 420px;
   --sidebar-collapsed-width: 0px;
   --panel-width: 280px;
+  --panel-width-min: 200px;
+  --panel-width-max: 480px;
   --editor-max-width: 720px;
-  --indent-step: 14px;
+  --indent-step: 16px;
   --indent-max: 8;
 
   /* ------------------------------------------------------------ z-indexing */

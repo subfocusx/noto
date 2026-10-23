@@ -36,11 +36,11 @@ test.describe('the viewport matrix', () => {
       expect(editor!.width).toBeGreaterThan(120);
       expect(editor!.height).toBeGreaterThan(80);
 
-      // The header is not covered and the title is readable.
+      // The header of the column is not covered and the title is readable.
       await expect(page.locator('.app-title')).toBeVisible();
 
-      // Every button of the header fits into the screen.
-      const buttons = page.locator('.app-header button');
+      // Every button of the permanent status bar fits into the screen.
+      const buttons = page.locator('.app-footer button');
       const count = await buttons.count();
       for (let index = 0; index < count; index += 1) {
         const box = await buttons.nth(index).boundingBox();

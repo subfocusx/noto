@@ -1,8 +1,10 @@
 // The context menu of the tree.
 //
 // The menu is a small floating panel: it shows the actions of a note or of a
-// folder. It is rendered by the sidebar when a row asks for it, and it closes
-// as soon as the user leaves it.
+// folder. Every action is an icon, and its name is carried by the accessible
+// label and by the native tooltip of the button. The menu is rendered by the
+// sidebar when a row asks for it, and it closes as soon as the user leaves it.
+import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/icons';
 
@@ -35,10 +37,37 @@ export interface TreeContextMenuProps {
   onCreateFile(): void;
   /** Called when the user asks to create a folder (folders only). */
   onCreateFolder(): void;
+  /** Called when the user asks to duplicate the node (notes only). */
+  onDuplicate?(): void;
 }
 
 /** The distance kept between the menu and the edge of the viewport. */
 const MARGIN = 8;
+
+/** An entry of the menu: an icon, and the name of the action. */
+function MenuEntry(props: {
+  /** The name of the action, used as label and as tooltip. */
+  label: string;
+  /** True when the action is destructive. */
+  danger?: boolean;
+  /** Called when the action is chosen. */
+  onSelect(): void;
+  /** The icon of the action. */
+  children: ComponentChildren;
+}) {
+  return (
+    <button
+      type="button"
+      class={`context-menu-item${props.danger ? ' danger' : ''}`}
+      role="menuitem"
+      aria-label={props.label}
+      title={props.label}
+      onClick={props.onSelect}
+    >
+      {props.children}
+    </button>
+  );
+}
 
 export function TreeContextMenu(props: TreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -110,56 +139,31 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
       aria-label={props.isFolder ? 'Folder actions' : 'Note actions'}
       style={{ position: 'fixed', left: `${position.left}px`, top: `${position.top}px` }}
     >
-      <button
-        type="button"
-        class="context-menu-item"
-        role="menuitem"
-        onClick={() => run(props.onRename)}
-      >
-        <Icon name="pencil" size={14} />
-        Rename
-      </button>
-      <button
-        type="button"
-        class="context-menu-item"
-        role="menuitem"
-        onClick={() => run(props.onMove)}
-      >
-        <Icon name="move" size={14} />
-        Move
-      </button>
+      <MenuEntry label="Rename" onSelect={() => run(props.onRename)}>
+        <Icon name="pencil" size={16} />
+      </MenuEntry>
+      <MenuEntry label="Move" onSelect={() => run(props.onMove)}>
+        <Icon name="move" size={16} />
+      </MenuEntry>
       {props.isFolder ? (
         <>
-          <button
-            type="button"
-            class="context-menu-item"
-            role="menuitem"
-            onClick={() => run(props.onCreateFile)}
-          >
-            <Icon name="file-plus" size={14} />
-            New note
-          </button>
-          <button
-            type="button"
-            class="context-menu-item"
-            role="menuitem"
-            onClick={() => run(props.onCreateFolder)}
-          >
-            <Icon name="folder-plus" size={14} />
-            New folder
-          </button>
+          <MenuEntry label="New note" onSelect={() => run(props.onCreateFile)}>
+            <Icon name="file-plus" size={16} />
+          </MenuEntry>
+          <MenuEntry label="New folder" onSelect={() => run(props.onCreateFolder)}>
+            <Icon name="folder-plus" size={16} />
+          </MenuEntry>
         </>
       ) : null}
+      {!props.isFolder && props.onDuplicate ? (
+        <MenuEntry label="Duplicate" onSelect={() => run(props.onDuplicate as () => void)}>
+          <Icon name="copy" size={16} />
+        </MenuEntry>
+      ) : null}
       <div class="context-menu-separator" />
-      <button
-        type="button"
-        class="context-menu-item danger"
-        role="menuitem"
-        onClick={() => run(props.onDelete)}
-      >
-        <Icon name="trash" size={14} />
-        Delete
-      </button>
+      <MenuEntry label="Delete" danger onSelect={() => run(props.onDelete)}>
+        <Icon name="trash" size={16} />
+      </MenuEntry>
     </div>
   );
 }

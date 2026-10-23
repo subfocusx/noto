@@ -1,0 +1,61 @@
+# --- Go ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/backend/noto
+/backend/noto.exe
+/backend/backup
+/backend/backup.exe
+/backend/dist/
+/backend/bin/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+*.tsbuildinfo
+
+# --- E2E ---
+e2e/.artifacts/
+e2e/playwright-report/
+e2e/test-results/
+e2e/fixtures/import.zip
+e2e/scratch/
+
+# --- Local toolchains ---
+.tools/
+
+# --- Local data (never commit notes or databases) ---
+noto-data/
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+attachments/
+trash/
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Built frontend copied into the Go binary ---
+backend/internal/web/dist/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini

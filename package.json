@@ -1,0 +1,15 @@
+{
+  "name": "noto-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "End-to-end tests for Noto (Playwright).",
+  "scripts": {
+    "e2e": "playwright test",
+    "e2e:desktop": "playwright test --project=desktop",
+    "e2e:mobile": "playwright test --project=mobile",
+    "e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

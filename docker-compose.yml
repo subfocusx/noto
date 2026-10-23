@@ -1,0 +1,35 @@
+# Noto — optional Docker setup.
+#
+# Docker is a convenience, not a requirement: the application also runs
+# directly as a Go binary (see README.md).
+#
+#   docker compose up --build
+#   docker compose down
+#
+# The port is published on 127.0.0.1 only, so the API stays reachable from
+# the host machine but not from the network. Noto has no user accounts —
+# put an authenticating reverse proxy in front of it before exposing it.
+
+services:
+  noto:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: noto:latest
+    container_name: noto
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # Inside the container the server must listen on all interfaces, and
+      # NOTO_ALLOW_PUBLIC disables the localhost-only startup guard. The
+      # published port above still restricts access to the host.
+      NOTO_ADDR: "0.0.0.0:8080"
+      NOTO_ALLOW_PUBLIC: "true"
+      NOTO_DATA_DIR: "/data"
+      NOTO_LOG_LEVEL: "info"
+    volumes:
+      - noto-data:/data
+
+volumes:
+  noto-data:

@@ -39,6 +39,10 @@ export interface Prefs {
   expandedFolders: string[];
   /** The paths of the recently opened notes, the newest first. */
   recentPaths: string[];
+  /** True when the right panel (outline) is visible. */
+  rightPanelVisible: boolean;
+  /** True when the right panel is pinned open even on narrow screens. */
+  rightPanelPinned: boolean;
 }
 
 /** The smallest font size of the editor. */
@@ -73,6 +77,8 @@ export const DEFAULT_PREFS: Prefs = {
   editorWrap: true,
   expandedFolders: [],
   recentPaths: [],
+  rightPanelVisible: true,
+  rightPanelPinned: false,
 };
 
 function clampWidth(value: number): number {
@@ -133,6 +139,8 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     editorWrap: source.editorWrap !== false,
     expandedFolders: stringList(source.expandedFolders),
     recentPaths: stringList(source.recentPaths).slice(0, RECENT_LIMIT),
+    rightPanelVisible: source.rightPanelVisible !== false,
+    rightPanelPinned: source.rightPanelPinned === true,
   };
 }
 

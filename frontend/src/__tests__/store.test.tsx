@@ -32,6 +32,9 @@ vi.mock('../api/client', () => ({
   exportFolderUrl: (path: string) => `/api/export/folder?path=${path}`,
   exportAllUrl: () => '/api/export/all',
   attachmentRawUrl: (id: string) => `/api/attachments/${id}/raw`,
+  getVault: vi.fn(async () => ({ configured: true, path: 'C:\\notes', notesDir: 'C:\\notes' })),
+  setVault: vi.fn(async () => ({ ok: true, path: 'C:\\notes' })),
+  browseVault: vi.fn(async () => ({ path: 'C:\\', parent: '', dirs: [] })),
 }));
 
 afterEach(() => {

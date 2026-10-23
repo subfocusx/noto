@@ -41,7 +41,7 @@ func (s *Server) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		uploads = append(uploads, notes.UploadedFile{Name: fh.Filename, Content: data})
 	}
-	result, err := s.svc.ImportFiles(r.Context(), uploads, target, conflict)
+	result, err := s.service().ImportFiles(r.Context(), uploads, target, conflict)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -77,7 +77,7 @@ func (s *Server) handleImportZip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodePayloadTooLarge, "the uploaded archive is too large", notes.ErrPayloadTooLarge))
 		return
 	}
-	result, err := s.svc.ImportZip(r.Context(), data, target, conflict)
+	result, err := s.service().ImportZip(r.Context(), data, target, conflict)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -105,7 +105,7 @@ func multipartError(err error) error {
 // handleExportNote serves a single note as a Markdown download.
 func (s *Server) handleExportNote(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
-	name, data, err := s.svc.ExportNote(r.Context(), p)
+	name, data, err := s.service().ExportNote(r.Context(), p)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -126,7 +126,7 @@ func (s *Server) handleExportFolder(w http.ResponseWriter, r *http.Request) {
 	// The archive is built before the status code is written, so that a
 	// failure is reported with the proper error code instead of an empty
 	// download.
-	data, err := s.svc.ExportFolderBytes(r.Context(), p)
+	data, err := s.service().ExportFolderBytes(r.Context(), p)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -140,7 +140,7 @@ func (s *Server) handleExportFolder(w http.ResponseWriter, r *http.Request) {
 
 // handleExportAll serves the whole library as a ZIP download.
 func (s *Server) handleExportAll(w http.ResponseWriter, r *http.Request) {
-	data, err := s.svc.ExportAllBytes(r.Context())
+	data, err := s.service().ExportAllBytes(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return

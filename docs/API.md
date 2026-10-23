@@ -242,6 +242,62 @@ Response `200` with the restored `Node`.
 { "entries": [ { "path": "trash/xxx/a.md", "name": "a.md", "type": "file", "id": "…", "size": 42, "parentPath": "trash/xxx", "modTime": "2026-01-02T10:00:00Z", "revision": 3, "createdAt": "2026-01-01T09:00:00Z", "updatedAt": "2026-01-02T10:00:00Z" } ] }
 ```
 
+## Storage of the notes
+
+### `GET /api/vault`
+
+Returns the state of the storage of the notes.
+
+```json
+{ "configured": true, "path": "D:\\Notes", "notesDir": "D:\\Notes" }
+```
+
+`path` is empty when the default layout is used and the storage was not fixed
+by the environment. See [`docs/VAULT.md`](VAULT.md) for the whole model.
+
+### `POST /api/vault`
+
+```json
+{ "path": "D:\\Notes" }
+```
+
+Chooses the folder with the notes: the path is validated, the configuration is
+saved and the server switches to the new folder. Response `200`:
+
+```json
+{ "ok": true, "path": "D:\\Notes" }
+```
+
+Errors: `400 bad_request` (no path), `400 invalid_path` (the path is not
+usable), `404 not_found` (there is no such directory), `500 internal` (the
+storage could not be opened; the saved configuration is restored).
+
+When the storage was fixed by the environment (`NOTO_DATA_DIR` /
+`NOTO_NOTES_DIR`), the request is refused with `400 bad_request` and the
+message `the storage is fixed by the environment`.
+
+### `DELETE /api/vault`
+
+Resets the configuration and returns the server to the default layout.
+Response `200`:
+
+```json
+{ "ok": true }
+```
+
+### `GET /api/vault/browse?path=D:\\`
+
+Lists the subdirectories of a folder, for the dialog of the choice of the
+folder.
+
+```json
+{ "path": "D:\\", "parent": "", "dirs": [ { "name": "Notes", "path": "D:\\Notes" } ] }
+```
+
+Only the directories are returned, the hidden ones are not. An empty `path`
+means the root of the volume. A path that does not exist fails with
+`400 bad_request`.
+
 ## Search
 
 ### `GET /api/search?q=term&limit=50`

@@ -139,6 +139,51 @@ shortcut help) and the state of the preferences. The budget of the plan was
 32 kB gzip — the result is 0,25 kB above it; the four rarely used overlays were
 moved into lazy chunks to stay near the budget.
 
+## Phase 5 status (the redesign of the prototype, the vault, the drag and drop)
+
+The interface was rewritten pixel by pixel after the prototype
+(`stitch_noto_markdown_editor_redesign`, the "Obsidian Slate" screens), and the
+functions that the prototype promised were implemented.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P5-1 | The palette, the typography and the sizes of the prototype were transferred exactly: canvas `#09090b`, panel `#121215`, surface `#18181b`, container `#1f1f22`, border `#27272a`, accent `#818cf8` (light `#6366f1`), the radii 2/4/8/12, the row of 32 px, the column of 240 px, the outline column of 280 px, the editor of 720 px, the header of 44 px and the status bar of 24 px. The fonts (Inter 400–600, JetBrains Mono 400–500) are served locally from `frontend/public/fonts` — the application never asks a CDN at runtime | done | `frontend/src/styles/{tokens,fonts}.css`, `frontend/public/fonts/` |
+| P5-2 | The shell of the prototype: a permanent top bar (brand, search, navigation, the state of the vault, the toggles of both columns, the theme), the left column with the vault header, the navigation (All notes / Recent / Trash) and the tree, the middle with the tab strip, the breadcrumbs and the editor, the right column with the outline of the note, the status bar with the path, Ln/Col, the word count, the encoding and the state of the file | done | `frontend/src/App.tsx`, `frontend/src/components/{AppHeader,AppFooter,EditorTabs,OutlinePanel}.tsx`, `frontend/src/styles/layout.css` |
+| P5-3 | The buttons of both columns live in the permanent top bar, so a hidden column can always be brought back. On a narrow screen the columns are drawers over the editor | done | `frontend/src/components/AppHeader.tsx`, `e2e/specs/shell.spec.ts` |
+| P5-4 | The drag and drop of the notes and the folders in the tree (native HTML5, without a new dependency). The rules are on the server: a folder cannot be dropped into itself or into one of its own descendants, a note cannot be dropped into the folder it already lives in | done | `frontend/src/components/{TreeRow,Sidebar}.tsx`, `backend/internal/notes/notes_move.go`, `e2e/specs/tree-interaction.spec.ts` |
+| P5-5 | The long names are cut off with an ellipsis on one line (no wrapping). The full name is shown in a tooltip only when the text is really clipped (the pattern of `useOverflowTitle` of Memos, MIT) | done | `frontend/src/lib/useOverflowTitle.ts`, `frontend/src/components/TreeRow.tsx` |
+| P5-6 | The button of the trash in the footer of the left column is an icon only; the point "Trash" of the navigation keeps its text | done | `frontend/src/components/Sidebar.tsx`, `e2e/specs/shell.spec.ts` |
+| P5-7 | The storage of the notes (the "vault"): the folder is asked at the first start, the notes are plain Markdown files in it, the internal data lives in the hidden `.noto` subfolder, the folder can be changed at any time, the server switches to it on the fly | done | `backend/internal/vault/`, `backend/internal/api/handlers_vault.go`, `frontend/src/components/VaultPicker.tsx`, `docs/VAULT.md` |
+| P5-8 | The outline of the note on the right: the headings of the Markdown, the active heading follows the cursor, the click scrolls the editor to the heading | done | `frontend/src/lib/outline.ts`, `frontend/src/components/OutlinePanel.tsx` |
+| P5-9 | The stubs of the prototype: "Graph" and "Archive" in the top bar are honest stubs (`aria-disabled`, the title "Not implemented yet", the click does nothing) | stub | `frontend/src/components/AppHeader.tsx`, `e2e/specs/shell.spec.ts` |
+| P5-10 | The tests: 8 new unit files (the outline, the preferences, the shortcut keys, the tree order, the icons) and 3 new E2E files (the shell, the tree, the vault) | done | `frontend/src/__tests__/`, `e2e/specs/{shell,tree-interaction,vault}.spec.ts` |
+| P5-11 | The documentation: `docs/VAULT.md` (the model of the storage), the API of the storage in `docs/API.md`, the new shell in `docs/DESIGN_SYSTEM.md`, the README | done | `docs/`, `README.md` |
+
+### Measured effect of the redesign
+
+| Measurement | after phase 4 | after phase 5 |
+| --- | --- | --- |
+| Entry chunk, raw | 108,20 kB | 119,50 kB |
+| Entry chunk, gzip | 32,39 kB | 35,66 kB |
+| Frontend unit tests | 322 | 330 (+8) |
+| E2E | 57 passed / 19 skipped | see the verification log of phase 5 |
+
+The entry chunk grew by 3,3 kB gzip: the tab strip, the outline, the picker of
+the storage and the state of the columns. The picker of the storage is loaded
+lazily, because it is needed once.
+
+### What was borrowed from the reference projects
+
+| Project | Licence | What was taken |
+|---|---|---|
+| `usememos/memos` | MIT | the idea of the tooltip only for the really clipped text (`useOverflowTitle`), the outline that is built from the Markdown |
+| `Vinzent03/obsidian-git` | MIT | nothing beyond the idea of the folder picker with a validation on the server |
+| `laurent22/joplin` | AGPL-3.0 | only the ideas were read: the native HTML5 drag and drop, the check of the descendants in the model. **No code was copied** |
+| `siyuan-note/siyuan` | AGPL-3.0 | only the ideas were read: the flow of the choice of the storage (check on the server, then switch), the outline that follows the cursor. **No code was copied** |
+
+The rules of the drag and drop live on the server, like in SiYuan and in Joplin:
+the client is not trusted.
+
 ## Definition of Done
 
 | # | Criterion | Status | Evidence |

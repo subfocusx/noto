@@ -40,6 +40,8 @@ export interface EditorHandle {
   onSelectionChange(cb: (sel: EditorRange) => void): () => void;
   /** Replaces the CodeMirror extensions contributed by plugins. */
   setExtensions(extensions: Extension[]): void;
+  /** Scrolls the given line (1-based) into the view and puts the cursor there. */
+  scrollToLine(line: number): void;
 }
 
 interface EditorProps {
@@ -326,6 +328,16 @@ export function MarkdownEditor(props: EditorProps) {
         return () => {
           selectionSubscribers.current.delete(cb);
         };
+      },
+      scrollToLine: (line: number) => {
+        const doc = instance.state.doc;
+        const number = Math.min(Math.max(line, 1), doc.lines);
+        const pos = doc.line(number).from;
+        instance.dispatch({
+          selection: { anchor: pos },
+          scrollIntoView: true,
+        });
+        instance.focus();
       },
       setExtensions: (next: Extension[]) => {
         pluginExtensions.current = next;

@@ -78,6 +78,16 @@ export interface UiState {
   shortcutHelpOpen: boolean;
   /** The open context menu of the tree. */
   contextMenu: ContextMenuState | null;
+  /** True when the right panel (the outline) is visible. */
+  rightPanelVisible: boolean;
+  /** True when the right panel stays open on narrow screens. */
+  rightPanelPinned: boolean;
+  /** True when the storage of the notes has been chosen. */
+  vaultConfigured: boolean;
+  /** The path of the storage of the notes. */
+  vaultPath: string;
+  /** True while the storage is being read or changed. */
+  vaultBusy: boolean;
 }
 
 /** The open context menu of the note tree. */

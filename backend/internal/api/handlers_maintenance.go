@@ -54,7 +54,7 @@ func (s *Server) handleReconcile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	report, err := s.svc.ReconcileWithOptions(r.Context(), notes.ReconcileOptions{
+	report, err := s.service().ReconcileWithOptions(r.Context(), notes.ReconcileOptions{
 		Apply:      req.Apply,
 		DropGhosts: req.DropGhosts,
 		DryRun:     !req.Apply && !req.DropGhosts,

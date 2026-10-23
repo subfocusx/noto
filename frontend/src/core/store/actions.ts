@@ -9,10 +9,12 @@ import {
   deleteNote,
   getNote,
   getTree,
+  getVault,
   moveNote,
   renameNote,
   restoreNote,
   saveNote,
+  setVault,
 } from '../../api/client';
 import { createAutosave, type AutosaveController, type AutosaveStatus } from '../../lib/autosave';
 import { deleteDraft, getDraft, isDraftNewer, putDraft, type Draft } from '../../lib/drafts';
@@ -48,6 +50,8 @@ function persistPrefs(): void {
     editorWrap: state.ui.editorWrap,
     expandedFolders: [...state.ui.expanded],
     recentPaths: state.ui.recentPaths,
+    rightPanelVisible: state.ui.rightPanelVisible,
+    rightPanelPinned: state.ui.rightPanelPinned,
   });
 }
 
@@ -473,6 +477,71 @@ export function setShortcutHelpOpen(open: boolean): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, shortcutHelpOpen: open } }));
 }
 
+/* ---------------------------------------------------------- right panel */
+
+/** Shows or hides the right panel (the outline of the note). */
+export function setRightPanelVisible(visible: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, rightPanelVisible: visible } }));
+  persistPrefs();
+}
+
+/** Switches the right panel. */
+export function toggleRightPanel(): void {
+  setRightPanelVisible(!getSnapshot().ui.rightPanelVisible);
+}
+
+/** Pins the right panel open on narrow screens. */
+export function setRightPanelPinned(pinned: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, rightPanelPinned: pinned } }));
+  persistPrefs();
+}
+
+/* ----------------------------------------------------------------- vault */
+
+/** Reads the state of the storage of the notes. */
+export async function loadVault(): Promise<void> {
+  try {
+    const info = await getVault();
+    update((prev) => ({
+      ...prev,
+      ui: {
+        ...prev.ui,
+        vaultConfigured: info.configured,
+        vaultPath: info.path ?? '',
+      },
+    }));
+  } catch (err) {
+    showBanner(errorMessage(err));
+  }
+}
+
+/**
+ * Chooses the folder with the notes.
+ *
+ * The server switches to the new folder; the tree of the notes is read again,
+ * so the interface shows the notes of the new storage at once.
+ */
+export async function chooseVault(path: string): Promise<void> {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: true } }));
+  try {
+    const info = await setVault(path);
+    update((prev) => ({
+      ...prev,
+      ui: {
+        ...prev.ui,
+        vaultConfigured: true,
+        vaultPath: info.path ?? path,
+        vaultBusy: false,
+      },
+    }));
+    await refreshTree();
+  } catch (err) {
+    update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: false } }));
+    showBanner(errorMessage(err));
+    throw err;
+  }
+}
+
 /** Adds a note to the list of the recently opened notes. */
 export function addRecent(path: string): void {
   update((prev) => ({
@@ -587,6 +656,11 @@ export interface AppActions {
   closeContextMenu(): void;
   setSettingsOpen(open: boolean): void;
   setShortcutHelpOpen(open: boolean): void;
+  setRightPanelVisible(visible: boolean): void;
+  toggleRightPanel(): void;
+  setRightPanelPinned(pinned: boolean): void;
+  loadVault(): Promise<void>;
+  chooseVault(path: string): Promise<void>;
   addRecent(path: string): void;
   removeRecent(path: string): void;
   showBanner(message: string): void;
@@ -633,6 +707,11 @@ export const actions: AppActions = {
   closeContextMenu,
   setSettingsOpen,
   setShortcutHelpOpen,
+  setRightPanelVisible,
+  toggleRightPanel,
+  setRightPanelPinned,
+  loadVault,
+  chooseVault,
   addRecent,
   removeRecent,
   showBanner,

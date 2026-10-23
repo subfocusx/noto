@@ -35,7 +35,7 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.log, notes.NewError(notes.CodePayloadTooLarge, "the uploaded file is too large", notes.ErrPayloadTooLarge))
 		return
 	}
-	att, err := s.svc.UploadAttachment(r.Context(), files[0].Filename, data, r.FormValue("notePath"))
+	att, err := s.service().UploadAttachment(r.Context(), files[0].Filename, data, r.FormValue("notePath"))
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -45,7 +45,7 @@ func (s *Server) handleUploadAttachment(w http.ResponseWriter, r *http.Request) 
 
 // handleListAttachments lists the stored attachments.
 func (s *Server) handleListAttachments(w http.ResponseWriter, r *http.Request) {
-	list, err := s.svc.ListAttachments(r.Context())
+	list, err := s.service().ListAttachments(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -56,7 +56,7 @@ func (s *Server) handleListAttachments(w http.ResponseWriter, r *http.Request) {
 // handleRawAttachment serves the bytes of an attachment.
 func (s *Server) handleRawAttachment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	att, data, err := s.svc.AttachmentContent(r.Context(), id)
+	att, data, err := s.service().AttachmentContent(r.Context(), id)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -75,7 +75,7 @@ func (s *Server) handleRawAttachment(w http.ResponseWriter, r *http.Request) {
 // handleDeleteAttachment removes an attachment.
 func (s *Server) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := s.svc.DeleteAttachment(r.Context(), id); err != nil {
+	if err := s.service().DeleteAttachment(r.Context(), id); err != nil {
 		writeError(w, s.log, err)
 		return
 	}

@@ -18,6 +18,7 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-md);
   line-height: var(--leading-normal);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
@@ -49,6 +50,10 @@ textarea {
   color: inherit;
 }
 
+button {
+  letter-spacing: inherit;
+}
+
 a {
   color: var(--link);
   text-decoration: none;
@@ -57,6 +62,14 @@ a {
 a:hover {
   color: var(--link-hover);
   text-decoration: underline;
+}
+
+/* The numbers of the interface are aligned in a column. */
+.tabular,
+.status,
+.app-footer,
+.tree-count {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------- selection */
@@ -69,9 +82,9 @@ a:hover {
 /* ----------------------------------------------------------------- focus */
 
 :focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+  border-radius: var(--radius-md);
 }
 
 /* The editor manages its own focus ring. */
@@ -99,7 +112,7 @@ a:hover {
   background: var(--border-strong);
   border: 3px solid transparent;
   background-clip: content-box;
-  border-radius: var(--radius-pill);
+  border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {

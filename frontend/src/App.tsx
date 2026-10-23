@@ -5,8 +5,10 @@ import { AppHeader } from './components/AppHeader';
 import { AttachmentsPanel } from './components/AttachmentsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { Dialog } from './components/Dialog';
+import { EditorTabs } from './components/EditorTabs';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
+import { OutlinePanel } from './components/OutlinePanel';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
   PluginCommandSlot,
@@ -18,6 +20,7 @@ import {
 import type { PluginManagerEntry, PluginManagerPanelProps, PluginManagerStatus } from './components/PluginManagerPanel';
 import { Preview } from './components/Preview';
 import type { SearchPanelProps } from './components/SearchPanel';
+import type { VaultPickerProps } from './components/VaultPicker';
 import type { SettingsDialogProps } from './components/SettingsDialog';
 import type { ShortcutHelpProps } from './components/ShortcutHelp';
 import { Sidebar } from './components/Sidebar';
@@ -32,6 +35,7 @@ import { EventBus } from './core/events/eventBus';
 import { SettingsStore } from './core/settings/settingsStore';
 import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
+import { extractHeadings } from './lib/outline';
 import { buildTree } from './lib/tree';
 import { createWikiResolver } from './lib/wiki';
 import { Icon } from './ui/icons';
@@ -74,6 +78,16 @@ export function App() {
   const state = useAppState();
   const actions = useAppActions();
   const editorRef = useRef<EditorHandle | null>(null);
+  /** The unsubscribe function of the listener of the selection. */
+  const cursorUnsubscribe = useRef<(() => void) | null>(null);
+
+  useEffect(
+    () => () => {
+      cursorUnsubscribe.current?.();
+      cursorUnsubscribe.current = null;
+    },
+    [],
+  );
 
   const { tree, note, ui, env, dialog, draftOffer, banner } = state;
 
@@ -313,8 +327,43 @@ export function App() {
 
   /* -------------------------------------------------------------- events */
 
+  /** The notes that are open in the tab strip of the editor. */
+  const [tabs, setTabs] = useState<string[]>([]);
+
+  // The storage of the notes is asked for once, at the start: when the user
+  // has not chosen a folder yet, the picker opens right away.
+  const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
+
+  /**
+   * True when the right column is opened as a drawer over the editor on a
+   * narrow screen.
+   */
+  const [panelOverlayOpen, setPanelOverlayOpen] = useState(false);
+
+  /**
+   * True on a narrow screen, where the left and the right columns are
+   * drawers over the editor instead of columns next to it.
+   */
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches,
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 820px)');
+    const onChange = (event: MediaQueryListEvent) => setNarrow(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  /** The position of the cursor in the editor; it is shown in the status bar. */
+  const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
+
+  /** The line of the cursor, counted from one. */
+  const cursorLine = cursor?.line ?? null;
+
   /** Opens a note and tells the plugins about it. */
   const openNote = async (path: string): Promise<void> => {
+    setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
     await actions.openNote(path);
     const snapshot = appStore.getSnapshot();
     const host = hostRef.current;
@@ -488,19 +537,20 @@ export function App() {
 
   const [lazyOverlays, setLazyOverlays] = useState<{
     SearchPanel: ComponentType<SearchPanelProps>;
+    VaultPicker: ComponentType<VaultPickerProps>;
   } | null>(null);
 
   useEffect(() => {
-    if (!ui.searchOpen || lazyOverlays) return;
+    if ((!ui.searchOpen && !vaultPickerOpen) || lazyOverlays) return;
     let cancelled = false;
     void import('./components/LazyOverlays').then((module) => {
       if (cancelled) return;
-      setLazyOverlays({ SearchPanel: module.SearchPanel });
+      setLazyOverlays({ SearchPanel: module.SearchPanel, VaultPicker: module.VaultPicker });
     });
     return () => {
       cancelled = true;
     };
-  }, [ui.searchOpen, lazyOverlays]);
+  }, [ui.searchOpen, vaultPickerOpen, lazyOverlays]);
 
   const [SettingsDialogComponent, setSettingsDialogComponent] = useState<
     ComponentType<SettingsDialogProps> | null
@@ -531,6 +581,20 @@ export function App() {
     };
   }, [ui.shortcutHelpOpen, ShortcutHelpComponent]);
 
+  /* --------------------------------------------------------------- vault */
+
+  useEffect(() => {
+    let cancelled = false;
+    void actions.loadVault().then(() => {
+      if (cancelled) return;
+      const snapshot = appStore.getSnapshot();
+      if (!snapshot.ui.vaultConfigured) setVaultPickerOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /* ----------------------------------------------------------- derived */
 
   const { roots, filesByParent } = useMemo(
@@ -539,6 +603,46 @@ export function App() {
   );
 
   const wikiResolver = useMemo(() => createWikiResolver(tree.files), [tree.files]);
+
+  /** The headings of the open note: the outline of the right column. */
+  const headings = useMemo(() => extractHeadings(note.content), [note.content]);
+
+  /** The heading the cursor is in: the active entry of the outline. */
+  const activeHeadingId = useMemo(() => {
+    const line = cursorLine;
+    if (!line) return null;
+    let current: string | null = null;
+    for (const heading of headings) {
+      if ((heading.line ?? 0) <= line) current = heading.id;
+      else break;
+    }
+    return current;
+  }, [headings, cursorLine]);
+
+  /** The open notes for the tab strip of the editor. */
+  const tabItems = useMemo(
+    () =>
+      tabs.map((path) => ({
+        path,
+        name: path.split('/').pop() ?? path,
+      })),
+    [tabs],
+  );
+
+  /** The number of the words of the open note. */
+  const wordCount = useMemo(() => {
+    const text = note.content.trim();
+    if (!text) return 0;
+    return text.split(/\s+/).length;
+  }, [note.content]);
+
+  /** The name of the storage of the notes. */
+  const vaultName = useMemo(() => {
+    const path = ui.vaultPath;
+    if (!path) return 'Noto';
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    return parts[parts.length - 1] ?? 'Noto';
+  }, [ui.vaultPath]);
 
   const treeFolderPaths = useMemo(
     () => tree.folders.map((f) => f.path).sort((a, b) => a.localeCompare(b)),
@@ -629,6 +733,33 @@ export function App() {
     return tree.files.find((file) => file.path === menu.path) ?? null;
   }, [ui.contextMenu, tree.folders, tree.files]);
 
+  /**
+   * Moves a node that was dropped on another folder.
+   *
+   * The drop is refused when it makes no sense: a folder cannot be moved into
+   * itself or into one of its own subfolders, and a node that already lies in
+   * the target folder stays where it is.
+   */
+  const moveByDrop = async (node: Node, targetParentPath: string) => {
+    const parent = node.parentPath ?? '';
+    if (
+      node.type === 'folder' &&
+      (targetParentPath === node.path || targetParentPath.startsWith(`${node.path}/`))
+    ) {
+      actions.showBanner('A folder cannot be moved into itself');
+      return;
+    }
+    if (parent === targetParentPath) {
+      actions.showBanner('The note is already here');
+      return;
+    }
+    try {
+      await actions.moveNode(node, targetParentPath);
+    } catch (err) {
+      actions.showBanner(err instanceof Error ? err.message : 'Could not move the note');
+    }
+  };
+
   /** Renames a note directly in the tree. */
   const renameInline = async (node: Node, name: string) => {
     if (!name || name === node.name) return;
@@ -640,7 +771,7 @@ export function App() {
   };
 
   return (
-    <div class={`app mode-${ui.mode}${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+    <div class={`app mode-${ui.mode}${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}>
       <AppHeader
         title={note.path ? note.path.split('/').pop()! : 'Noto'}
         status={note.status}
@@ -653,9 +784,19 @@ export function App() {
         onSetMode={actions.setMode}
         onToggleTheme={actions.toggleTheme}
         onOpenAttachments={() => actions.openDialog({ kind: 'attachments' })}
+        onOpenSearch={() => actions.setSearchOpen(true)}
+        onToggleSidebar={actions.toggleSidebar}
+        onTogglePanel={() => {
+          // On a narrow screen the panel is a drawer over the editor, on a
+          // wide one it is a column next to the editor.
+          if (narrow) setPanelOverlayOpen((open) => !open);
+          else actions.toggleRightPanel();
+        }}
+        sidebarVisible={!ui.sidebarCollapsed}
+        panelVisible={narrow ? panelOverlayOpen : ui.rightPanelVisible}
+        vaultName={vaultName}
+        online={env.online}
       />
-
-      <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />
 
       {!env.online ? (
         <div class="offline-banner" role="status" data-testid="offline-banner">
@@ -680,7 +821,15 @@ export function App() {
       <div class="app-body">
         {ui.drawerOpen ? (
           <div class="drawer-backdrop" onClick={actions.closeDrawer} aria-hidden="true" />
-        ) : null}        <div class="sidebar-wrap">
+        ) : null}
+        {narrow && panelOverlayOpen ? (
+          <div
+            class="panel-backdrop"
+            onClick={() => setPanelOverlayOpen(false)}
+            aria-hidden="true"
+          />
+        ) : null}
+        <div class="sidebar-wrap">
           <Sidebar
             folders={roots}
             filesByParent={filesByParent}
@@ -707,6 +856,11 @@ export function App() {
             onRemoveRecent={actions.removeRecent}
             onContextMenu={openTreeContextMenu}
             onRenameInline={(node, name) => renameInline(node, name)}
+            vaultName={vaultName}
+            vaultPath={ui.vaultPath}
+            noteCount={tree.files.length}
+            onMoveNode={moveByDrop}
+            onChooseVault={() => setVaultPickerOpen(true)}
             collapsed={ui.sidebarCollapsed}
             onToggleCollapse={actions.toggleSidebar}
             sidebarWidth={ui.sidebarWidth}
@@ -736,6 +890,24 @@ export function App() {
         </div>
 
         <main class="workspace">
+          <EditorTabs
+            tabs={tabItems}
+            activePath={note.path}
+            onSelect={(path) => void openNote(path)}
+            onClose={(path) => {
+              setTabs((prev) => {
+                const rest = prev.filter((item) => item !== path);
+                if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
+                return rest;
+              });
+            }}
+          />
+
+          <div class="breadcrumb-strip">
+            <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />
+          </div>
+
+          <div class="workspace-panes">
           <div class="pane pane-editor">
             <PluginToolbarSlot items={pluginToolbarItems} />
             <MarkdownEditor
@@ -748,6 +920,16 @@ export function App() {
               onSave={actions.explicitSave}
               onHandle={(handle) => {
                 editorRef.current = handle;
+                // The position of the cursor is shown in the status bar and
+                // marks the active heading of the outline.
+                const unsubscribe = handle.onSelectionChange((range) => {
+                  const text = handle.getText();
+                  const upTo = text.slice(0, range.from);
+                  const line = upTo.split('\n').length;
+                  const column = range.from - (upTo.lastIndexOf('\n') + 1) + 1;
+                  setCursor({ line, column });
+                });
+                cursorUnsubscribe.current = unsubscribe;
               }}
             />
             {!note.path ? (
@@ -768,7 +950,19 @@ export function App() {
             </div>
           ) : null}
           <PluginPanelSlot panels={pluginPanels} />
+          </div>
         </main>
+
+        <aside class="panel-wrap" aria-label="Outline of the note">
+          <OutlinePanel
+            headings={headings}
+            activeId={activeHeadingId}
+            onSelect={(id) => {
+              const heading = headings.find((item) => item.id === id);
+              if (heading?.line) editorRef.current?.scrollToLine(heading.line);
+            }}
+          />
+        </aside>
       </div>
 
       <AppFooter
@@ -776,6 +970,12 @@ export function App() {
         status={note.status}
         currentPath={note.path ?? ''}
         onRetrySave={actions.explicitSave}
+        wordCount={wordCount}
+        characterCount={note.content.length}
+        cursor={cursor}
+        encoding="UTF-8"
+        writable
+        vaultPath={ui.vaultPath}
       />
 
       {lazyOverlays && ui.searchOpen ? (
@@ -943,6 +1143,24 @@ export function App() {
         <ShortcutHelpComponent
           open={ui.shortcutHelpOpen}
           onClose={() => actions.setShortcutHelpOpen(false)}
+        />
+      ) : null}
+
+      {lazyOverlays && vaultPickerOpen ? (
+        <lazyOverlays.VaultPicker
+          open={vaultPickerOpen}
+          initialPath={ui.vaultPath}
+          onChoose={(path) => {
+            void actions.chooseVault(path).then(() => setVaultPickerOpen(false));
+          }}
+          onClose={() => {
+            // The picker may be skipped: the application then works with the
+            // default storage, and the banner offers to choose a folder later.
+            setVaultPickerOpen(false);
+            if (!ui.vaultConfigured) {
+              actions.showBanner('No storage folder chosen — the notes are kept in the default folder');
+            }
+          }}
         />
       ) : null}
     </div>

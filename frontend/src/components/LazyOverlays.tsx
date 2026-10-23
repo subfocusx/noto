@@ -4,3 +4,4 @@
 // note, so they are loaded when they are opened for the first time.
 export { CommandPalette } from './CommandPalette';
 export { SearchPanel } from './SearchPanel';
+export { VaultPicker, type VaultPickerProps } from './VaultPicker';

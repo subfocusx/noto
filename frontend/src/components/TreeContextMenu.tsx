@@ -54,8 +54,8 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
     const maxLeft = Math.max(MARGIN, window.innerWidth - rect.width - MARGIN);
     const maxTop = Math.max(MARGIN, window.innerHeight - rect.height - MARGIN);
     setPosition({
-      left: Math.min(props.x, maxLeft),
-      top: Math.min(props.y, maxTop),
+      left: Math.min(Math.max(props.x, MARGIN), maxLeft),
+      top: Math.min(Math.max(props.y, MARGIN), maxTop),
     });
   }, [props.x, props.y]);
 

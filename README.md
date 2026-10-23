@@ -83,9 +83,26 @@ network.
 **Application**
 
 - Installable PWA (web manifest, service worker, offline app shell).
-- One design system: semantic CSS tokens, a graphite dark theme and a matching
-  light theme, one icon set (Lucide) and one spacing scale — see
-  [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- **Storage of the notes (the "vault").** At the first start the application asks
+  for the folder that holds the notes, like Obsidian does. The notes are plain
+  Markdown files in that folder, the internal data of Noto lives in a hidden
+  `.noto` subfolder next to them, and the folder can be changed at any time from
+  the left column. See [`docs/VAULT.md`](docs/VAULT.md).
+- One design system: semantic CSS tokens, a graphite dark theme ("Obsidian
+  Slate": canvas `#09090b`, accent `#818cf8`) and a matching light theme, one
+  icon set (Lucide), locally served Inter and JetBrains Mono, one spacing scale
+  — see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- The shell of the application follows the prototype: a permanent top bar (brand,
+  search, navigation, the toggles of both columns, the theme), the left column
+  with the vault, the navigation and the tree, the writing surface with the tab
+  strip and the breadcrumbs in the middle, the outline of the note in the right
+  column and the status bar at the bottom. Both columns are toggled from the
+  top bar, so a hidden column can always be brought back.
+- Notes and folders can be dragged from one place of the tree to another. The
+  rules live on the server: a folder cannot be dropped into itself or into one
+  of its own subfolders.
+- Long names in the tree are cut off with an ellipsis on one line; the full name
+  is shown in a tooltip when the text is really clipped.
 - The theme can follow the operating system (`System`) or be pinned to light or
   dark; the choice survives a reload.
 - Responsive layout: a drawer sidebar below 820 px, a resizable sidebar above,

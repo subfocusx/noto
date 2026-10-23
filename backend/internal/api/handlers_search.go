@@ -14,7 +14,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
-	hits, err := s.svc.Search(r.Context(), q, limit)
+	hits, err := s.service().Search(r.Context(), q, limit)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -24,7 +24,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 // handleReindex rebuilds the search index.
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
-	count, err := s.svc.Reindex(r.Context())
+	count, err := s.service().Reindex(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return

@@ -185,6 +185,10 @@ func (s *Service) removeFromIndex(ctx context.Context, rel string) {
 
 // walkNotes walks the notes root and calls fn for every file and folder.
 // Folders are visited before their content.
+//
+// Paths with a hidden segment, a segment whose name starts with a dot, are
+// skipped. The internal directory of a vault lives in such a directory, so it
+// must not show up in the tree of the notes.
 func (s *Service) walkNotes(fn func(rel string, info os.FileInfo, isDir bool) error) error {
 	return filepath.Walk(s.notesRoot, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -194,8 +198,28 @@ func (s *Service) walkNotes(fn func(rel string, info os.FileInfo, isDir bool) er
 		if rel == "" {
 			return nil
 		}
+		if hasHiddenSegment(rel) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		return fn(rel, info, info.IsDir())
 	})
+}
+
+// hasHiddenSegment reports whether one of the segments of a slash separated
+// relative path starts with a dot.
+func hasHiddenSegment(rel string) bool {
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == "" {
+			continue
+		}
+		if strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 // treeEntries is the flat result of a tree listing.

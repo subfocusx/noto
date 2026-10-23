@@ -12,3 +12,4 @@ export { attachmentRawUrl, deleteAttachment, listAttachments, uploadAttachment }
 export { exportAllUrl, exportFolderUrl, exportNoteUrl, importFiles, importZip } from './transfer';
 export { getTrash, restoreNote } from './trash';
 export { getHealth } from './health';
+export { browseVault, getVault, setVault, type VaultBrowse, type VaultDir, type VaultInfo } from './vault';

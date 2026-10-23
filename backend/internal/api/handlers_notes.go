@@ -19,7 +19,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // handleTree returns the flat folder and file lists.
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
-	folders, files, err := s.svc.Tree(r.Context())
+	folders, files, err := s.service().Tree(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -43,7 +43,7 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.CreateFolder(r.Context(), req.ParentPath, req.Name)
+	node, err := s.service().CreateFolder(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -58,7 +58,7 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.CreateFile(r.Context(), req.ParentPath, req.Name)
+	node, err := s.service().CreateFile(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -73,7 +73,7 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path parameter is required", notes.ErrBadRequest))
 		return
 	}
-	content, err := s.svc.Read(r.Context(), p)
+	content, err := s.service().Read(r.Context(), p)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -99,7 +99,7 @@ func (s *Server) handlePutNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path field is required", notes.ErrBadRequest))
 		return
 	}
-	res, err := s.svc.Write(r.Context(), req.Path, req.Content, req.Revision)
+	res, err := s.service().Write(r.Context(), req.Path, req.Content, req.Revision)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -120,7 +120,7 @@ func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Rename(r.Context(), req.Path, req.NewName)
+	node, err := s.service().Rename(r.Context(), req.Path, req.NewName)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -141,7 +141,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Move(r.Context(), req.Path, req.NewParentPath)
+	node, err := s.service().Move(r.Context(), req.Path, req.NewParentPath)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -156,7 +156,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path parameter is required", notes.ErrBadRequest))
 		return
 	}
-	if err := s.svc.Delete(r.Context(), p); err != nil {
+	if err := s.service().Delete(r.Context(), p); err != nil {
 		writeError(w, s.log, err)
 		return
 	}
@@ -175,7 +175,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Restore(r.Context(), req.TrashPath)
+	node, err := s.service().Restore(r.Context(), req.TrashPath)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -185,7 +185,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 
 // handleTrash lists the trashed entries.
 func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.svc.Trash(r.Context())
+	entries, err := s.service().Trash(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return

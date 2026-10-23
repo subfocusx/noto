@@ -27,6 +27,7 @@ import (
 	"noto/backend/internal/notes"
 	"noto/backend/internal/restore"
 	"noto/backend/internal/sqlitestore"
+	"noto/backend/internal/vault"
 )
 
 // serve starts the server. It is a variable so that the tests can replace it
@@ -237,10 +238,18 @@ func runReconcile(args []string) int {
 
 // runServer starts the server and blocks until the process is asked to stop.
 func runServer(ctx context.Context) error {
-	cfg, err := config.Load()
+	baseCfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	logger := newLogger(baseCfg.LogLevel)
+	vaultPath, cfg, err := resolveVault(baseCfg, logger)
+	if err != nil {
+		return err
+	}
+	// A storage that was fixed by the environment cannot be changed at
+	// runtime, but the user does not have to choose a folder either.
+	vaultFixed := vaultPath == "" && storageFixedByEnv()
 	listenAddr, err := resolveListenAddr(cfg)
 	if err != nil {
 		return err
@@ -248,22 +257,12 @@ func runServer(ctx context.Context) error {
 	if err := cfg.EnsureDirs(); err != nil {
 		return err
 	}
-	logger := newLogger(cfg.LogLevel)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store, err := sqlitestore.Open(ctx, cfg.DBPath)
-	if err != nil {
-		return fmt.Errorf("cannot open the database: %w", err)
-	}
-	defer func() {
-		if cerr := store.Close(); cerr != nil {
-			logger.Error("cannot close the database", "err", cerr)
-		}
-	}()
-
-	svc, err := notes.NewService(cfg, store)
+	factory := newServiceFactory(ctx, baseCfg)
+	svc, closer, err := factory(vaultPath)
 	if err != nil {
 		return fmt.Errorf("cannot create the notes service: %w", err)
 	}
@@ -275,10 +274,15 @@ func runServer(ctx context.Context) error {
 		logger.Info("search index is up to date", "indexed", count)
 	}
 
-	apiServer, err := api.New(cfg, svc, logger)
+	apiServer, err := api.NewWithFactory(cfg, svc, logger, factory)
 	if err != nil {
+		closer()
 		return fmt.Errorf("cannot create the API server: %w", err)
 	}
+	apiServer.SetServiceCloser(closer)
+	apiServer.SetVaultPath(vaultPath)
+	apiServer.SetVaultFixed(vaultFixed)
+	defer apiServer.Close()
 
 	srv := &http.Server{
 		Addr:              listenAddr,
@@ -316,6 +320,74 @@ func runServer(ctx context.Context) error {
 	}
 	logger.Info("server stopped")
 	return nil
+}
+
+// resolveVault returns the vault the server has to serve and the effective
+// configuration.
+//
+// The environment variables NOTO_DATA_DIR and NOTO_NOTES_DIR have priority
+// over the stored vault configuration, so that a test or a CI job can run the
+// server in a temporary directory. Such a run uses the default layout and not
+// the layout of a vault.
+func resolveVault(cfg config.Config, logger *slog.Logger) (string, config.Config, error) {
+	if _, ok := os.LookupEnv("NOTO_DATA_DIR"); ok {
+		return "", cfg, nil
+	}
+	if _, ok := os.LookupEnv("NOTO_NOTES_DIR"); ok {
+		return "", cfg, nil
+	}
+	vc, ok, err := vault.Read()
+	if err != nil {
+		logger.Warn("cannot read the vault configuration, using the default directory", "err", err)
+		return "", cfg, nil
+	}
+	if !ok {
+		return "", cfg, nil
+	}
+	newCfg, _, err := vault.ApplyTo(cfg, vc.Path)
+	if err != nil {
+		logger.Warn("the stored vault is not usable, using the default directory", "err", err)
+		return "", cfg, nil
+	}
+	return newCfg.NotesDir, newCfg, nil
+}
+
+// storageFixedByEnv reports whether the directory of the notes was fixed by
+// the environment. Such a run (a test or a CI job) uses the default layout.
+func storageFixedByEnv() bool {
+	if _, ok := os.LookupEnv("NOTO_DATA_DIR"); ok {
+		return true
+	}
+	_, ok := os.LookupEnv("NOTO_NOTES_DIR")
+	return ok
+}
+
+// newServiceFactory builds the factory that creates the notes service. An
+// empty vault path means the default layout of the base configuration.
+func newServiceFactory(ctx context.Context, base config.Config) api.ServiceFactory {
+	return func(vaultPath string) (*notes.Service, func(), error) {
+		cfg := base
+		if strings.TrimSpace(vaultPath) != "" {
+			var err error
+			cfg, _, err = vault.ApplyTo(base, vaultPath)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if err := cfg.EnsureDirs(); err != nil {
+			return nil, nil, err
+		}
+		store, err := sqlitestore.Open(ctx, cfg.DBPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot open the database: %w", err)
+		}
+		svc, err := notes.NewService(cfg, store)
+		if err != nil {
+			_ = store.Close()
+			return nil, nil, err
+		}
+		return svc, func() { _ = store.Close() }, nil
+	}
 }
 
 // newLogger builds the structured logger of the server.

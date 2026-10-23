@@ -2,18 +2,28 @@
 //
 // A row is a line of the file tree: a folder with its toggle, its name and
 // its actions, or a note with its name and its actions. Both rows can be
-// renamed in place with a double click.
+// renamed in place with a double click, and both rows can be dragged to
+// another folder.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
+import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { Icon } from '../ui/icons';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 
 /** The deepest level that is indented; deeper rows share the last step. */
-const MAX_DEPTH = 6;
+const MAX_DEPTH = 8;
 
 /** The width of one indentation step, in pixels. */
 const INDENT_STEP = 14;
+
+/** The state of a drag, shared by every row of the tree. */
+export interface TreeDragState {
+  /** The path of the node that is being dragged. */
+  path: string | null;
+  /** True when the dragged node is a folder. */
+  isFolder: boolean;
+}
 
 export interface TreeFolderRowProps {
   /** The folder and its children. */
@@ -35,6 +45,14 @@ export interface TreeFolderRowProps {
   onDelete(node: Node): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
+  /** The path of the node that is currently dragged, if any. */
+  draggingPath?: string | null;
+  /** Called when a drag starts. */
+  onDragStart?(state: TreeDragState): void;
+  /** Called when a drag ends. */
+  onDragEnd?(): void;
+  /** Called when a node is dropped on a folder. */
+  onDropOnFolder?(node: Node, targetParentPath: string): void;
 }
 
 export interface TreeNoteRowProps {
@@ -50,6 +68,12 @@ export interface TreeNoteRowProps {
   onDelete(node: Node): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
+  /** The path of the node that is currently dragged, if any. */
+  draggingPath?: string | null;
+  /** Called when a drag starts. */
+  onDragStart?(state: TreeDragState): void;
+  /** Called when a drag ends. */
+  onDragEnd?(): void;
 }
 
 interface InlineRename {
@@ -254,6 +278,16 @@ function RowActions(props: {
   );
 }
 
+/** The name of a row, cut off with an ellipsis when it does not fit. */
+function TreeName(props: { name: string }) {
+  const overflow = useOverflowTitle(props.name);
+  return (
+    <span class="tree-name" ref={overflow.ref} title={overflow.title}>
+      {props.name}
+    </span>
+  );
+}
+
 /** A folder of the tree, with its children. */
 export function TreeFolderRow(props: TreeFolderRowProps) {
   const { folder } = props;
@@ -261,10 +295,46 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   const isOpen = props.expanded.has(node.path);
   const files = props.filesByParent.get(node.path) ?? [];
   const rename = useInlineRename(node, props.onRenameInline);
+  const [over, setOver] = useState(false);
+  const isDragging = props.draggingPath === node.path;
+
+  // The highlight of a drop target disappears with the drag itself.
+  useEffect(() => {
+    if (!props.draggingPath) setOver(false);
+  }, [props.draggingPath]);
+
+  const handleDragStart = (event: DragEvent): void => {
+    if (event.dataTransfer) {
+      event.dataTransfer.setData('text/plain', node.path);
+      event.dataTransfer.effectAllowed = 'move';
+    }
+    props.onDragStart?.({ path: node.path, isFolder: true });
+  };
+
+  const handleDragOver = (event: DragEvent): void => {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    setOver(true);
+  };
+
+  const handleDrop = (event: DragEvent): void => {
+    event.preventDefault();
+    setOver(false);
+    props.onDropOnFolder?.(node, node.path);
+  };
 
   return (
     <li class="tree-folder">
-      <div class="tree-row" style={{ paddingLeft: `${indentOf(props.depth)}px` }}>
+      <div
+        class={`tree-row${isDragging ? ' dragging' : ''}${over ? ' drop-target' : ''}`}
+        style={{ paddingLeft: `${indentOf(props.depth)}px` }}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={() => props.onDragEnd?.()}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setOver(false)}
+        onDrop={handleDrop}
+      >
         <button
           type="button"
           class="tree-toggle"
@@ -288,7 +358,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             <span class="tree-icon">
               <Icon name={isOpen ? 'folder-open' : 'folder'} size={16} />
             </span>
-            <span class="tree-name">{node.name}</span>
+            <TreeName name={node.name} />
           </button>
         )}
         <RowActions
@@ -326,6 +396,10 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               onDelete={props.onDelete}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
+              draggingPath={props.draggingPath}
+              onDragStart={props.onDragStart}
+              onDragEnd={props.onDragEnd}
+              onDropOnFolder={props.onDropOnFolder}
             />
           ))}
           {files.map((file) => (
@@ -340,6 +414,9 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               onDelete={props.onDelete}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
+              draggingPath={props.draggingPath}
+              onDragStart={props.onDragStart}
+              onDragEnd={props.onDragEnd}
             />
           ))}
         </ul>
@@ -353,10 +430,25 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
   const { file } = props;
   const selected = file.path === props.currentPath;
   const rename = useInlineRename(file, props.onRenameInline);
+  const isDragging = props.draggingPath === file.path;
+
+  const handleDragStart = (event: DragEvent): void => {
+    if (event.dataTransfer) {
+      event.dataTransfer.setData('text/plain', file.path);
+      event.dataTransfer.effectAllowed = 'move';
+    }
+    props.onDragStart?.({ path: file.path, isFolder: false });
+  };
 
   return (
     <li class={`tree-file${selected ? ' selected' : ''}`}>
-      <div class="tree-row" style={{ paddingLeft: `${indentOf(props.depth)}px` }}>
+      <div
+        class={`tree-row${isDragging ? ' dragging' : ''}`}
+        style={{ paddingLeft: `${indentOf(props.depth)}px` }}
+        draggable
+        onDragStart={handleDragStart}
+        onDragEnd={() => props.onDragEnd?.()}
+      >
         {rename.renaming ? (
           <RenameInput rename={rename} label={`Rename ${file.name}`} />
         ) : (
@@ -371,7 +463,7 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
             <span class="tree-icon">
               <Icon name="file-text" size={16} />
             </span>
-            {file.name}
+            <TreeName name={file.name} />
           </button>
         )}
         <RowActions

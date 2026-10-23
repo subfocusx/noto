@@ -206,18 +206,27 @@ type treeEntries struct {
 
 // Tree lists every folder and file of the notes root. Trashed entries are
 // excluded because they live outside of the notes root.
+//
+// The metadata of every node is read with a single store.ListNotes call and
+// is then distributed by path, so that the cost of the listing does not grow
+// with the number of the notes.
 func (s *Service) Tree(ctx context.Context) ([]model.Node, []model.Node, error) {
+	stored, err := s.store.ListNotes(ctx)
+	if err != nil {
+		return nil, nil, newErr(ErrInternal, "cannot read node metadata")
+	}
+	byPath := make(map[string]model.Node, len(stored))
+	for _, n := range stored {
+		byPath[n.Path] = n
+	}
 	var out treeEntries
-	err := s.walkNotes(func(rel string, info os.FileInfo, isDir bool) error {
+	err = s.walkNotes(func(rel string, info os.FileInfo, isDir bool) error {
 		node := s.statNode(s.notesRoot, info)
 		node.Path = rel
 		node.Name = baseOf(rel)
 		node.ParentPath = parentOf(rel)
-		stored, found, err := s.store.GetNote(ctx, rel)
-		if err != nil {
-			return newErr(ErrInternal, "cannot read node metadata")
-		}
-		node = mergeStored(node, stored, found)
+		persisted, found := byPath[rel]
+		node = mergeStored(node, persisted, found)
 		if isDir {
 			out.Folders = append(out.Folders, node)
 		} else {

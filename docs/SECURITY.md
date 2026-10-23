@@ -38,7 +38,9 @@ ignores entirely.
 | Oversized requests and zip bombs | `http.MaxBytesReader` bounds every request body, including the total size of a multipart upload (`NOTO_MAX_UPLOAD_MB`); archives have a separate uncompressed-size cap. |
 | Lost updates from concurrent writes | Every note carries a revision. A write with a stale revision is rejected with `409 revision_conflict` and the current server copy is returned instead of being overwritten. Renaming or moving a folder takes a hierarchical lock that also covers writes inside it, so a concurrent write can never split the tree. A write to a note that was moved away returns `409 conflict`, and a write to a missing parent folder returns `not_found` instead of re-creating the folder. |
 | Information disclosure through error messages | Errors return a stable code and a short message. Stack traces and absolute server paths are never returned; they are logged server side. Note contents are never logged. |
-| Private API payloads surviving in the browser cache | The service worker serves every `/api/*` route `network-only` (`frontend/public/sw.js`): a private response is never written to a cache, an offline request fails with an explicit `503 network_error` envelope instead of a stale body, and a successful mutation purges any leftover private-API cache. Only static assets and the app shell are cached. |
+| Private API payloads surviving in the browser cache | The service worker serves every `/api/*` route `network-only` (`frontend/public/sw.js`): a private response is never written to a cache, an offline request fails with an explicit `503 network_error` envelope instead of a stale body, and a successful mutation purges any leftover private-API cache. Only static assets and the app shell are cached. The policy itself lives in pure functions in `frontend/public/sw-policy.js` (`globalThis.NotoSwPolicy`), which are covered by unit tests; a defect that had put the private `/api/*` requests into the cache-first branch (because the base origin was fixed instead of taken from the location of the worker) was found and fixed in phase 3. |
+| A damaged library being repaired by an unintended request | The maintenance endpoint `POST /api/maintenance/reconcile` is registered only when the server was started with `NOTO_MAINTENANCE=1`; without it the route does not exist and answers `404`. Even with the flag the default request only produces a report, and the destructive actions (`apply`, `dropGhosts`) need explicit fields. The same policy holds for the CLI (`noto reconcile --apply`, `--drop-ghosts`). |
+| A tampered or truncated backup archive | The archive carries a manifest of version 2 with the SHA-256 checksum and the size of every file. `noto restore` (and `cmd/restore`, which use the shared `internal/restore`) verifies every file against the manifest before it writes anything and aborts on a mismatch. The archive itself is written to a temporary file and renamed into place, so a failed backup never leaves a broken archive under the final name. Older archives without a checksum list are still restored, but with a warning, because their integrity cannot be verified. |
 | Resource exhaustion from a slow client | Every request is bounded by `NOTO_REQUEST_TIMEOUT_SEC` and shutdown by `NOTO_SHUTDOWN_TIMEOUT_SEC`. |
 
 ### Out of scope — the server does **not** defend against these
@@ -97,6 +99,17 @@ trusted code, not a sandboxed extension.** The full model is in
 * **Private API responses are never cached.** Because `/api/*` is
   `network-only`, data a plugin fetched through the API does not survive
   offline in a cache.
+* **The built-in plugins stay inside the contract.** The third plugin
+  `backlinks` (phase 3) is implemented through the public contract only: it
+  imports nothing but `plugins/contract.ts` and declares the rights
+  `editor.read`, `notes.read`, `tree.read` and `ui.contribute`. It cannot
+  open a note, because the contract has no such operation and it was not
+  extended for the plugin.
+
+The trust model did not change in phase 3: a built-in plugin is still trusted
+code without a sandbox, and the checks still cover the data API, the editor,
+the UI contributions and the settings — **not** the network requests a plugin
+makes itself.
 
 Because plugins are trusted code, the practical mitigation is the supply chain:
 plugins live in this repository, are reviewed like any other code and are
@@ -126,7 +139,9 @@ Work through this before putting Noto on a network you do not fully control.
    `NOTO_MAX_UPLOAD_MB` and `NOTO_MAX_ARCHIVE_MB`.
 7. **Encrypt the disk** that holds the data directory.
 8. **Back up the data directory** regularly and keep at least one copy off the
-   machine (see `README.md` → Backup and restore).
+   machine (see `README.md` → Backup and restore). Test a backup now and then
+   with `noto restore -in <archive.zip> -dry-run` — it verifies the
+   checksums of the archive without changing anything.
 9. **Run as a non-privileged user.** The Docker image already runs as the
    unprivileged `noto` user.
 10. **Keep the data directory out of version control.** `.gitignore` excludes

@@ -7,23 +7,22 @@
  *
  * `__BUILD_ID__` is replaced with the build timestamp by `scripts/copy-dist.mjs`
  * (run as the `postbuild` step), so a new build invalidates the old caches.
+ *
+ * The routing rules themselves live in `/sw-policy.js` (a classic script, so
+ * that it can be loaded with `importScripts` without turning this worker into
+ * a module worker) and are unit tested in `src/__tests__/sw-policy.test.ts`.
  */
+importScripts('/sw-policy.js');
+
+const POLICY = globalThis.NotoSwPolicy;
+
 const VERSION = 'noto-__BUILD_ID__';
-const SHELL_CACHE = `${VERSION}-shell`;
-const ASSET_CACHE = `${VERSION}-assets`;
+const SHELL_CACHE = POLICY.cacheNameFor('shell', VERSION);
+const ASSET_CACHE = POLICY.cacheNameFor('assets', VERSION);
 // Kept only as a safety net: nothing is ever stored in it, but a leftover
 // cache from an older build (or from a previous version of this worker) is
 // purged on activation and after every successful mutation.
-const PRIVATE_API_CACHE = `${VERSION}-private-api`;
-
-/** Every route that carries private, user specific data. */
-const PRIVATE_API_PREFIXES = [
-  '/api/notes',
-  '/api/tree',
-  '/api/search',
-  '/api/trash',
-  '/api/attachments',
-];
+const PRIVATE_API_CACHE = POLICY.cacheNameFor('private-api', VERSION);
 
 const SHELL = [
   '/',
@@ -32,26 +31,6 @@ const SHELL = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];
-
-/** Collects the local assets referenced by the built index.html. */
-function extractAssets(html) {
-  const urls = new Set();
-  const pattern = /(?:src|href)\s*=\s*"([^"]+)"/g;
-  let match = pattern.exec(html);
-  while (match) {
-    const url = match[1];
-    if (
-      url.startsWith('/') &&
-      !url.startsWith('//') &&
-      url !== '/' &&
-      !url.startsWith('/api/')
-    ) {
-      urls.add(url);
-    }
-    match = pattern.exec(html);
-  }
-  return Array.from(urls);
-}
 
 /** Caches the app shell and every asset the current build references. */
 async function precacheShell() {
@@ -65,7 +44,7 @@ async function precacheShell() {
       '/index.html',
       new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
     );
-    const assets = extractAssets(html);
+    const assets = POLICY.extractAssets(html);
     await Promise.all(assets.map((url) => cache.add(url).catch(() => undefined)));
   } catch (err) {
     // Offline during the installation: the static shell stays cached.
@@ -117,7 +96,10 @@ function networkErrorResponse(privateApi) {
  */
 async function networkOnly(request, privateApi) {
   try {
-    return await fetch(request);
+    // `cache: 'no-store'` keeps the HTTP cache of the browser out of the
+    // picture: a private API response must never be answered from a stale
+    // cache entry, not even from the disk cache of the browser.
+    return await fetch(request, { cache: 'no-store' });
   } catch (err) {
     return networkErrorResponse(privateApi);
   }
@@ -172,24 +154,15 @@ async function navigationResponse() {
   }
 }
 
-/**
- * True for the private, user specific API routes. Every /api/* route is
- * treated as private except the public health probe.
- */
-function isPrivateApi(pathname) {
-  if (PRIVATE_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
-  return pathname.startsWith('/api/') && pathname !== '/api/health';
-}
-
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (url.pathname.startsWith('/api/')) {
+  if (POLICY.shouldNetworkOnly(url, self.location.origin)) {
     // Private payloads are never cached; /api/health is public but still
     // network-only so that no API response survives in a cache.
-    const privateApi = isPrivateApi(url.pathname);
+    const privateApi = POLICY.isPrivateApi(url, self.location.origin);
     if (request.method === 'GET') {
       event.respondWith(networkOnly(request, privateApi));
       return;
@@ -205,5 +178,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(navigationResponse());
     return;
   }
+
+  // Only the static files of the app shell and of the current build are
+  // allowed to end up in a cache; every other route goes to the network.
+  if (!POLICY.shouldCacheFirst(url, self.location.origin)) return;
   event.respondWith(cacheFirst(request));
 });

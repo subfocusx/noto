@@ -10,7 +10,12 @@ interface SearchPanelProps {
   onOpenNote(path: string): void;
 }
 
-/** Search overlay: Ctrl+K / Ctrl+P, 250ms debounce, results with snippet. */
+/**
+ * Search overlay: Ctrl+Shift+F, 250ms debounce, results with snippet.
+ *
+ * Ctrl+K and Ctrl+P open the command palette; the palette itself offers the
+ * "Search notes" command.
+ */
 export function SearchPanel(props: SearchPanelProps) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);

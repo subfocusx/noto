@@ -212,7 +212,7 @@ export function Sidebar(props: SidebarProps) {
           <button
             type="button"
             class="icon-button"
-            title="Search (Ctrl+K)"
+            title="Search (Ctrl+Shift+F)"
             aria-label="Search notes"
             onClick={props.onOpenSearch}
           >

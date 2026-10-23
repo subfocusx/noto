@@ -79,6 +79,22 @@ export function wordCountPanel(page: Page): Locator {
   return page.locator('[data-plugin="word-count"]');
 }
 
+/**
+ * Activates a tab of the plugin panel area.
+ *
+ * The panels of the plugins are rendered as tabs ("Plugin panels"), so only the
+ * selected panel is in the DOM. The helper switches to the requested tab and
+ * waits until it is rendered.
+ */
+export async function selectPluginPanel(page: Page, title: string): Promise<void> {
+  const tablist = page.getByRole('region', { name: 'Plugin panels' });
+  await tablist.getByRole('tab', { name: title, exact: true }).click();
+  await expect(tablist.getByRole('tab', { name: title, exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+}
+
 /** The word counter inside the panel. */
 export function wordCountWords(page: Page): Locator {
   return page.locator('.noto-word-count-words');

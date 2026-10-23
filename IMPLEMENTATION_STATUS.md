@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Noto (Markdown Notes PWA)
 
-Last updated: 2026-10-23 (phase 2). Status legend: **done** (implemented and
+Last updated: 2026-10-23 (phase 3). Status legend: **done** (implemented and
 verified here) · **partial** (implemented, some part unverified) · **planned**.
 
 ## Architecture
@@ -8,29 +8,37 @@ verified here) · **partial** (implemented, some part unverified) · **planned**
 ```
 noto/
 ├─ backend/            Go 1.23+ module `noto/backend`
-│  ├─ cmd/noto         HTTP server entry point
+│  ├─ cmd/noto         HTTP server entry point + the "reconcile" and "restore" subcommands
 │  ├─ cmd/backup       consistent backup (notes + attachments + SQLite)
+│  ├─ cmd/restore      thin wrapper around internal/restore (also `noto restore`)
 │  ├─ cmd/smoke        end-to-end API smoke test
 │  └─ internal/
 │     ├─ config        env configuration            (frozen contract)
 │     ├─ model         shared domain types / DTOs   (frozen contract)
 │     ├─ port          Store interface              (frozen contract)
 │     ├─ sqlitestore   SQLite implementation of port.Store (FTS5 + fallback)
+│     ├─ backuppkg     archive format: manifest v2, SHA-256 checksums, create/open
+│     ├─ restore       restore logic: checksums, dry run, atomic DB replacement, rollback
 │     ├─ notes         business logic: tree, CRUD, trash, search, import/export, attachments
 │     │                + noteapi.go: NoteService, NoteEvent, Hook, AddHook (extension point)
+│     │                + reconcile.go: Reconcile / ReconcileWithOptions (file system vs. database)
 │     ├─ api           HTTP handlers, router, security middleware
+│     │                + handlers_maintenance.go (only with NOTO_MAINTENANCE=1)
 │     ├─ web           SPA / static serving (embedded dist or NOTO_STATIC_DIR)
 │     └─ testutil      in-memory store + test helpers
 ├─ frontend/           Preact + TypeScript(strict) + Vite + CodeMirror 6
 │  ├─ src/core/        app-agnostic modules: store, api facade, events, commands,
 │  │                   settings store, diagnostics logger
 │  ├─ src/plugins/     plugin platform: contract, manifest, registry, host, loader,
-│  │                   builtin/word-count, builtin/insert-template
-│  └─ src/components/  shell, editor, preview, plugin slots, plugin manager
+│  │                   builtin/word-count, builtin/insert-template, builtin/backlinks
+│  ├─ src/components/  shell, editor, preview, plugin slots, plugin manager,
+│  │                   command palette
+│  └─ public/          sw.js (service worker) + sw-policy.js (pure policy functions)
 ├─ e2e/                Playwright end-to-end suite
-├─ docs/               CONTRACT.md (authoritative), API.md, SECURITY.md,
-│                      PLUGIN_API.md, PLUGIN_SECURITY.md, PLUGIN_DEVELOPMENT.md
-└─ scripts/            dev / build / test / verify / backup / smoke PowerShell helpers
+├─ docs/               CONTRACT.md (authoritative), API.md, SECURITY.md, PERFORMANCE.md,
+│                      ARCHITECTURE.md, PLUGIN_API.md, PLUGIN_SECURITY.md,
+│                      PLUGIN_DEVELOPMENT.md
+└─ scripts/            dev / build / test / verify / backup / smoke / measure-perf helpers
 ```
 
 Layering: `api` → `notes` → `port.Store` ← `sqlitestore`. The business layer never
@@ -48,6 +56,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 6 | Security, backups, tests, documentation | done | `internal/api/middleware.go`, `cmd/backup`, `README.md`, `docs/SECURITY.md` |
 | 7 | Full check run, live start, fixes | done | see "Verification log" below |
 | 8 | Phase 2: modularisation, PWA privacy, plugin platform | partial | see "Phase 2 status" below |
+| 9 | Phase 3: performance, backups, reconciliation, command palette | done | see "Phase 3 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -67,7 +76,35 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | Frontend / backend modularisation (splits of `App.tsx`, `api/`, `lib/`, `internal/notes`, `internal/api`, `internal/sqlitestore`, `cmd/smoke`) | done | `frontend/src/core/store/**`, `frontend/src/api/**`, `backend/internal/**` |
 | PWA privacy policy: `/api/*` → `network-only`, private responses never cached, offline → `503 network_error` | done | `frontend/public/sw.js` |
 | Lazy loading of `marked`/`dompurify`/`idb` (entry chunk 652,02 kB → 36,52 kB) | done | `frontend/src/lib/markdownLoader.ts`, `frontend/src/lib/drafts.ts` |
-| E2E scenario for the plugin lifecycle (enable → tab → disable → cleanup → reload) | **not verified here** | `e2e/specs/plugins.spec.ts` was added in parallel by another worker; it was not executed as part of this documentation update |
+| E2E scenario for the plugin lifecycle (enable → tab → disable → cleanup → reload) | **not verified here** | `e2e/specs/plugins.spec.ts` was added in parallel by another worker; it was not executed as part of this documentation update (it ran green in phase 3, see the verification log) |
+
+## Phase 3 status (performance, backups, reconciliation, command palette)
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P3-1 | The N+1 of `notes.Service.Tree` is removed: the metadata is read with a single `store.ListNotes(ctx)` and distributed to the walked nodes by path. `port.Store` was **not** changed | done | `backend/internal/notes/service.go`, benchmarks `backend/internal/notes/service_bench_test.go` |
+| P3-2 | Backups get a manifest of version 2 with a SHA-256 checksum per file, the archive is written to a temporary file and renamed into place, and the restore logic in the new `backend/internal/restore` restores an archive (checksum verification, `-dry-run`, keeping of `noto.db.pre-restore-<timestamp>`, atomic replacement of the database, rollback on an invalid schema). The entry point is available both as the subcommand `noto restore` and as the standalone program `cmd/restore` — a thin wrapper around the same package. Old archives without checksums are still restored, with a warning | done | `backend/internal/backuppkg/`, `backend/internal/restore/`, `backend/cmd/restore/main.go`, `backend/cmd/backup/main.go` |
+| P3-3 | Reconciliation of the file system and the database: `notes.Reconcile` / `notes.ReconcileWithOptions{Apply, DropGhosts, DryRun}`, the CLI `noto reconcile` and the HTTP endpoint `POST /api/maintenance/reconcile` (registered only with `NOTO_MAINTENANCE=1`). Without an explicit flag nothing is changed. The SQLite schema was not changed | done | `backend/internal/notes/reconcile.go`, `backend/internal/api/handlers_maintenance.go`, `backend/cmd/noto/main.go` |
+| P3-4 | Tests: fuzz targets `FuzzNormalizeRel` / `FuzzJoinRel` / `FuzzValidateName`, the tests of the LIKE fallback of the search, and the race tests of concurrent writes to the same path | done | `backend/internal/notes/paths_fuzz_test.go`, `backend/internal/sqlitestore/search_fallback_test.go`, `backend/internal/notes/concurrency_test.go` |
+| P3-5 | The service worker policy was moved into pure functions in `frontend/public/sw-policy.js` (20 unit tests) and the offline E2E scenario was extended. A real defect was fixed: a fixed base origin sent the private `/api/*` requests into the cache-first branch | done | `frontend/public/sw-policy.js`, `frontend/src/__tests__/sw-policy.test.ts`, `e2e/specs/offline.spec.ts` |
+| P3-6 | Global command palette on Ctrl+K / Ctrl+P. The search moved to **Ctrl+Shift+F** and stays reachable through the button in the sidebar and the "Search notes" command of the palette. Eight built-in commands (`app:new-note`, `app:new-folder`, `app:rename-note`, `app:delete-note`, `app:daily-note`, `app:search`, `app:toggle-theme`, `app:open-trash`); the daily note creates or opens `YYYY-MM-DD.md` in the root of the library and never overwrites an existing file | done | `frontend/src/components/CommandPalette.tsx`, `frontend/src/core/commands/appCommands.ts`, `frontend/src/App.tsx` |
+| P3-7 | Third built-in plugin `backlinks`: incoming links (`[[Wiki Link]]`) and mentions. It is implemented through the public contract only (it imports nothing but `plugins/contract.ts`) and declares `editor.read`, `notes.read`, `tree.read`, `ui.contribute`. It cannot open a note — the contract was not extended | done | `frontend/src/plugins/builtin/backlinks/index.ts`, `frontend/src/plugins/loader.ts` |
+| P3-8 | DX: `scripts/verify.ps1` got `-ReportPath` (a markdown report with the summary and the tool versions) and `-Bench`; the npm scripts `verify` in the frontend and in the root; the outdated comments about FTS5 were corrected (in `modernc.org/sqlite` FTS5 is enabled by default, the build tag `sqlite_fts5` is not needed) | done | `scripts/verify.ps1`, `scripts/measure-perf.ps1`, `frontend/package.json`, `package.json` |
+
+### Measured effect of P3-1
+
+2000 notes, the same machine, the numbers are detailed in `docs/PERFORMANCE.md`:
+
+| Measurement | before | after |
+| --- | --- | --- |
+| `GET /api/tree`, median | 283 ms | 98 - 110 ms |
+| `GET /api/tree`, p95 | 314 ms | 118 - 125 ms |
+| `BenchmarkTree`, allocations per operation | ~98 930 | ~56 440 |
+| `BenchmarkTree`, time per operation | ~170 ms | ~92 ms |
+
+The tree endpoint is 2.3x - 2.9x faster; the number of allocations drops by
+43 %. `Service.Reindex` still has the same N+1 pattern and was out of the
+scope of the card (about 7.7 s for 2000 notes).
 
 ## Definition of Done
 
@@ -141,6 +178,36 @@ Not verified in phase 2: the plugin lifecycle E2E scenario
 update), the Docker image build, and the 7 failing frontend plugin tests
 mentioned above (the defect is in the plugin code, not in the documentation).
 
+### Phase 3 (2026-10-23)
+
+Commands that were actually executed while the phase 3 documentation was
+written, with their real output:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Backend tests | `go test ./... -count=1` (`backend`) | all packages `ok` (9 packages with tests: `cmd/backup`, `cmd/noto`, `internal/api`, `internal/backuppkg`, `internal/notes`, `internal/port`, `internal/restore`, `internal/sqlitestore`, `internal/web`; the restore tests live in `internal/restore`, `cmd/restore` is a thin wrapper without tests of its own) |
+| Frontend unit tests | `npm test` (`frontend`) | 20 test files, **293 tests passed**, 0 failed |
+| Bundle size | `npm run measure` (`frontend`) | entry chunk 81,44 kB (gzip 25,33 kB) — the phase 2 value was 36,52 kB / 11,96 kB; the command palette and the backlinks plugin added weight |
+| End-to-end | `npx playwright test` | **24 passed, 18 skipped, 0 failed** — on the locally cached Chromium build |
+
+Results of the phase 3 waves that were reported but **not** re-run for this
+documentation update:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Backend build / vet | `go build ./...`, `go vet ./...` | exit 0 |
+| Backend tests (race) | `CGO_ENABLED=1 go test ./... -race -count=1` | exit 0 (needs cgo) |
+| API smoke suite | `go run ./cmd/smoke` | `PASS 43 / FAIL 0` |
+| Frontend production build | `npm run build` | exit 0 |
+| Go benchmarks | `go test ./internal/notes -bench=. -benchmem` | `BenchmarkTree` ~170 ms -> ~92 ms, allocations 98 930 -> 56 440 |
+| HTTP measurement | `.\scripts\measure-perf.ps1 -Notes 2000 -Iterations 11` | `GET /api/tree` median 283 ms -> 98 - 110 ms, p95 314 ms -> 118 - 125 ms |
+| Verification script | `.\scripts\verify.ps1 -Bench -ReportPath ...` | markdown report with the summary and the tool versions |
+
+Not verified in phase 3: the Docker image build (Docker is not installed on
+this machine), the download of a Chromium build for Playwright (the suite ran
+on the locally cached build), the race detector without a C compiler, and the
+`npx playwright install` path.
+
 **Note on concurrent work.** While this documentation was being written, the
 plugin core (`frontend/src/plugins/{contract,host}.ts`,
 `frontend/src/core/api/pluginApi.ts`, `frontend/src/core/settings/settingsStore.ts`)
@@ -173,19 +240,22 @@ are fixed with regression tests:
 ### Environment
 
 * Docker was never built in this phase: Docker is not installed on this machine,
-  so `docker compose up --build` and the image build are unverified.
+  so `docker compose up --build` and the image build are unverified. The same
+  is true for phase 3 — the images were never built.
 * Playwright could not download Chromium from the CDN (403); the E2E config
   falls back to the locally cached full Chromium build (`channel: 'chromium'`).
-  On a normal machine install the browser normally.
+  `npx playwright install` is therefore not usable on this machine, and the
+  suite of phase 3 (24 passed / 18 skipped) ran on the cached build.
 * `go test -race` needs cgo. On this machine it runs with
   `CGO_ENABLED=1` and `C:\msys64\mingw64\bin` on `PATH`; without a C compiler
-  the race detector cannot start.
+  (gcc) the race detector cannot start.
 * The Windows toolchain used here lives in `.tools/goroot`; on a normal machine
   install Go 1.23+ from go.dev and use `go` directly.
 * The security audit used a proof-of-concept that created three throwaway files
   outside the repository (`C:\Windows\evil.md`, `C:\Windows\small.md`,
   `C:\Windows\pwned_dir`). The sandbox refuses to delete anything under
-  `C:\Windows`; remove them manually with an elevated shell.
+  `C:\Windows`; remove them manually with an elevated shell. The three paths
+  were still present when the phase 3 documentation was written.
 
 ### Application
 
@@ -193,10 +263,26 @@ are fixed with regression tests:
   refuses to start on a public address unless `NOTO_ALLOW_PUBLIC=true`.
   A public deployment must be protected by a VPN or an authenticating reverse proxy.
 * Offline support is an app-shell foundation with local draft recovery: every
-  `/api/*` route is `network-only`, so nothing private is served from a cache.
-  There is **no** automatic background synchronisation of pending edits.
+  `/api/*` route is `network-only`, so nothing private is served from a cache
+  and an offline request answers `503` with the code `network_error`. There is
+  **no** automatic background synchronisation of pending edits: a **full
+  offline synchronisation is not implemented**, the drafts stay in the browser
+  until the note is saved again.
 * The export endpoints buffer the archive in memory; for very large libraries a
   temporary file would be preferable.
+* `validateName` does not limit the length of a name and accepts the control
+  characters below `0x20` (except NUL). This was found by the fuzz targets of
+  card P3-4 and was deliberately **not** changed, so that existing files on
+  disk are never rejected. A note name is therefore not guaranteed to be free
+  of control characters.
+* The search button in the sidebar still carries the tooltip
+  "Search (Ctrl+K)"; the shortcut is `Ctrl+Shift+F` since the command palette
+  took over `Ctrl+K` / `Ctrl+P`. The palette itself offers "Search notes", so
+  the function is still reachable.
+* The restore is available as the subcommand `noto restore`; the separate
+  program `backend/cmd/restore` remains for the cases where a separate process
+  is needed. Both call the same `restore.Run`. It refuses to write into a
+  directory that already contains data unless `-force` is given.
 
 ### Plugins
 
@@ -208,13 +294,13 @@ are fixed with regression tests:
   check the declared rights and throw `PluginPermissionError`. The checks do
   **not** cover network requests a plugin makes itself, and there is no
   sandbox.
-* **The built-in example manifests need `ui.contribute`.** `word-count`
-  declares only `editor.read` and `insert-template` only `editor.write`, while
-  both register a panel or a command — with the enforcement in place their UI
-  contributions are refused and the corresponding tests fail
-  (`plugin-word-count.test.tsx`, `plugin-insert-template.test.tsx`). The fix
-  belongs to the plugin code (`frontend/src/plugins/builtin/**`), which is not
-  part of the documentation scope.
+* **The manifests of the built-in plugins declare `ui.contribute`.** The defect
+  of phase 2 (the manifests of `word-count` and `insert-template` lacked the
+  right while they register a panel or a command, which made seven tests fail)
+  is fixed: `word-count` declares `editor.read` and `ui.contribute`,
+  `insert-template` declares `editor.read`, `editor.write` and
+  `ui.contribute`, and the third plugin `backlinks` declares `editor.read`,
+  `notes.read`, `tree.read` and `ui.contribute`.
 * **User-supplied plugins are not supported.** Only built-in plugins exist;
   loading a plugin from disk or from the network is not implemented. A future
   phase would need an iframe sandbox with a strict CSP.
@@ -230,9 +316,9 @@ are fixed with regression tests:
   operation succeeded.
 * **The backend hook API (`notes.AddHook`) is not connected to the frontend**
   yet: the plugin events come from `App.tsx`, not from the Go hooks.
-* **No verified E2E scenario for the plugin lifecycle** — the spec file
-  `e2e/specs/plugins.spec.ts` exists in the tree, but it was not executed as
-  part of this status update.
-* **Plugin logging is not filtered.** The rule "a plugin must not log note
+* **The E2E suite covers the plugin lifecycle** (`e2e/specs/plugins.spec.ts`,
+  14 tests over the desktop and the mobile project). It was not executed
+  during the phase 2 status update, but the whole suite ran green in phase 3
+  (24 passed / 18 skipped).* **Plugin logging is not filtered.** The rule "a plugin must not log note
   content" is a convention, not a mechanism: the logger only adds a prefix.
 

@@ -38,9 +38,10 @@ type Store struct {
 // schema and all pending migrations. The parent directory of dbPath is
 // created when it does not exist.
 //
-// The FTS5 search index is used when the SQLite driver was built with FTS5
-// support (build tag "sqlite_fts5"). Without it the store transparently
-// falls back to a LIKE based scan; see FTS5Available.
+// The FTS5 search index is used when the SQLite driver supports FTS5. The
+// pure Go driver modernc.org/sqlite ships FTS5 enabled by default (no build
+// tag is needed); the store still detects the support at runtime and falls
+// back to a LIKE based scan for a build without FTS5; see FTS5Available.
 func Open(ctx context.Context, dbPath string) (*Store, error) {
 	if strings.TrimSpace(dbPath) == "" {
 		return nil, errors.New("sqlitestore: empty database path")

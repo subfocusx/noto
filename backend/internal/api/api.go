@@ -67,6 +67,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/attachments/{id}/raw", s.handleRawAttachment)
 	s.mux.HandleFunc("DELETE /api/attachments/{id}", s.handleDeleteAttachment)
 
+	// The maintenance endpoints are only registered when they are enabled
+	// explicitly, so that they stay out of the route contract of a normal
+	// build.
+	if maintenanceEnabled() {
+		s.mux.HandleFunc("POST /api/maintenance/reconcile", s.handleReconcile)
+	}
+
 	// Unknown API routes return the JSON error envelope.
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeNotFound, "unknown endpoint", notes.ErrNotFound))

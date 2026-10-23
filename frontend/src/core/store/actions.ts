@@ -257,6 +257,62 @@ export async function restoreFromTrash(path: string): Promise<Node> {
   return restoreNote(path);
 }
 
+/* ----------------------------------------------------------- daily note */
+
+/**
+ * The file name of the daily note: the local date as `YYYY-MM-DD`.
+ *
+ * The local date is used on purpose: the note of the "23rd" must not depend
+ * on the time zone of the server.
+ */
+export function dailyNoteName(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}.md`;
+}
+
+/**
+ * Opens the daily note of the given day, creating it when it is missing.
+ *
+ * An existing note is never overwritten: it is simply opened. When a folder
+ * with the same name is in the way, the user gets a message and nothing is
+ * changed.
+ */
+export async function openOrCreateDailyNote(date: Date = new Date()): Promise<void> {
+  const name = dailyNoteName(date);
+
+  const { tree } = getSnapshot();
+  // The daily note lives in the root of the library: only the root level is
+  // looked at (the path of a root node is its name).
+  const folder = tree.folders.find((node) => node.path === name);
+  if (folder) {
+    showBanner(`A folder named "${name}" already exists — the daily note was not created`);
+    return;
+  }
+
+  const file = tree.files.find((node) => node.path === name);
+  if (file) {
+    await openNote(file.path);
+    return;
+  }
+
+  try {
+    // `createFile` creates the note, refreshes the tree and opens it.
+    await createFileNode('', name);
+  } catch (err) {
+    // The tree may be out of date: the note might exist after all.
+    await refreshTree().catch(() => undefined);
+    const { tree: fresh } = getSnapshot();
+    const existing = fresh.files.find((node) => node.path === name);
+    if (existing) {
+      await openNote(existing.path);
+      return;
+    }
+    showBanner(errorMessage(err));
+  }
+}
+
 /* ---------------------------------------------------------------- dialogs */
 
 export function openDialog(dialog: DialogState): void {
@@ -360,6 +416,7 @@ export interface AppActions {
   moveNode(node: Node, newParentPath: string): Promise<void>;
   deleteNode(node: Node): Promise<void>;
   restoreFromTrash(path: string): Promise<Node>;
+  openOrCreateDailyNote(date?: Date): Promise<void>;
   restoreDraft(): void;
   discardDraft(): void;
   setMode(mode: ViewMode): void;
@@ -387,6 +444,7 @@ export const actions: AppActions = {
   moveNode,
   deleteNode,
   restoreFromTrash,
+  openOrCreateDailyNote,
   restoreDraft,
   discardDraft,
   setMode,

@@ -9,6 +9,7 @@
 import type { Plugin } from './contract';
 import { insertTemplatePlugin } from './builtin/insert-template';
 import { wordCountPlugin } from './builtin/word-count';
+import { backlinksPlugin } from './builtin/backlinks';
 
 /**
  * The built-in plugins known to this build.
@@ -16,4 +17,8 @@ import { wordCountPlugin } from './builtin/word-count';
  * Each entry is a static object literal created by the integration layer.
  * The order defines the order in the plugin manager panel.
  */
-export const builtinPlugins: Plugin[] = [wordCountPlugin, insertTemplatePlugin];
+export const builtinPlugins: Plugin[] = [
+  wordCountPlugin,
+  insertTemplatePlugin,
+  backlinksPlugin,
+];

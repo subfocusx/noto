@@ -73,8 +73,10 @@ func (s *Store) migrate(ctx context.Context) error {
 	return nil
 }
 
-// fts5TableStatement creates the FTS5 search index. It is only applied when
-// the driver was built with FTS5 support (build tag "sqlite_fts5").
+// fts5TableStatement creates the FTS5 search index. The driver
+// modernc.org/sqlite supports FTS5 by default, so the statement is applied
+// on every normal build; it is only skipped when the runtime detection finds
+// no FTS5 support, in which case the LIKE fallback is used.
 const fts5TableStatement = "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts_v USING fts5(path UNINDEXED, name, body)"
 
 // schemaStatements is the schema described in CONTRACT.md section 2.

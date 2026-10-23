@@ -6,7 +6,7 @@ test.describe('search', () => {
     test.skip(testInfo.project.name !== 'desktop', 'desktop project only');
   });
 
-  test('ctrl+k opens the search overlay and a hit opens the note', async ({ page }) => {
+  test('ctrl+shift+f opens the search overlay and a hit opens the note', async ({ page }) => {
     await gotoApp(page);
 
     const folder = 'E2E Search Folder';
@@ -17,8 +17,8 @@ test.describe('search', () => {
     await typeInEditor(page, 'A distinctive marker: quokka appears exactly here.\n');
     await waitForSaved(page);
 
-    // Ctrl+K opens the search overlay.
-    await page.keyboard.press('Control+k');
+    // Ctrl+Shift+F opens the search overlay (Ctrl+K opens the command palette).
+    await page.keyboard.press('Control+Shift+F');
     const searchInput = page.getByLabel('Search query');
     await expect(searchInput).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();

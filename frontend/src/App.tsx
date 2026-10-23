@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AppFooter } from './components/AppFooter';
 import { AppHeader } from './components/AppHeader';
 import { AttachmentsPanel } from './components/AttachmentsPanel';
+import { CommandPalette } from './components/CommandPalette';
 import { Dialog } from './components/Dialog';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteDialogs } from './components/NoteDialogs';
@@ -23,6 +24,7 @@ import { Sidebar } from './components/Sidebar';
 import { TrashPanel } from './components/TrashPanel';
 import { TransferPanel } from './components/TransferPanel';
 import { createPluginApi } from './core/api/pluginApi';
+import { registerAppCommands, APP_COMMAND_PREFIX } from './core/commands/appCommands';
 import { CommandRegistry } from './core/commands/commandRegistry';
 import { EventBus } from './core/events/eventBus';
 import { SettingsStore } from './core/settings/settingsStore';
@@ -79,6 +81,8 @@ export function App() {
   const [pluginVersion, setPluginVersion] = useState(0);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [commandRegistry, setCommandRegistry] = useState<CommandRegistry | null>(null);
 
   /** The path of the note that is open; the plugins read it through the editor. */
   const currentPathRef = useRef<string | null>(note.path);
@@ -138,6 +142,38 @@ export function App() {
     registryRef.current = registry;
     commandsRef.current = commands;
     settingsRef.current = settings;
+    setCommandRegistry(commands);
+
+    // The commands of the application live in the same registry as the
+    // commands of the plugins: the palette shows both of them.
+    const unregisterAppCommands = registerAppCommands(commands, {
+      createNote: () => appStore.actions.openDialog({ kind: 'create-file', parentPath: '', value: 'note.md' }),
+      createFolder: () =>
+        appStore.actions.openDialog({ kind: 'create-folder', parentPath: '', value: 'New folder' }),
+      dailyNote: () => appStore.actions.openOrCreateDailyNote(),
+      openSearch: () => appStore.actions.setSearchOpen(true),
+      toggleTheme: () => appStore.actions.toggleTheme(),
+      openTrash: () => appStore.actions.openDialog({ kind: 'trash' }),
+      renameNote: () => {
+        // The commands of the application act on the note that is open.
+        const { note, tree } = appStore.getSnapshot();
+        const node = tree.files.find((file) => file.path === note.path);
+        if (!node) {
+          appStore.actions.showBanner('Open a note first — there is nothing to rename');
+          return;
+        }
+        appStore.actions.openDialog({ kind: 'rename', node, value: node.name });
+      },
+      deleteNote: () => {
+        const { note, tree } = appStore.getSnapshot();
+        const node = tree.files.find((file) => file.path === note.path);
+        if (!node) {
+          appStore.actions.showBanner('Open a note first — there is nothing to delete');
+          return;
+        }
+        appStore.actions.openDialog({ kind: 'delete', node });
+      },
+    });
 
     const host = new PluginHost({
       registry,
@@ -184,11 +220,13 @@ export function App() {
 
     return () => {
       offState();
+      unregisterAppCommands();
       void host.disposeAll();
       hostRef.current = null;
       registryRef.current = null;
       commandsRef.current = null;
       settingsRef.current = null;
+      setCommandRegistry(null);
     };
     // The host lives as long as the application does.
   }, []);
@@ -213,6 +251,8 @@ export function App() {
     if (!registry || !host) return;
     registry.enable(id);
     await host.activate(id);
+    // The contributions of the plugin changed: the slots must be redrawn.
+    setPluginVersion((v) => v + 1);
     await persistEnabledStates();
   };
 
@@ -222,6 +262,8 @@ export function App() {
     if (!registry || !host) return;
     registry.disable(id);
     await host.deactivate(id);
+    // The contributions of the plugin are gone: the slots must be redrawn.
+    setPluginVersion((v) => v + 1);
     await persistEnabledStates();
   };
 
@@ -296,6 +338,8 @@ export function App() {
 
   /* ----------------------------------------------------------- shortcuts */
 
+  // Ctrl+K / Ctrl+P open the command palette; the search is one of its
+  // commands and stays reachable through Ctrl+Shift+F.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const mod = event.ctrlKey || event.metaKey;
@@ -303,6 +347,11 @@ export function App() {
       const key = event.key.toLowerCase();
       const inEditor = Boolean((event.target as HTMLElement | null)?.closest?.('.cm-editor'));
       if (key === 'k' || key === 'p') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
+      if (key === 'f' && event.shiftKey) {
         event.preventDefault();
         actions.setSearchOpen(true);
         return;
@@ -365,7 +414,9 @@ export function App() {
     [pluginVersion],
   );
   const pluginCommands = useMemo(
-    () => commandsRef.current?.list() ?? [],
+    // The commands of the application are not plugin contributions: they are
+    // only shown in the command palette.
+    () => (commandsRef.current?.list() ?? []).filter((cmd) => !cmd.id.startsWith(APP_COMMAND_PREFIX)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pluginVersion],
   );
@@ -466,6 +517,14 @@ export function App() {
               onClick={() => setPluginsOpen(true)}
             >
               Plugins
+            </button>
+            <button
+              type="button"
+              class="text-button"
+              aria-label="Open command palette"
+              onClick={() => setPaletteOpen(true)}
+            >
+              Commands
             </button>
           </div>
         </div>
@@ -568,6 +627,14 @@ export function App() {
       <Dialog title="Attachments" open={dialog.kind === 'attachments'} onClose={actions.closeDialog}>
         <AttachmentsPanel notePath={note.path} onInsert={insertAtCursor} />
       </Dialog>
+
+      <CommandPalette
+        open={paletteOpen}
+        registry={commandRegistry}
+        refreshKey={pluginVersion}
+        onClose={() => setPaletteOpen(false)}
+        onError={(message) => actions.showBanner(message)}
+      />
 
       <NoteDialogs
         dialog={dialog}

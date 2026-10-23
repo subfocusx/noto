@@ -1,11 +1,18 @@
 // Command noto starts the Noto server: the REST API and the single page
 // application.
+//
+// The command without a subcommand starts the server. The subcommand
+// "reconcile" compares the notes directory with the database, the subcommand
+// "restore" restores a backup archive into a data directory.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,18 +25,218 @@ import (
 	"noto/backend/internal/api"
 	"noto/backend/internal/config"
 	"noto/backend/internal/notes"
+	"noto/backend/internal/restore"
 	"noto/backend/internal/sqlitestore"
 )
 
+// serve starts the server. It is a variable so that the tests can replace it
+// and check the dispatch of the command line without starting a server.
+var serve = runServer
+
 func main() {
-	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "noto:", err)
-		os.Exit(1)
-	}
+	os.Exit(run(context.Background(), os.Args[1:]))
 }
 
-// run starts the server and blocks until the process is asked to stop.
-func run() error {
+// run dispatches the command line and returns the exit code of the process.
+func run(ctx context.Context, args []string) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "reconcile":
+			return runReconcile(args[1:])
+		case "restore":
+			return runRestore(ctx, args[1:], os.Stdout)
+		case "help", "-h", "--help":
+			usage(os.Stdout)
+			return 0
+		default:
+			fmt.Fprintf(os.Stderr, "noto: unknown command %q\n\n", args[0])
+			usage(os.Stderr)
+			return 1
+		}
+	}
+	if err := serve(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "noto:", err)
+		return 1
+	}
+	return 0
+}
+
+// usage writes the help of the command.
+func usage(w io.Writer) {
+	fmt.Fprintln(w, "noto - the notes server")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  noto                     start the server")
+	fmt.Fprintln(w, "  noto reconcile [flags]   compare the notes directory with the database")
+	fmt.Fprintln(w, "  noto restore [flags]     restore a backup archive into a data directory")
+	fmt.Fprintln(w, "  noto help                show this help")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags of the reconcile command:")
+	fmt.Fprintln(w, "  --apply        create the metadata rows of the files without a row")
+	fmt.Fprintln(w, "  --drop-ghosts  delete the metadata rows without a file")
+	fmt.Fprintln(w, "  --dry-run      report the differences without changing anything")
+	fmt.Fprintln(w, "  --json         print the report as JSON")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags of the restore command:")
+	fmt.Fprintln(w, "  -in <file>     path of the backup archive to restore (required)")
+	fmt.Fprintln(w, "  -data <dir>    override the data directory (default: the configured one)")
+	fmt.Fprintln(w, "  -dry-run       only report what would be restored, change nothing")
+	fmt.Fprintln(w, "  -force         restore even when the target directory already contains data")
+}
+
+// restoreUsage writes the help of the restore subcommand.
+func restoreUsage(w io.Writer) {
+	fmt.Fprintln(w, "noto restore - restore a backup archive into a data directory")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  noto restore -in <archive> [-data <dir>] [-dry-run] [-force]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  -in <file>     path of the backup archive to restore (required)")
+	fmt.Fprintln(w, "  -data <dir>    override the data directory (default: the configured one)")
+	fmt.Fprintln(w, "  -dry-run       only report what would be restored, change nothing")
+	fmt.Fprintln(w, "  -force         restore even when the target directory already contains data")
+}
+
+// runRestore restores a backup archive into a data directory. It returns the
+// exit code of the process.
+func runRestore(ctx context.Context, args []string, out io.Writer) int {
+	fs := flag.NewFlagSet("restore", flag.ContinueOnError)
+	fs.SetOutput(out)
+	fs.Usage = func() { restoreUsage(out) }
+	in := fs.String("in", "", "path of the backup archive to restore (required)")
+	dataDir := fs.String("data", "", "override the data directory (default: the configured one)")
+	dryRun := fs.Bool("dry-run", false, "only report what would be restored, change nothing")
+	force := fs.Bool("force", false, "restore even when the target directory already contains data")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 1
+	}
+	if strings.TrimSpace(*in) == "" {
+		fmt.Fprintln(os.Stderr, "noto restore: the -in flag is required")
+		return 1
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto restore:", err)
+		return 1
+	}
+
+	report, err := restore.Run(ctx, cfg, restore.Options{
+		ArchivePath: *in,
+		DataDir:     *dataDir,
+		DryRun:      *dryRun,
+		Force:       *force,
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto restore:", err)
+		return 1
+	}
+	restore.PrintReport(out, report)
+	return 0
+}
+
+// runReconcile compares the notes directory with the database and prints the
+// report. It returns the exit code of the process.
+func runReconcile(args []string) int {
+	fs := flag.NewFlagSet("reconcile", flag.ContinueOnError)
+	fs.SetOutput(os.Stdout)
+	apply := fs.Bool("apply", false, "create the metadata rows of the files without a row")
+	dropGhosts := fs.Bool("drop-ghosts", false, "delete the metadata rows without a file")
+	dryRun := fs.Bool("dry-run", false, "report the differences without changing anything")
+	asJSON := fs.Bool("json", false, "print the report as JSON")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 1
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto reconcile:", err)
+		return 1
+	}
+	if err := cfg.EnsureDirs(); err != nil {
+		fmt.Fprintln(os.Stderr, "noto reconcile:", err)
+		return 1
+	}
+
+	ctx := context.Background()
+	store, err := sqlitestore.Open(ctx, cfg.DBPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto reconcile: cannot open the database:", err)
+		return 1
+	}
+	defer func() {
+		if cerr := store.Close(); cerr != nil {
+			fmt.Fprintln(os.Stderr, "noto reconcile: cannot close the database:", cerr)
+		}
+	}()
+
+	svc, err := notes.NewService(cfg, store)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto reconcile: cannot create the notes service:", err)
+		return 1
+	}
+
+	report, err := svc.ReconcileWithOptions(ctx, notes.ReconcileOptions{
+		Apply:      *apply,
+		DropGhosts: *dropGhosts,
+		DryRun:     *dryRun,
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "noto reconcile:", err)
+		return 1
+	}
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetEscapeHTML(false)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			fmt.Fprintln(os.Stderr, "noto reconcile:", err)
+			return 1
+		}
+		return 0
+	}
+
+	fmt.Printf("checked:    %d entries\n", report.Checked)
+	fmt.Printf("missing in the database: %d\n", len(report.MissingInDB))
+	for _, p := range report.MissingInDB {
+		fmt.Println("  +", p)
+	}
+	fmt.Printf("missing on the disk:    %d\n", len(report.MissingOnDisk))
+	for _, p := range report.MissingOnDisk {
+		fmt.Println("  -", p)
+	}
+	fmt.Printf("metadata drift:         %d\n", len(report.MetadataDrift))
+	for _, d := range report.MetadataDrift {
+		fmt.Println("  ~", d)
+	}
+	if len(report.Restored) > 0 {
+		fmt.Printf("restored:               %d\n", len(report.Restored))
+		for _, p := range report.Restored {
+			fmt.Println("  +", p)
+		}
+	}
+	if len(report.Dropped) > 0 {
+		fmt.Printf("dropped:                %d\n", len(report.Dropped))
+		for _, p := range report.Dropped {
+			fmt.Println("  -", p)
+		}
+	}
+	for _, n := range report.Notes {
+		fmt.Println("note:", n)
+	}
+	return 0
+}
+
+// runServer starts the server and blocks until the process is asked to stop.
+func runServer(ctx context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -43,7 +250,7 @@ func run() error {
 	}
 	logger := newLogger(cfg.LogLevel)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	store, err := sqlitestore.Open(ctx, cfg.DBPath)

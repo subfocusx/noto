@@ -7,7 +7,8 @@
     "e2e": "playwright test",
     "e2e:desktop": "playwright test --project=desktop",
     "e2e:mobile": "playwright test --project=mobile",
-    "e2e:report": "playwright show-report"
+    "e2e:report": "playwright show-report",
+    "verify": "powershell -ExecutionPolicy Bypass -File scripts/verify.ps1"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"

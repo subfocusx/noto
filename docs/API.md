@@ -349,6 +349,62 @@ Response `200`:
 { "ok": true }
 ```
 
+## Maintenance
+
+The maintenance endpoint is **not part of the normal route contract**. It is
+registered only when the server was started with the environment variable
+`NOTO_MAINTENANCE=1`; otherwise `POST /api/maintenance/reconcile` is not
+registered at all and the request answers `404` with the usual error envelope
+(`{"error":{"code":"not_found","message":"unknown endpoint"}}`).
+
+### `POST /api/maintenance/reconcile`
+
+Compares the notes directory with the metadata rows of the database.
+
+The body is optional. Without a body the call only produces the report and
+changes nothing.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `apply` | boolean | `false` | Create the metadata rows of the files that have no row. |
+| `dropGhosts` | boolean | `false` | Delete the metadata rows whose file no longer exists. |
+
+`dropGhosts` alone deletes the rows without a file; it is never done
+implicitly.
+
+```json
+{ "apply": true, "dropGhosts": true }
+```
+
+Response `200`:
+
+```json
+{
+  "missingInDB": [ "journal/day2.md" ],
+  "missingOnDisk": [ "journal/gone.md" ],
+  "metadataDrift": [ "journal/day1.md: updatedAt differs" ],
+  "checked": 128,
+  "restored": [ "journal/day2.md" ],
+  "dropped": [ "journal/gone.md" ],
+  "indexed": [ "journal/day2.md" ],
+  "notes": []
+}
+```
+
+* `missingInDB` — the files that exist on the disk but have no row in the
+  `notes` table,
+* `missingOnDisk` — the rows of the `notes` table whose file is gone (the
+  "ghosts"),
+* `metadataDrift` — the descriptions of the metadata that differs between the
+  disk and the database,
+* `checked` — the number of the compared entries of the notes directory,
+* `restored`, `dropped`, `indexed` — what the run actually changed (they stay
+  empty for a report without flags),
+* `notes` — the human readable remarks of the run.
+
+The trash is not part of the comparison, and junctions and symbolic links
+inside the notes directory are skipped.
+
 ## Static frontend
 
 * `GET /` and every unknown route that does not start with `/api` return the

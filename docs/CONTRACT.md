@@ -12,10 +12,13 @@ E:\Code\Software\noto
 │  ├─ go.mod                     OWNER: root (do not edit go.mod except `go mod tidy`)
 │  ├─ cmd/noto/main.go           OWNER: agent-backend-api
 │  ├─ cmd/backup/main.go         OWNER: agent-backend-api
+│  ├─ cmd/restore/main.go        OWNER: agent-backend-api (thin wrapper around internal/restore)
 │  ├─ internal/config/           OWNER: root (frozen)
 │  ├─ internal/model/            OWNER: root (frozen)
 │  ├─ internal/port/             OWNER: root (frozen)
 │  ├─ internal/sqlitestore/      OWNER: agent-store
+│  ├─ internal/backuppkg/        OWNER: agent-backend-api
+│  ├─ internal/restore/          OWNER: agent-backend-api
 │  ├─ internal/notes/            OWNER: agent-backend-api
 │  ├─ internal/api/              OWNER: agent-backend-api
 │  ├─ internal/web/              OWNER: agent-backend-api
@@ -55,6 +58,34 @@ docs/PLUGIN_API.md, docs/PLUGIN_SECURITY.md, docs/PLUGIN_DEVELOPMENT.md   plugin
 Built-in plugins may import `frontend/src/plugins/contract.ts` and their own
 files only; the rules are enforced by `npm run check:boundaries`
 (`frontend/scripts/check-boundaries.mjs`).
+
+### Phase 3 modules
+
+Phase 3 added the following modules. They follow the layering of the sections
+above: `api` → `notes` → `port.Store` ← `sqlitestore`, and the archive format
+lives in its own package that knows nothing about the HTTP layer.
+
+```
+backend/internal/backuppkg/        archive format: manifest v2 with the SHA-256
+                                   checksums of the files, create, open, verify
+backend/internal/restore/         the restore logic: checksums, dry run, atomic
+                                   replacement of the database, rollback
+backend/cmd/restore/main.go        a thin wrapper around internal/restore: the
+                                   same flags and the same behaviour
+backend/internal/notes/reconcile.go  Reconcile / ReconcileWithOptions: the
+                                   comparison of the notes directory and the
+                                   metadata rows of the database
+backend/internal/api/handlers_maintenance.go  the reconcile endpoint, registered
+                                   only when NOTO_MAINTENANCE=1
+frontend/src/core/commands/appCommands.ts  the built-in commands of the palette
+frontend/src/components/CommandPalette.tsx  the global command palette
+frontend/src/plugins/builtin/backlinks/     the third built-in plugin
+frontend/public/sw-policy.js        the pure functions of the service worker
+                                   policy (testable without a browser)
+```
+
+`port.Store` was **not** changed in phase 3: the N+1 of the tree was removed
+with the existing `ListNotes`, not with a new method of the interface.
 
 Toolchain: Go is installed at `E:\Code\Software\noto\.tools\goroot\go\bin\go.exe`
 (equivalent to `go` on PATH). Node 24 + npm 11 are on PATH.
@@ -187,12 +218,82 @@ Stable error codes: `bad_request`, `invalid_path`, `not_found`, `conflict`,
 * `GET /api/attachments/{id}/raw` → raw bytes with the stored mime type
 * `DELETE /api/attachments/{id}` → `200 {"ok":true}`
 
+### Maintenance
+The maintenance endpoint is registered **only** when the server was started
+with `NOTO_MAINTENANCE=1`. Without it the route does not exist and answers
+`404 not_found` ("unknown endpoint").
+
+* `POST /api/maintenance/reconcile` body optional
+  `{"apply":bool,"dropGhosts":bool}` → `200 ReconcileReport`
+  `{"missingInDB":[path],"missingOnDisk":[path],"metadataDrift":[string],
+  "checked":N,"restored":[path],"dropped":[path],"indexed":[path],"notes":[string]}`
+
+  Without a body (or with both flags false) the call only reports and changes
+  nothing. `apply` creates the metadata rows of the files without a row,
+  `dropGhosts` deletes the rows whose file is gone. The trash is not compared
+  and junctions/symlinks inside the notes directory are skipped. The SQLite
+  schema is not changed by a reconciliation.
+
 ### Static frontend
 * `GET /` and all unknown non `/api` routes → the SPA index (with SPA fallback).
 * The frontend is served from `internal/web` (embedded `dist/`) when
   `NOTO_STATIC_DIR` is unset. `internal/web` may contain a placeholder
   `index.html`; the frontend agent must additionally provide a build script
   that copies `frontend/dist` into `backend/internal/web/dist`.
+
+## 3.1 Operational commands (CLI)
+
+Both commands change the library, so both follow the same policy: **the
+default is a report, a destructive action always needs an explicit flag.**
+
+### `noto reconcile` (subcommand of `cmd/noto`)
+
+Compares the notes directory with the metadata rows of the database.
+
+| Flag | Meaning |
+| --- | --- |
+| `--apply` | create the metadata rows of the files that have no row |
+| `--drop-ghosts` | delete the metadata rows whose file is gone |
+| `--dry-run` | report the differences and change nothing, whatever the other flags say |
+| `--json` | print the report as JSON |
+
+Without a flag the command only prints the report. The trash is not compared,
+and junctions/symlinks inside the notes directory are skipped. The schema of
+the database is not changed.
+
+### `noto restore` / `cmd/restore`
+
+Restores a backup archive into a data directory. The restore logic lives in
+`backend/internal/restore` (`restore.Run`, `restore.PrintReport`); both entry
+points call the same `restore.Run`, so they behave identically:
+
+* `noto restore -in <archive.zip> [-data <dir>] [-dry-run] [-force]` — the
+  subcommand of the server binary, parsed in `backend/cmd/noto`;
+* `go run ./cmd/restore -in <archive.zip> [-data <dir>] [-dry-run] [-force]` —
+  the standalone program, a thin wrapper around the same package.
+
+| Flag | Meaning |
+| --- | --- |
+| `-in <archive.zip>` | the archive to restore (required) |
+| `-data <dir>` | override the data directory (default: the configured one) |
+| `-dry-run` | only report what would be restored, change nothing |
+| `-force` | restore even when the target directory already contains data |
+
+Policy of the command:
+
+1. the archive is opened and every file is verified against the SHA-256
+   checksums of the manifest; a mismatch aborts the restore. An archive
+   without a `files` list (manifest version 1) is restored with a warning,
+   because its integrity cannot be verified;
+2. with `-dry-run` nothing is written;
+3. without `-force` the command refuses to write into a directory that already
+   contains data;
+4. the current database is kept as `noto.db.pre-restore-<timestamp>`, the
+   current content directories are moved aside with the same suffix, and the
+   restored database is installed with an atomic rename; the stale
+   `noto.db-wal` and `noto.db-shm` are removed;
+5. the restored database is opened through `sqlitestore.Open` (which applies
+   the schema); if it is not usable, the whole restore is rolled back.
 
 ## 4. Filesystem rules (backend)
 

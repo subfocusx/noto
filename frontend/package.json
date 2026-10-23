@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "measure": "node scripts/measure-bundle.mjs",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "verify": "npm run typecheck && npm run check:boundaries && npm test && npm run build"
   },
   "dependencies": {
     "@codemirror/commands": "^6.6.0",

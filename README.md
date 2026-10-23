@@ -74,6 +74,11 @@ network.
 - Export a single note, a folder or the entire tree as a zip.
 - Attachments (images, PDF, plain text) stored outside the notes directory
   with server-side content sniffing.
+- Consistency check between the notes directory and the database
+  (`noto reconcile`): it reports files that have no metadata row, metadata
+  rows whose file is gone ("ghosts") and metadata that differs from the file
+  system. By default it only reports; repairing the library requires the
+  explicit `--apply` / `--drop-ghosts` flags.
 
 **Application**
 
@@ -82,6 +87,19 @@ network.
   toggle.
 - Responsive layout with a drawer sidebar and 44 px touch targets on mobile.
 - Single static Go binary in production — the frontend is embedded.
+- Global command palette on **Ctrl+K** / **Ctrl+P** with eight built-in
+  commands (new note, new folder, daily note, search, rename note, delete
+  note, toggle theme, open trash) plus every command the plugins contribute.
+- Daily note: one command creates or opens `YYYY-MM-DD.md` in the root of the
+  library. The local date is used, and an existing file is never overwritten.
+
+**Keyboard shortcuts**
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+K` / `Ctrl+P` | Open the command palette. |
+| `Ctrl+Shift+F` | Open the note search (also reachable through the search button in the sidebar and through the "Search notes" command of the palette). |
+| `Ctrl+S` | Save the open note explicitly (outside the editor). |
 
 ---
 
@@ -92,12 +110,18 @@ compiled into the application** — there is no plugin installation from disk or
 from the network, and there is no sandbox: a built-in plugin is trusted code
 running in the context of the app.
 
-Two plugins ship with the app:
+Three plugins ship with the app:
 
 | Plugin | What it does | Permissions it needs |
 | --- | --- | --- |
 | **Word Count** | Shows the word and character count of the open note in a panel. | `editor.read`, `ui.contribute` |
 | **Insert Template** | Inserts a configurable Markdown template at the cursor position. | `editor.write`, `ui.contribute` |
+| **Backlinks** | Lists the notes that link to the open note (`[[Wiki Link]]`) and the notes that only mention its name. | `editor.read`, `notes.read`, `tree.read`, `ui.contribute` |
+
+The **Backlinks** plugin uses the public contract only (it imports nothing but
+`plugins/contract.ts`). It shows the path of every matching note but cannot
+open it: the contract has no "open this note" operation and it was not
+extended.
 
 A plugin can:
 
@@ -152,6 +176,9 @@ Documentation:
         │  backend/  (Go, module noto/backend)         │
         │                                              │
         │  cmd/noto        HTTP server, wiring, signals│
+        │  cmd/backup      backup archive                │
+        │  cmd/restore     restore from an archive       │
+        │  noto restore    the same, as a subcommand     │
         │      │                                       │
         │      ├─ internal/api      HTTP routing, JSON │
         │      │      │             encoding, headers   │
@@ -159,7 +186,8 @@ Documentation:
         │      ├─ internal/notes    domain logic:       │
         │      │                    tree, CRUD, search, │
         │      │                    import/export,      │
-        │      │                    trash, attachments  │
+        │      │                    trash, attachments, │
+        │      │                    reconciliation      │
         │      │      │  (depends only on the port)    │
         │      │      ▼                                 │
         │      ├─ internal/port    Store interface      │
@@ -169,6 +197,8 @@ Documentation:
         │      │      SQLite: notes metadata, FTS5      │
         │      │      index, attachments, trash         │
         │      │                                       │
+        │      ├─ internal/backuppkg archive format:   │
+        │      │      manifest, SHA-256 checksums       │
         │      ├─ internal/config   env -> Config      │
         │      ├─ internal/model    shared JSON types   │
         │      └─ internal/web      embedded frontend   │
@@ -183,13 +213,19 @@ Documentation:
         │  frontend/  (Preact + TypeScript + Vite)     │
         │                                              │
         │  src/api/client.ts   single request() helper │
+        │  src/core/store/     state and actions       │
+        │  src/core/commands/  built-in palette commands│
         │  src/components/     tree, editor, preview,  │
-        │                      search, attachments      │
+        │                      search, attachments,     │
+        │                      command palette          │
+        │  src/plugins/        plugin platform and the  │
+        │                      three built-in plugins   │
         │  src/hooks/          autosave, drafts, theme  │
         │  CodeMirror 6        editor                   │
         │  marked + DOMPurify   sanitised preview       │
         │  idb                 offline drafts           │
-        │  service worker      app shell + API cache    │
+        │  service worker      app shell; /api is      │
+        │                      network-only             │
         └──────────────────────────────────────────────┘
 ```
 
@@ -342,6 +378,17 @@ after every native command.
 | `.\scripts\build.ps1` | Builds the frontend, copies `frontend/dist` into `backend/internal/web/dist`, then builds `backend/noto.exe`. |
 | `.\scripts\test.ps1` | Runs `go vet ./...`, `go test ./... -race` and `npm test`. Options: `-BackendOnly`, `-FrontendOnly`. |
 | `.\scripts\backup.ps1` | Runs the backup command from `backend/cmd/backup`. Extra flags can be forwarded with `-BackupArgs`. |
+| `.\scripts\verify.ps1` | Runs every verification step and prints a PASS/FAIL summary. Options: `-Skip <steps>`, `-E2E`, `-Bench` (Go benchmarks of `internal/notes`), `-ReportPath <file.md>` (markdown report with the summary and the tool versions). |
+| `.\scripts\measure-perf.ps1` | Measures the latency of the HTTP API on a generated notes tree (default 2000 notes) and prints median and p95 per operation. Options: `-Notes`, `-Iterations`, `-Port`, `-KeepData`. |
+
+The npm scripts wrap the same tooling:
+
+```powershell
+cd E:\Code\Software\noto
+npm run verify          # -> powershell -File scripts/verify.ps1
+cd frontend
+npm run verify          # typecheck + boundary check + unit tests + production build
+```
 
 ### Loading an environment file
 
@@ -480,12 +527,23 @@ cd E:\Code\Software\noto
 `scripts/verify.ps1` runs every step and prints a PASS/FAIL summary at the
 end instead of stopping at the first failure. Steps can be skipped with
 `-Skip` (names: `build`, `vet`, `test`, `smoke`, `boundaries`, `typecheck`,
-`unit`, `bundle`, `measure`, `e2e`), and the end-to-end Playwright suite runs
+`unit`, `bundle`, `measure`, `bench`, `e2e`), and the end-to-end Playwright suite runs
 only with `-E2E`:
 
 ```powershell
 .\scripts\verify.ps1 -Skip e2e,smoke
 ```
+
+The Go benchmarks of the notes package are added with `-Bench`, and the whole
+run can be written as a markdown report (with the summary and the versions of
+the tools) with `-ReportPath`:
+
+```powershell
+.\scripts\verify.ps1 -Bench -ReportPath .tools\verify-report.md
+```
+
+The measurements of the latency of the API are described in
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 The architecture boundary check on its own (it is part of `verify.ps1` too):
 
@@ -664,8 +722,10 @@ $go = "E:\Code\Software\noto\.tools\goroot\go\bin\go.exe"
 & $go run ./cmd/backup          # create a backup
 ```
 
-The tool prints the archive path it wrote. The exact flag names depend on the
-implementation, so check `-h` before scripting around it.
+The tool prints the archive path it wrote. The archive is written to a
+temporary file and renamed into place, so an interrupted backup never leaves a
+broken archive under the final name. Its `manifest.json` is version 2 and
+lists every file with its size and SHA-256 checksum.
 
 Or via the helper script, which forwards any extra arguments verbatim:
 
@@ -694,6 +754,49 @@ Copy the archive off the machine. Test a restore occasionally.
 
 ### Restore
 
+The restore logic lives in `backend/internal/restore` and is reached through two
+entry points that share the same implementation: the `noto restore` subcommand
+of the server binary (the usual way) and the standalone program
+`backend/cmd/restore`, which is a thin wrapper around the same package.
+
+```powershell
+cd E:\Code\Software\noto\backend
+$go = "E:\Code\Software\noto\.tools\goroot\go\bin\go.exe"
+& $go run ./cmd/noto restore --help
+```
+
+The standalone program takes the same flags:
+
+```powershell
+& $go run ./cmd/restore -h
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `-in <archive.zip>` | The backup archive to restore. Required. |
+| `-data <dir>` | Override the data directory (default: the configured one). |
+| `-dry-run` | Only report what would be restored; nothing is changed. |
+| `-force` | Restore even when the target directory already contains data. |
+
+What it does, in this order:
+
+1. Opens the archive and verifies every file against the SHA-256 checksums of
+   the manifest. A mismatch aborts the restore. Archives written before the
+   checksums existed are still restored, with a warning that their integrity
+   cannot be verified.
+2. With `-dry-run` it prints the report and stops — nothing is written.
+3. Refuses to continue when the target directory already contains data, unless
+   `-force` is given.
+4. Keeps the current database next to it as
+   `noto.db.pre-restore-<timestamp>` and moves the current content
+   directories aside with the same suffix.
+5. Installs the restored database atomically (rename), removes the stale
+   `noto.db-wal` and `noto.db-shm` side files and opens the database through
+   the store, which applies the schema. If the restored database turns out to
+   be unusable, the whole restore is rolled back.
+
+Manual restore (without the tool):
+
 1. Stop the server.
 2. Move the current data directory aside — do not delete it yet.
 3. Extract the backup over the data directory, so that `notes/`,
@@ -705,6 +808,23 @@ Copy the archive off the machine. Test a restore occasionally.
 Restoring into an existing installation overwrites `noto.db`; the WAL and
 shm sidecar files (`noto.db-wal`, `noto.db-shm`) belong to the old database
 and should be removed before the restore.
+
+### Checking the consistency of the library
+
+`noto reconcile` compares the notes directory with the database and reports
+the differences:
+
+```powershell
+cd E:\Code\Software\noto\backend
+$go = "E:\Code\Software\noto\.tools\goroot\go\bin\go.exe"
+& $go run ./cmd/noto reconcile                # report only, nothing is changed
+& $go run ./cmd/noto reconcile --json         # the same report as JSON
+& $go run ./cmd/noto reconcile --apply        # write the missing metadata rows
+& $go run ./cmd/noto reconcile --drop-ghosts  # delete the metadata of missing files
+```
+
+Without an explicit flag the command only reports. The trash is not part of
+the comparison, and junctions and symbolic links are skipped.
 
 ---
 
@@ -832,6 +952,7 @@ authentication — see [Security model](#security-model-and-limitations).
 | `GET` | `/api/attachments` | List attachment metadata. |
 | `GET` | `/api/attachments/{id}/raw` | Download the raw bytes. |
 | `DELETE` | `/api/attachments/{id}` | Delete an attachment. |
+| `POST` | `/api/maintenance/reconcile` | Compare the notes directory with the database. Only registered when the server runs with `NOTO_MAINTENANCE=1`; otherwise the route answers `404`. |
 | `GET` | `/` and any non-`/api` route | The SPA `index.html` (SPA fallback). |
 
 Errors use a single envelope:
@@ -873,6 +994,14 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
   Declared permissions are enforced for the data API, the editor, the UI
   contributions and the settings, but a plugin can still make network requests
   itself (see [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md)).
+* The **Backlinks** plugin can only list the matching notes; it cannot open
+  them, because the plugin contract has no such operation.
+* The name of a note is not length-limited and may contain control characters
+  (except NUL) — the validation deliberately stays permissive so that existing
+  files are never rejected.
+* The search button in the sidebar still carries the old tooltip
+  "Search (Ctrl+K)"; the shortcut itself is `Ctrl+Shift+F` (or `Ctrl+K` for
+  the command palette, which also offers "Search notes").
 * There is no mobile-native wrapper — Android support is via the installed
   PWA.
 
@@ -881,7 +1010,9 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
 * Optional passphrase protection for the whole vault, unlocking the key in
   the browser.
 * Note version history and a diff view.
-* Tagging, backlinks and a graph view.
+* Tagging and a graph view. The backlinks plugin already lists the incoming
+  links and the mentions of the open note, but it cannot open a note and
+  there is no graph.
 * Server-side pagination and lazy loading of the tree.
 * Full-text search over attachments.
 * Optional end-to-end encryption between the browser and the server.
@@ -894,23 +1025,30 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
 ```
 noto/
 ├── backend/                  Go module noto/backend
-│   ├── cmd/noto/             server entry point
+│   ├── cmd/noto/             server entry point and the "reconcile" and "restore" subcommands
 │   ├── cmd/backup/           backup tool
+│   ├── cmd/restore/          thin wrapper around internal/restore (also `noto restore`)
 │   └── internal/
 │       ├── config/           environment -> Config
 │       ├── model/            shared domain and JSON types
 │       ├── port/             Store interface
 │       ├── sqlitestore/      SQLite implementation
+│       ├── backuppkg/        archive format: manifest, checksums, create and open
+│       ├── restore/          restore logic: checksums, dry run, atomic DB replacement
 │       ├── notes/            domain logic
 │       ├── api/              HTTP layer
 │       └── web/              embedded frontend assets
 ├── frontend/                 Preact + TypeScript + Vite PWA
+│   ├── public/sw-policy.js   pure service worker policy (testable without a browser)
 │   └── src/plugins/          plugin platform: contract, manifest, registry, host, loader, builtin plugins
+│   └── src/core/commands/    built-in commands of the command palette
 ├── scripts/                  PowerShell helper scripts
 ├── docs/
 │   ├── CONTRACT.md           authoritative internal contract
 │   ├── API.md                REST API reference
 │   ├── SECURITY.md           threat model and hardening checklist
+│   ├── PERFORMANCE.md        measurements and the methodology
+│   ├── ARCHITECTURE.md       structure of the application
 │   ├── PLUGIN_API.md         plugin contract reference
 │   ├── PLUGIN_SECURITY.md    plugin trust model and limitations
 │   └── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin

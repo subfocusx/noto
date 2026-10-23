@@ -27,6 +27,7 @@ import {
   pluginStatus,
   pluginVersion,
   resetPluginStates,
+  selectPluginPanel,
   wordCountChars,
   wordCountPanel,
   wordCountWords,
@@ -47,27 +48,28 @@ test.describe('plugin platform', () => {
   });
 
   /**
-   * Every test starts from a known plugin state: both built-in plugins are
+   * Every test starts from a known plugin state: the built-in plugins are
    * enabled. The state is reset explicitly (it is stored in IndexedDB and
    * would otherwise survive the reloads inside the tests).
    */
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await resetPluginStates(page, { 'word-count': true, 'insert-template': true });
+    await resetPluginStates(page, { 'word-count': true, 'insert-template': true, backlinks: true });
     await gotoApp(page);
   });
 
   test('the plugin manager lists the built-in plugins with their versions', async ({ page }) => {
     await openPluginManager(page);
 
-    // Both built-in plugins are listed...
-    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(2);
+    // All built-in plugins are listed...
+    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(3);
 
     // ...with their version and their state.
     await expect(pluginVersion(page, WORD_COUNT)).toHaveText('1.0.0');
     await expect(pluginStatus(page, WORD_COUNT)).toHaveText('Active');
     await expect(pluginVersion(page, INSERT_TEMPLATE)).toHaveText('1.0.0');
     await expect(pluginStatus(page, INSERT_TEMPLATE)).toHaveText('Active');
+    await expect(pluginVersion(page, 'Backlinks')).toHaveText('1.0.0');
 
     // The commands of the active plugins are listed in the same dialog.
     await expect(pluginCommand(page, 'Вставить шаблон')).toBeVisible();
@@ -83,6 +85,9 @@ test.describe('plugin platform', () => {
 
     await typeInEditor(page, 'Привет мир');
     await waitForSaved(page);
+
+    // The panel of the plugin is a tab of the panel area: switch to it first.
+    await selectPluginPanel(page, WORD_COUNT);
 
     // The counter of the plugin reacts to the content of the note.
     await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
@@ -105,6 +110,7 @@ test.describe('plugin platform', () => {
     await createNote(page, folder, note);
     await typeInEditor(page, 'Привет мир');
     await waitForSaved(page);
+    await selectPluginPanel(page, WORD_COUNT);
     await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
 
     /* ------------------------------------------------------------- disable */
@@ -121,6 +127,7 @@ test.describe('plugin platform', () => {
     await closePluginManager(page);
 
     // The counter is back — and there is no second copy of it.
+    await selectPluginPanel(page, WORD_COUNT);
     await expect(wordCountPanel(page)).toHaveCount(1);
     await expect(wordCountWords(page)).toHaveCount(1);
     await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
@@ -204,8 +211,8 @@ test.describe('plugin platform', () => {
     // The tree shows the note.
     await expect(treeFile(page, note)).toBeVisible();
 
-    // The search finds it.
-    await page.keyboard.press('Control+k');
+    // The search finds it (Ctrl+Shift+F opens the search overlay).
+    await page.keyboard.press('Control+Shift+F');
     const searchInput = page.getByLabel('Search query');
     await expect(searchInput).toBeVisible();
     await searchInput.fill(marker);

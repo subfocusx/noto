@@ -106,15 +106,18 @@ model, config, web — листья. Циклов в графе импортов
 | Пакет | Файлы (LOC) | Назначение |
 |---|---|---|
 | `internal/api` | `api.go` 134 (146), `handlers_notes.go` 176 (194), `handlers_importexport.go` 143 (152), `handlers_attachments.go` 87 (94), `handlers_search.go` 30 (33), `middleware.go` 200 (215), `errors.go` 71 (77) | HTTP-слой: маршруты, хендлеры, JSON-энкодирование, конвертация ошибок, security-заголовки, host/origin-проверки, логирование |
-| `internal/notes` | `notes.go` 285 (297), `service.go` 236 (257), `paths.go` 238 (252), `trash.go` 199 (209), `notes_move.go` 194 (203), `import_files.go` 191 (202), `attachments.go` 161 (173), `export.go` 133 (140), `import_zip.go` 126 (130), `errors.go` 127 (139), `locks.go` 109 (116), `fsatomic.go` 96 (102), `search.go` 95 (99), `reparse_windows.go` 40 (44), `reparse_other.go` 27 (30) | Доменная логика: ФС, нормализация и защита путей, блокировки, атомарная запись, корзина, импорт/экспорт, вложения, поиск, типизированные ошибки |
+| `internal/notes` | `notes.go` 285 (297), `service.go` 236 (257), `paths.go` 238 (252), `trash.go` 199 (209), `notes_move.go` 194 (203), `import_files.go` 191 (202), `attachments.go` 161 (173), `export.go` 133 (140), `import_zip.go` 126 (130), `errors.go` 127 (139), `locks.go` 109 (116), `fsatomic.go` 96 (102), `search.go` 95 (99), `reparse_windows.go` 40 (44), `reparse_other.go` 27 (30), `reconcile.go` 321 (352) | Доменная логика: ФС, нормализация и защита путей, блокировки, атомарная запись, корзина, импорт/экспорт, вложения, поиск, сверка ФС↔БД, типизированные ошибки |
 | `internal/sqlitestore` | `search.go` 309 (329), `store_notes.go` 172 (186), `store.go` 128 (145), `store_index.go` 109 (116), `store_schema.go` 106 (113), `store_attachments.go` 75 (82), `store_trash.go` 67 (73) | Реализация `port.Store`: схема и миграции, метаданные, индекс (FTS5 + LIKE), вложения, корзина |
 | `internal/port` | `port.go` 47 (54), `porttest/porttest.go` 504 (550) | Интерфейс хранилища (17 методов) и переиспользуемый conformance-набор |
 | `internal/model` | `model.go` 69 (79) | Общие типы домена; одновременно контракт JSON API |
 | `internal/config` | `config.go` 138 (148) | Конфигурация из переменных окружения, умолчания, создание каталогов |
 | `internal/web` | `web.go` 133 (141) | Раздача SPA: `embed` сборки, fallback на `index.html`, `Content-Type` по расширению |
 | `internal/testutil` | `store.go` 272 (301), `service.go` 37 (41) | `MemStore` — in-memory реализация `port.Store`, фабрика конфигурации для тестов |
-| `cmd/noto` | `main.go` 170 (189) | Точка входа сервера: конфигурация, логгер, БД, сборка сервиса и API, graceful shutdown, запрет не-loopback адреса |
+| `cmd/noto` | `main.go` 170 (189) | Точка входа сервера: конфигурация, логгер, БД, сборка сервиса и API, graceful shutdown, запрет не-loopback адреса. Содержит подкоманды `reconcile` и `restore` |
 | `cmd/backup` | `main.go` 234 (248) | Консистентный бэкап каталога данных в ZIP (notes, attachments, trash, БД через `VACUUM INTO`, `manifest.json`) |
+| `cmd/restore` | `main.go` 51 | Тонкая CLI-обёртка над `internal/restore`: разбор флагов, запуск восстановления, печать отчёта. Поведение и тексты ошибок совпадают с подкомандой `noto restore` |
+| `internal/restore` | `restore.go` 430 | Логика восстановления: проверка контрольных сумм, `-dry-run`, `-force`, сохранение текущей БД как `noto.db.pre-restore-<timestamp>`, атомарная подмена БД, удаление `-wal`/`-shm`, проверка схемы, откат при непригодной схеме |
+| `internal/backuppkg` | `archive.go` 439 (476), `create.go` 160 (176), `manifest.go` 145 (160) | Формат архива: манифест версии 2 с SHA-256 каждого файла, создание (во временный файл + rename), открытие и проверка |
 | `cmd/smoke` | `main.go` 169 (195), `http.go` 111 (124), `helpers.go` 74 (81) | Smoke-проверка REST API: собирает сервер, поднимает на временном порту, прогоняет сценарии, печатает PASS/FAIL. Это бинарник, а не `go test` |
 
 ### 3.1. `internal/api`
@@ -140,6 +143,13 @@ GET    /api/trash
 запись, переименование, перемещение, удаление, восстановление),
 `handlers_importexport.go` (импорт/экспорт), `handlers_attachments.go`
 (вложения), `handlers_search.go` (поиск и переиндексация).
+
+Фаза 3 добавила `handlers_maintenance.go` с единственным маршрутом
+`POST /api/maintenance/reconcile`. Он регистрируется **только** при
+`NOTO_MAINTENANCE=1` (`backend/internal/api/api.go:73-75`), поэтому в
+обычной сборке маршрута нет и запрос получает `404 not_found`. Тело
+необязательно: `{"apply":bool,"dropGhosts":bool}`; без флагов вызывается
+только отчёт.
 
 Порядок middleware (снаружи внутрь):
 `recoverer → securityHeaders → hostCheck → originCheck → logger → mux`
@@ -226,12 +236,15 @@ DeleteAttachment
 | `src/core/store/hooks.ts` | 16 (18) | Привязка стора к Preact: `useSyncExternalStore` (`hooks.ts:11-13`), `useAppActions` (`:16-18`) |
 | `src/core/events/eventBus.ts` | 89 (96) | Шина событий приложения (в работе: хост плагинов) |
 | `src/core/commands/commandRegistry.ts` | 80 (87) | Реестр команд (в работе: хост плагинов) |
+| `src/core/commands/appCommands.ts` | 107 (117) | Восемь прикладных команд палитры (`app:new-note`, `app:new-folder`, `app:rename-note`, `app:delete-note`, `app:daily-note`, `app:search`, `app:toggle-theme`, `app:open-trash`) |
+| `src/components/CommandPalette.tsx` | 208 (228) | Глобальная палитра команд: Ctrl+K / Ctrl+P, поиск по командам, навигация стрелками, вклад в режиме ввода |
 | `src/core/settings/settingsStore.ts` | 197 (211) | Хранилище настроек (в работе: хост плагинов) |
 | `src/core/diagnostics/logger.ts` | 37 (41) | Логирование для плагинов (в работе) |
 | `src/App.tsx` | 203 (225) | Оболочка приложения: подписка на стор, горячие клавиши, композиция панелей, производные `useMemo` |
 | `src/main.tsx` | 12 (14) | Точка входа: `render(<App/>)`, подключение `styles.css` |
 | `src/plugins/contract.ts` | 207 (229) | Публичный контракт плагинов: версия API, разрешения, манифест, интерфейсы API и точек вклада в UI, карта событий |
 | `src/plugins/manifest.ts` | 158 (179) | Валидация манифеста (`validateManifest`), список разрешений, проверка совместимости версий |
+| `src/plugins/builtin/backlinks/index.ts` | 863 (949) | Третий встроенный плагин: обратные ссылки и упоминания. Реализован только через публичный контракт (`plugins/contract.ts`), права `editor.read`, `notes.read`, `tree.read`, `ui.contribute` |
 | `src/api/http.ts` | 97 (106) | Транспорт: единственная точка `fetch` (`:70`), `ApiError` (`:8`), разбор конверта ошибок (`:46`), `jsonInit` (`:100`) |
 | `src/api/{notes,tree,search,transfer,trash,attachments,health}.ts` | 6–34 каждый | Тонкие обёртки над `request()`; 23 функции |
 | `src/api/client.ts` | 14 (14) | Фасад: реэкспорт функций `src/api/*` для совместимости импортов |
@@ -254,6 +267,7 @@ DeleteAttachment
 | `src/lib/{debounce,errors,format,ordering}.ts` | 5–38 каждый | `debounce`, `errorMessage`, `formatSize`, `compareStrings` |
 | `src/lib/utils.ts` | 8 (8) | Фасад над `lib/debounce|errors|format|ordering` |
 | `public/sw.js` | 130 (141) | Service worker: precache оболочки, `network-only` для `/api/*`, `cache-first` для статики |
+| `public/sw-policy.js` | 195 (215) | Чистые функции политики service worker (`globalThis.NotoSwPolicy`), вынесены из `sw.js` ради тестируемости без браузера |
 | `vite.config.ts` | 63 (69) | Сборка: `preact()`, dev-прокси `/api → 127.0.0.1:8080` (`:45-50`), `manualChunks` (`:27-39`, `:57-61`), параметры `vitest` (`:63-68`) |
 
 Сторонние зависимости (`frontend/package.json:17-28`): `preact`, `marked`,
@@ -511,6 +525,11 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 | `web.Handler(staticDir)` | `backend/internal/web/web.go:30` | Раздача фронтенда из внешнего каталога |
 | `createAutosave` | `frontend/src/lib/autosave.ts:43` | Альтернативная политика автосохранения |
 | `buildTree` | `frontend/src/lib/tree.ts:29` | Альтернативная модель дерева |
+| `notes.Reconcile` / `notes.ReconcileWithOptions` | `backend/internal/notes/reconcile.go:70`, `:96` | Сверка ФС↔БД: что добавить (`Apply`), что удалить (`DropGhosts`), только отчёт (`DryRun`) |
+| `backuppkg.Create` / `backuppkg.Open` | `backend/internal/backuppkg/create.go`, `archive.go` | Формат архива бэкапа: манифест, контрольные суммы, создание и проверка архива |
+| `POST /api/maintenance/reconcile` | `backend/internal/api/handlers_maintenance.go:49` | HTTP-доступ к сверке; включается только через `NOTO_MAINTENANCE=1` |
+| `commandRegistry` + `appCommands` | `frontend/src/core/commands/{commandRegistry,appCommands}.ts` | Реестр команд: прикладные команды приложения и команды плагинов попадают в одну палитру |
+| `globalThis.NotoSwPolicy` | `frontend/public/sw-policy.js` | Политика service worker как чистые функции — тестируемая и переиспользуемая |
 
 ### 8.2. Объявленные, но не доведённые до конца точки расширения
 
@@ -711,3 +730,52 @@ frontend store/api split, PWA privacy + chunking, plugin extension point»)
   дерева): `GET /api/tree` — ≈ 418 мс на запрос (5 прогонов),
   `GET /api/search?q=lorem&limit=50` — ≈ 29 мс, `GET /api/notes` — ≈ 12 мс;
   базовый накладной расход клиента (`/api/health`) — ≈ 17,5 мс.
+
+---
+
+## 14. Фаза 3: новые модули и точки расширения
+
+Раздел дополняет карту из разделов 3, 4 и 8: перечислены модули, которые
+появились в фазе 3, и новые точки расширения. Схема базы данных, интерфейс
+`port.Store` и публичный контракт плагинов в фазе 3 **не менялись**.
+
+### 14.1. Бэкенд
+
+| Модуль | Назначение | Слой |
+|---|---|---|
+| `backend/internal/backuppkg/` | Формат архива бэкапа: манифест версии 2 (`files: [{path,size,sha256}]`), создание (во временный файл + `rename`), открытие, проверка контрольных сумм | Не зависит от HTTP и от `notes`; используется `cmd/backup` и `internal/restore` |
+| `backend/internal/restore/` | Логика восстановления: проверка сумм, `-dry-run`, сохранение текущей БД как `noto.db.pre-restore-<timestamp>`, атомарная подмена `noto.db`, удаление `-wal`/`-shm`, проверка схемы через `sqlitestore.Open`, откат при ошибке | Не зависит от HTTP; используется подкомандой `noto restore` и обёрткой `cmd/restore` |
+| `backend/internal/notes/reconcile.go` | `Reconcile` и `ReconcileWithOptions{Apply, DropGhosts, DryRun}`: обход через существующий безопасный `walkNotes`, корзина исключена | `notes` → `port.Store`; схема SQLite не меняется |
+| `backend/internal/api/handlers_maintenance.go` | `POST /api/maintenance/reconcile`, регистрируется только при `NOTO_MAINTENANCE=1` | `api` → `notes` |
+
+Изменение в `notes.Service.Tree` (карточка P3-1): вместо вызова
+`store.GetNote` на каждый узел выполняется один `store.ListNotes`, а
+метаданные раскладываются по карте путей. `port.Store` при этом не менялся —
+использован уже существующий метод интерфейса.
+
+### 14.2. Фронтенд
+
+| Модуль | Назначение |
+|---|---|
+| `frontend/src/core/commands/appCommands.ts` | Восемь прикладных команд палитры; каждая команда описана через существующий реестр команд, поэтому команды плагинов попадают в ту же палитру |
+| `frontend/src/components/CommandPalette.tsx` | Палитра: Ctrl+K / Ctrl+P, фильтр по названию и описанию, навигация стрелками, Enter и Escape |
+| `frontend/src/plugins/builtin/backlinks/` | Третий встроенный плагин; реализован только через `plugins/contract.ts`, права `editor.read`, `notes.read`, `tree.read`, `ui.contribute` |
+| `frontend/public/sw-policy.js` | Политика service worker как чистые функции (`globalThis.NotoSwPolicy`), подключается через `importScripts`; покрыта 20 unit-тестами |
+
+### 14.3. Новые точки расширения
+
+* **Сверка ФС↔БД как сервис** — `notes.ReconcileWithOptions` позволяет
+  добавлять новые стратегии починки, не трогая HTTP-слой.
+* **Формат архива бэкапа** — `backuppkg` инкапсулирует манифест и
+  контрольные суммы; новая версия манифеста добавляется в одном пакете.
+* **Команды приложения** — `appCommands.ts` регистрирует прикладные команды
+  в том же реестре, что и плагины, поэтому новая команда не требует правок
+  палитры.
+* **Политика service worker** — `sw-policy.js` позволяет менять правила
+  кэширования и проверять их unit-тестами без браузера.
+* **Диагностические CLI-команды** — подкоманды `noto` и отдельные программы
+  (`cmd/backup`, `cmd/restore`) построены на одних и тех же пакетах, поэтому
+  проверки целостности переиспользуются. Восстановление доступно и как
+  подкоманда `noto restore`, и как отдельная программа `cmd/restore`: обе
+  точки входа вызывают общий `restore.Run`.
+

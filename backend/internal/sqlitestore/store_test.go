@@ -50,7 +50,8 @@ func TestOpenCreatesSchema(t *testing.T) {
 			t.Fatalf("table %s missing: %v", table, err)
 		}
 	}
-	// The FTS5 virtual table only exists when the driver supports FTS5.
+	// The FTS5 virtual table exists when the driver supports FTS5 (which
+	// modernc.org/sqlite does by default).
 	var ftsTable string
 	err := s.DB().QueryRowContext(ctx,
 		"SELECT name FROM sqlite_master WHERE name = 'notes_fts_v'").Scan(&ftsTable)

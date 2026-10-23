@@ -4,9 +4,17 @@
 // {@link PluginContext} that exposes exactly the capabilities listed in the
 // contract — a plugin can never reach application internals.
 //
+// Permissions: the host enforces the permissions declared in the manifest of
+// the plugin. Every capability handed to the plugin is wrapped in a
+// restricted version that checks the permissions before the call. A plugin
+// that tries to do something it did not ask for gets a
+// {@link PluginPermissionError} — never a silent no-op.
+//
 // Failure policy: a plugin that throws during activation is put into the
 // `failed` state with the error message; the error is never propagated to
-// the caller, so the application keeps working.
+// the caller, so the application keeps working. A permission error is not a
+// broken plugin: the plugin stays active with the registrations it managed
+// to make, and the reason is reported through the registry.
 import type {
   Plugin,
   PluginApi,
@@ -31,6 +39,12 @@ import type { EventBus } from '../core/events/eventBus';
 import type { CommandRegistry } from '../core/commands/commandRegistry';
 import type { SettingsStore } from '../core/settings/settingsStore';
 import { createLogger } from '../core/diagnostics/logger';
+import {
+  PluginPermissionError,
+  requirePermission,
+  restrictPluginApi,
+  type PluginPermissionName,
+} from '../core/api/pluginApi';
 
 /** Dependencies of the {@link PluginHost}. */
 export interface PluginHostDeps {
@@ -40,12 +54,25 @@ export interface PluginHostDeps {
   settings: SettingsStore;
   createApi(pluginId: string): PluginApi;
   getEditor(): PluginEditor | null;
+  /**
+   * Optional push source of the editor of the application.
+   *
+   * When it is given, the host is notified about every change of the editor.
+   * Without it the host polls `getEditor()` every time the editor is
+   * requested, which detects the appearance, the disappearance and the
+   * change of the note.
+   */
+  subscribeEditor?: (cb: (editor: PluginEditor | null) => void) => () => void;
   logger?: PluginLogger;
 }
 
 interface PluginRuntime {
   cleanups: Array<() => void>;
   deactivateCallbacks: Array<() => void>;
+  /** Callbacks waiting for a new editor (see `ctx.onEditor`). */
+  editorWatchers: Set<(editor: PluginEditor | null) => void>;
+  /** Number of the live event subscriptions of the plugin. */
+  eventSubscriptions: number;
   panels: Map<string, PluginPanel>;
   sidebarItems: Map<string, PluginSidebarItem>;
   contextMenuItems: Map<string, PluginContextMenuItem>;
@@ -53,14 +80,89 @@ interface PluginRuntime {
   settingsSections: Map<string, PluginSettingsSection>;
 }
 
+/**
+ * Wraps an editor with permission checks.
+ *
+ * The result is a NEW object: the plugin never gets a reference to the
+ * unrestricted editor of the application.
+ */
+function restrictEditor(
+  editor: PluginEditor,
+  pluginId: string,
+  permissions: readonly string[],
+): PluginEditor {
+  const need = (permission: PluginPermissionName): void => {
+    requirePermission(pluginId, permissions, permission);
+  };
+  return {
+    getText(): string {
+      need('editor.read');
+      return editor.getText();
+    },
+    getSelection(): string {
+      need('editor.read');
+      return editor.getSelection();
+    },
+    getCursor(): { from: number; to: number } {
+      need('editor.read');
+      return editor.getCursor();
+    },
+    insert(text: string): void {
+      need('editor.write');
+      editor.insert(text);
+    },
+    insertAt(text: string, from: number, to: number): void {
+      need('editor.write');
+      editor.insertAt(text, from, to);
+    },
+    replaceSelection(text: string): void {
+      need('editor.write');
+      editor.replaceSelection(text);
+    },
+    // Focusing the editor and opening the search do not read or change the
+    // content of the note, so they need no permission.
+    focus(): void {
+      editor.focus();
+    },
+    openSearch(): void {
+      editor.openSearch();
+    },
+    // The path is metadata, not content.
+    getPath(): string | null {
+      return editor.getPath();
+    },
+    onChange(cb: (text: string) => void): () => void {
+      need('editor.read');
+      return editor.onChange(cb);
+    },
+    onSelectionChange(cb: (sel: { from: number; to: number }) => void): () => void {
+      need('editor.read');
+      return editor.onSelectionChange(cb);
+    },
+  };
+}
+
 export class PluginHost {
   private readonly runtimes = new Map<string, PluginRuntime>();
   private readonly deps: PluginHostDeps;
   private readonly log: PluginLogger;
+  /** Signature of the last known editor (used to detect a change). */
+  private editorSignature: string | null = null;
+  /** True when the editor was polled at least once. */
+  private editorKnown = false;
+  /** Cancels the subscription to the editor source. */
+  private editorUnsubscribe: (() => void) | null = null;
 
   constructor(deps: PluginHostDeps) {
     this.deps = deps;
     this.log = deps.logger ?? createLogger('plugins');
+    if (deps.subscribeEditor) {
+      this.editorUnsubscribe = deps.subscribeEditor((editor) => {
+        this.editorSignature = this.signatureOf(editor);
+        this.editorKnown = true;
+        this.notifyEditorChange(editor);
+      });
+    }
   }
 
   /**
@@ -118,11 +220,16 @@ export class PluginHost {
       return;
     }
 
+    // The manifest was validated by the registry and the API version is
+    // compatible: the plugin is ready to be loaded.
+    this.deps.registry.setState(id, 'validated');
     this.deps.registry.setState(id, 'loading');
 
     const runtime: PluginRuntime = {
       cleanups: [],
       deactivateCallbacks: [],
+      editorWatchers: new Set(),
+      eventSubscriptions: 0,
       panels: new Map(),
       sidebarItems: new Map(),
       contextMenuItems: new Map(),
@@ -136,6 +243,14 @@ export class PluginHost {
       await entry.plugin.activate(this.createContext(id, manifest, runtime));
       this.deps.registry.setState(id, 'active');
     } catch (err) {
+      if (err instanceof PluginPermissionError) {
+        // The plugin asked for something it is not allowed to do. That is not
+        // a broken plugin: it stays active with the registrations it managed
+        // to make, and the reason is reported through the registry.
+        this.log.warn('plugin activation stopped by a permission error', id, err.message);
+        this.deps.registry.setState(id, 'active', err.message);
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.log.error('plugin activation failed', id, err);
       this.cleanupRuntime(id, runtime);
@@ -183,10 +298,15 @@ export class PluginHost {
     for (const id of Array.from(this.runtimes.keys())) {
       await this.deactivate(id);
     }
+    this.editorUnsubscribe?.();
+    this.editorUnsubscribe = null;
   }
 
   /** Emits an event to all plugins (and to the rest of the application). */
   emit<K extends PluginEventName>(event: K, payload: PluginEventMap[K]): void {
+    // Polls the editor: a change of the editor is noticed even when no
+    // plugin reads `ctx.editor` at that moment.
+    this.currentEditor();
     this.deps.bus.emit(event, payload);
   }
 
@@ -223,6 +343,10 @@ export class PluginHost {
   /**
    * Number of live registrations, for diagnostics and tests.
    *
+   * `events` counts the subscriptions to the event bus, not every cleanup
+   * callback: the registrations of the UI and the settings are counted by
+   * their own counters.
+   *
    * After a `deactivate()` all counters of that plugin are zero.
    */
   counts(): {
@@ -249,7 +373,7 @@ export class PluginHost {
       settingsSections += runtime.settingsSections.size;
     }
     for (const runtime of this.runtimes.values()) {
-      events += runtime.cleanups.length;
+      events += runtime.eventSubscriptions;
     }
     return {
       plugins: this.runtimes.size,
@@ -283,6 +407,8 @@ export class PluginHost {
     }
     runtime.cleanups.length = 0;
     runtime.deactivateCallbacks.length = 0;
+    runtime.editorWatchers.clear();
+    runtime.eventSubscriptions = 0;
     runtime.panels.clear();
     runtime.sidebarItems.clear();
     runtime.contextMenuItems.clear();
@@ -290,6 +416,63 @@ export class PluginHost {
     runtime.settingsSections.clear();
     // Commands are owned by the plugin and removed in one go.
     this.deps.commands.unregisterAll(id);
+  }
+
+  /**
+   * The current editor of the application.
+   *
+   * The editor is polled on every request, so the plugin always sees the
+   * editor that is open NOW. When the editor changed, the plugins that
+   * subscribed with `ctx.onEditor` are notified and the `editor.available`
+   * event is emitted.
+   */
+  private currentEditor(): PluginEditor | null {
+    const editor = this.deps.getEditor();
+    const signature = this.signatureOf(editor);
+    if (!this.editorKnown || signature !== this.editorSignature) {
+      this.editorKnown = true;
+      this.editorSignature = signature;
+      this.notifyEditorChange(editor);
+    }
+    return editor;
+  }
+
+  /**
+   * A cheap fingerprint of the editor.
+   *
+   * The application creates a new editor object on every request, so the
+   * identity cannot be compared: the path of the open note is used instead.
+   * It detects the appearance, the disappearance and the change of the note.
+   */
+  private signatureOf(editor: PluginEditor | null): string | null {
+    if (!editor) return null;
+    try {
+      return editor.getPath() ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  /** Notifies the plugins about a new editor and emits the event. */
+  private notifyEditorChange(editor: PluginEditor | null): void {
+    for (const runtime of this.runtimes.values()) {
+      for (const watcher of Array.from(runtime.editorWatchers)) {
+        try {
+          watcher(editor);
+        } catch (err) {
+          this.log.warn('plugin editor watcher failed', err);
+        }
+      }
+    }
+    let path: string | null = null;
+    if (editor) {
+      try {
+        path = editor.getPath();
+      } catch {
+        path = null;
+      }
+    }
+    this.deps.bus.emit('editor.available', { path });
   }
 
   private async applySettingsMigrations(
@@ -312,8 +495,12 @@ export class PluginHost {
     runtime: PluginRuntime,
   ): PluginContext {
     const logger = createLogger(id);
-    const api = this.deps.createApi(id);
-    const editor = this.deps.getEditor();
+    // The getter of `ctx.editor` needs the host, not the context object.
+    const host = this;
+    // A frozen copy: the plugin cannot change its own permissions.
+    const permissions: readonly string[] = Object.freeze([...(manifest.permissions ?? [])]);
+    // The plugin only gets the restricted API, never the original one.
+    const api = restrictPluginApi(this.deps.createApi(id), id, permissions);
 
     const track = (cleanup: () => void): (() => void) => {
       let active = true;
@@ -331,7 +518,17 @@ export class PluginHost {
       };
     };
 
+    // The editor of the application is live: it is read from the host every
+    // time the plugin asks for it, so a plugin that was activated before the
+    // first note was opened still gets the editor later.
+    const restrictedEditor = (raw: PluginEditor | null): PluginEditor | null => {
+      if (!raw) return null;
+      return restrictEditor(raw, id, permissions);
+    };
+
     const settings: PluginSettings = {
+      // Reading the own settings of the plugin needs no permission: the
+      // namespace belongs to the plugin itself.
       get: async <T>(key: string): Promise<T | undefined> => {
         const fallback = this.defaultFor(manifest, key);
         const value = await this.deps.settings.get<T | undefined>(
@@ -342,16 +539,32 @@ export class PluginHost {
         return value;
       },
       set: async <T>(key: string, value: T): Promise<void> => {
+        requirePermission(id, permissions, 'settings.write');
         await this.deps.settings.set(id, key, value);
       },
       reset: async (key?: string): Promise<void> => {
+        requirePermission(id, permissions, 'settings.write');
         await this.deps.settings.reset(id, key);
       },
       all: async (): Promise<Record<string, unknown>> => {
         const stored = await this.deps.settings.getAll(id);
         const out: Record<string, unknown> = {};
         for (const schema of manifest.settings ?? []) {
-          out[schema.key] = schema.key in stored ? stored[schema.key] : schema.default;
+          const value = stored[schema.key];
+          if (value === undefined) {
+            out[schema.key] = schema.default;
+            continue;
+          }
+          if (typeof value !== schema.type) {
+            // A value of the wrong type is broken: the default is used.
+            console.warn(
+              `[noto:plugins] setting ${id}:${schema.key} has type ${typeof value}, ` +
+                `expected ${schema.type}, using the default`,
+            );
+            out[schema.key] = schema.default;
+            continue;
+          }
+          out[schema.key] = value;
         }
         for (const [key, value] of Object.entries(stored)) {
           if (!(key in out)) out[key] = value;
@@ -364,39 +577,47 @@ export class PluginHost {
       id,
       version: manifest.version,
       logger,
-      permissions: manifest.permissions as readonly PluginPermission[],
+      permissions: permissions as readonly PluginPermission[],
       api,
-      editor,
+      get editor(): PluginEditor | null {
+        return restrictedEditor(host.currentEditor());
+      },
       settings,
       registerCommand: (cmd: PluginCommand): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         const unregister = this.deps.commands.register(id, cmd);
         return track(unregister);
       },
       registerPanel: (panel: PluginPanel): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         runtime.panels.set(panel.id, panel);
         return track(() => {
           if (runtime.panels.get(panel.id) === panel) runtime.panels.delete(panel.id);
         });
       },
       registerSidebarItem: (item: PluginSidebarItem): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         runtime.sidebarItems.set(item.id, item);
         return track(() => {
           if (runtime.sidebarItems.get(item.id) === item) runtime.sidebarItems.delete(item.id);
         });
       },
       registerContextMenuItem: (item: PluginContextMenuItem): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         runtime.contextMenuItems.set(item.id, item);
         return track(() => {
           if (runtime.contextMenuItems.get(item.id) === item) runtime.contextMenuItems.delete(item.id);
         });
       },
       registerToolbarItem: (item: PluginToolbarItem): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         runtime.toolbarItems.set(item.id, item);
         return track(() => {
           if (runtime.toolbarItems.get(item.id) === item) runtime.toolbarItems.delete(item.id);
         });
       },
       registerSettingsSection: (section: PluginSettingsSection): (() => void) => {
+        requirePermission(id, permissions, 'ui.contribute');
         runtime.settingsSections.set(section.id, section);
         return track(() => {
           if (runtime.settingsSections.get(section.id) === section) {
@@ -409,7 +630,33 @@ export class PluginHost {
         cb: (payload: PluginEventMap[K]) => void,
       ): (() => void) => {
         const unsubscribe = this.deps.bus.on(event, cb);
-        return track(unsubscribe);
+        runtime.eventSubscriptions += 1;
+        return track(() => {
+          unsubscribe();
+          runtime.eventSubscriptions -= 1;
+        });
+      },
+      onEditor: (cb: (editor: PluginEditor | null) => void): (() => void) => {
+        // The watcher receives the raw editor and hands the restricted one
+        // to the plugin, so the permissions are enforced here too.
+        const watcher = (raw: PluginEditor | null): void => {
+          cb(restrictedEditor(raw));
+        };
+        // The editor is polled BEFORE the watcher is registered, so that the
+        // callback is called exactly once with the current editor.
+        const current = this.currentEditor();
+        runtime.editorWatchers.add(watcher);
+        let active = true;
+        try {
+          watcher(current);
+        } catch (err) {
+          this.log.warn('plugin editor callback failed', id, err);
+        }
+        return () => {
+          if (!active) return;
+          active = false;
+          runtime.editorWatchers.delete(watcher);
+        };
       },
       onDeactivate: (cb: () => void): void => {
         runtime.deactivateCallbacks.push(cb);

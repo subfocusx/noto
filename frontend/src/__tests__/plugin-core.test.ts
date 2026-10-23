@@ -25,7 +25,9 @@ function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
     version: '1.0.0',
     manifestVersion: 1,
     minApiVersion: PLUGIN_API_VERSION,
-    permissions: ['notes.read'],
+    // The demo plugin registers UI contributions and writes its settings,
+    // so it declares the permissions the host enforces.
+    permissions: ['notes.read', 'ui.contribute', 'settings.write'],
     ...overrides,
   };
 }

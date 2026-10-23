@@ -14,6 +14,7 @@ network.
 ## Table of contents
 
 - [Features](#features)
+- [Plugins](#plugins)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
@@ -81,6 +82,62 @@ network.
   toggle.
 - Responsive layout with a drawer sidebar and 44 px touch targets on mobile.
 - Single static Go binary in production — the frontend is embedded.
+
+---
+
+## Plugins
+
+Noto has a plugin platform (phase 2). Plugins are **built-in code that is
+compiled into the application** — there is no plugin installation from disk or
+from the network, and there is no sandbox: a built-in plugin is trusted code
+running in the context of the app.
+
+Two plugins ship with the app:
+
+| Plugin | What it does | Permissions it needs |
+| --- | --- | --- |
+| **Word Count** | Shows the word and character count of the open note in a panel. | `editor.read`, `ui.contribute` |
+| **Insert Template** | Inserts a configurable Markdown template at the cursor position. | `editor.write`, `ui.contribute` |
+
+A plugin can:
+
+- read and write notes through `ctx.api` (`getNote`, `getTree`, `search`,
+  `saveNote` with optimistic locking);
+- read and edit the text of the open note through `ctx.editor`
+  (`insert`, `insertAt`, `replaceSelection` — there is deliberately no
+  `setText`, so the autosave keeps working);
+- contribute UI: a panel, a sidebar entry, a context-menu entry, a toolbar
+  button, a settings section and a command for the palette;
+- subscribe to nine application events (`note.created`, `note.updated`,
+  `note.deleted`, `note.renamed`, `note.moved`, `folder.created`,
+  `folder.moved`, `editor.saved`, `workspace.opened`) — payloads never carry
+  note content, only paths and metadata;
+- keep its own settings, stored separately in the `noto-plugins` IndexedDB
+  database under a per-plugin namespace.
+
+**Managing plugins.** Open the app and press the **Plugins** button in the
+sidebar. The dialog lists every built-in plugin with its state (`Active`,
+`Disabled`, `Failed`, `Incompatible`), lets you enable or disable it, and
+offers **Open settings** / **Reset settings** for plugins that declare a
+settings schema. The enabled/disabled flags survive a reload.
+
+**Permissions are enforced at runtime.** A manifest may request eight
+permissions; the validator rejects unknown names and duplicates, and every
+capability handed to a plugin checks the declared rights before the call — a
+refusal raises a `PluginPermissionError` inside the plugin (e.g. `editor.write`
+is needed to insert text, `ui.contribute` to add a panel or a command,
+`settings.write` to store settings). The checks cover the data API, the editor,
+the UI contributions and the settings; they do **not** cover network calls the
+plugin makes itself (`fetch` is still available to it) and there is no sandbox,
+because a built-in plugin is trusted code.
+
+Documentation:
+
+- [`docs/PLUGIN_API.md`](docs/PLUGIN_API.md) — the full contract reference;
+- [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md) — trust model, what the
+  platform does and does not protect against;
+- [`docs/PLUGIN_DEVELOPMENT.md`](docs/PLUGIN_DEVELOPMENT.md) — how to write,
+  register, test and debug a plugin.
 
 ---
 
@@ -269,6 +326,9 @@ Other frontend commands:
 | `npm run preview` | Serves the production build locally. |
 | `npm test` | Runs the Vitest suite once. |
 | `npm run test:watch` | Runs Vitest in watch mode. |
+| `npm run typecheck` | Type-checks the whole frontend with `tsc --noEmit`. |
+| `npm run check:boundaries` | Checks the architectural import boundaries (rules R1–R8) of the frontend source tree. |
+| `npm run measure` | Prints the bundle size report. |
 
 ### Helper scripts
 
@@ -408,6 +468,32 @@ cd E:\Code\Software\noto
 .\scripts\test.ps1
 ```
 
+Everything at once (backend build, vet, race tests, HTTP smoke suite,
+architecture boundaries, type-check, unit tests, production build and the
+bundle-size report):
+
+```powershell
+cd E:\Code\Software\noto
+.\scripts\verify.ps1
+```
+
+`scripts/verify.ps1` runs every step and prints a PASS/FAIL summary at the
+end instead of stopping at the first failure. Steps can be skipped with
+`-Skip` (names: `build`, `vet`, `test`, `smoke`, `boundaries`, `typecheck`,
+`unit`, `bundle`, `measure`, `e2e`), and the end-to-end Playwright suite runs
+only with `-E2E`:
+
+```powershell
+.\scripts\verify.ps1 -Skip e2e,smoke
+```
+
+The architecture boundary check on its own (it is part of `verify.ps1` too):
+
+```powershell
+cd E:\Code\Software\noto\frontend
+npm run check:boundaries
+```
+
 ---
 
 ## Production build
@@ -498,10 +584,11 @@ To uninstall: stop and delete the service, then delete the data directory.
 3. Tap the ⋮ menu → **Add to Home screen** (or **Install app**).
 4. Confirm the name; Noto is added as a standalone app with its own icon and
    opens without browser chrome.
-5. The service worker caches the app shell, so the UI opens offline. API
-   calls are network-first with a cache fallback for `GET` requests; writes
-   that fail offline keep their draft in IndexedDB and are retried when the
-   connection returns.
+5. The service worker caches the app shell, so the UI opens offline. API calls
+   are **network-only**: private responses are never cached, so an offline
+   request fails with an explicit error instead of showing a stale note body;
+   writes that fail offline keep their draft in IndexedDB and are retried when
+   the connection returns.
 
 On iOS the equivalent is Safari → Share → **Add to Home Screen**.
 
@@ -777,9 +864,15 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
   everything.
 * The UI is single-language (English) and has no tagging or filtering beyond
   folders and search.
-* Offline support covers the app shell and `GET` requests; writes made
-  offline are queued as local drafts and are not synchronised automatically
-  to the server.
+* Offline support covers the app shell and the static assets only: every
+  `/api/*` route is served `network-only`, so private responses never come
+  from a cache. Writes made offline are queued as local drafts and are not
+  synchronised automatically to the server.
+* Plugins are built-in code that runs as trusted code inside the application —
+  there is no sandbox and no plugin installation from disk or the network.
+  Declared permissions are enforced for the data API, the editor, the UI
+  contributions and the settings, but a plugin can still make network requests
+  itself (see [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md)).
 * There is no mobile-native wrapper — Android support is via the installed
   PWA.
 
@@ -812,11 +905,15 @@ noto/
 │       ├── api/              HTTP layer
 │       └── web/              embedded frontend assets
 ├── frontend/                 Preact + TypeScript + Vite PWA
+│   └── src/plugins/          plugin platform: contract, manifest, registry, host, loader, builtin plugins
 ├── scripts/                  PowerShell helper scripts
 ├── docs/
 │   ├── CONTRACT.md           authoritative internal contract
 │   ├── API.md                REST API reference
-│   └── SECURITY.md           threat model and hardening checklist
+│   ├── SECURITY.md           threat model and hardening checklist
+│   ├── PLUGIN_API.md         plugin contract reference
+│   ├── PLUGIN_SECURITY.md    plugin trust model and limitations
+│   └── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

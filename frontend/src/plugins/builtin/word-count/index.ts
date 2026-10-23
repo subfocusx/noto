@@ -4,6 +4,11 @@
 // `ctx.editor.onChange()` and shows the number of words and characters of the
 // active note in a panel.
 //
+// The editor is NOT captured once at activation: the plugin subscribes to
+// `ctx.onEditor()`, so it starts working as soon as a note is opened, even if
+// it was activated before the first note existed. Every new editor replaces
+// the previous one, and the subscription of the previous editor is dropped.
+//
 // Counting rules (documented here because they are part of the behaviour):
 //
 //   * a word is a maximal run of letters or digits, matched with
@@ -15,6 +20,10 @@
 //
 // The plugin never writes into the note and never logs the text of the note:
 // the logger only receives the counters.
+//
+// Permissions: `editor.read` (the text of the note) and `ui.contribute` (the
+// panel and the command). The plugin does NOT ask for `editor.write` or
+// `notes.write`, so the host refuses every write operation of this plugin.
 //
 // The whole plugin lives in one file on purpose: the boundary checker allows
 // `src/plugins/builtin/**` to import `src/plugins/contract.ts` only, so a
@@ -34,7 +43,9 @@ export const wordCountManifest: PluginManifest = {
   minApiVersion: '1.0.0',
   description: 'Считает слова и символы активной заметки.',
   author: 'Noto',
-  permissions: ['editor.read'],
+  // `editor.read` — the text of the note; `ui.contribute` — the panel and the
+  // command. The plugin never asks for a write permission.
+  permissions: ['editor.read', 'ui.contribute'],
   settings: [
     {
       key: 'countChars',
@@ -181,32 +192,62 @@ export const wordCountPlugin: Plugin = {
 
   async activate(ctx: PluginContext): Promise<void> {
     const store = new WordCountStore();
-    let unsubscribe: (() => void) | null = null;
+    /** Cancels the subscription of the text changes of the current editor. */
+    let unsubscribeChange: (() => void) | null = null;
+    /** Cancels the subscription of the editor itself. */
+    let unsubscribeEditor: (() => void) | null = null;
 
     const showChars = await readShowChars(ctx);
-    const editor: PluginEditor | null = ctx.editor;
 
-    if (editor) {
-      const apply = (text: string): void => {
-        const stats = computeStats(text);
-        store.set({ available: true, stats });
-        // Only the counters are logged, never the text of the note.
-        ctx.logger.debug('word count updated', {
-          words: stats.words,
-          characters: stats.characters,
-        });
-      };
+    const apply = (text: string): void => {
+      const stats = computeStats(text);
+      store.set({ available: true, stats });
+      // Only the counters are logged, never the text of the note.
+      ctx.logger.debug('word count updated', {
+        words: stats.words,
+        characters: stats.characters,
+      });
+    };
+
+    /** Drops the subscription of the previous editor. */
+    const detach = (): void => {
+      if (unsubscribeChange) {
+        unsubscribeChange();
+        unsubscribeChange = null;
+      }
+    };
+
+    /**
+     * Attaches the plugin to an editor.
+     *
+     * The callback is called with `null` when no note is open; the panel then
+     * shows the placeholder instead of failing.
+     */
+    const attach = (editor: PluginEditor | null): void => {
+      // A new editor replaces the previous one: its subscription is dropped.
+      detach();
+      if (!editor) {
+        store.set({ available: false, stats: null });
+        return;
+      }
       apply(editor.getText());
-      unsubscribe = editor.onChange(apply);
+      unsubscribeChange = editor.onChange(apply);
+    };
+
+    if (typeof ctx.onEditor === 'function') {
+      // The live editor: the callback is called with the current editor and
+      // then on every change of it.
+      unsubscribeEditor = ctx.onEditor(attach);
     } else {
-      // No note is open: the panel shows a placeholder instead of failing.
-      store.set({ available: false, stats: null });
+      // Fallback for hosts without `onEditor`: the editor is read once.
+      attach(ctx.editor);
     }
 
     ctx.onDeactivate(() => {
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
+      detach();
+      if (unsubscribeEditor) {
+        unsubscribeEditor();
+        unsubscribeEditor = null;
       }
       store.set({ available: false, stats: null });
     });

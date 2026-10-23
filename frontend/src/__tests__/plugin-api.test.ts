@@ -36,7 +36,7 @@ function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
     version: '1.0.0',
     manifestVersion: 1,
     minApiVersion: PLUGIN_API_VERSION,
-    permissions: ['notes.read'],
+    permissions: ['notes.read', 'ui.contribute'],
     ...overrides,
   };
 }
@@ -662,15 +662,19 @@ describe('F. settings store', () => {
     warn.mockRestore();
   });
 
-  it('returns a stored value of the wrong type unchanged (known limitation)', async () => {
-    // KNOWN LIMITATION (not a bug in the store, but a missing check):
-    // `SettingsStore.get()` only rejects values that are not JSON compatible.
-    // A stored value of a *different* type than the default is returned
-    // as-is instead of falling back to the default. See the report for a
-    // minimal diff that adds the type check.
+  it('falls back to the default when the stored value has the wrong type', async () => {
+    // A stored value whose type does not match the default is treated as
+    // corrupted: `get()` returns the default and warns about the mismatch.
     await store.set('api.settings', 'count', 'not-a-number' as never);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const value = await store.get('api.settings', 'count', 7);
-    expect(value).toBe('not-a-number');
+    expect(value).toBe(7);
+    expect(warn).toHaveBeenCalled();
+    const message = String(warn.mock.calls[0][0]);
+    expect(message).toContain('[noto:settings]');
+    expect(message).toContain('api.settings:count');
+    expect(message).toContain('using default');
+    warn.mockRestore();
   });
 
   it('keeps the values after the store is recreated', async () => {

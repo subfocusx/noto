@@ -72,6 +72,10 @@ export function App() {
   const registryRef = useRef<PluginRegistry | null>(null);
   const commandsRef = useRef<CommandRegistry | null>(null);
   const settingsRef = useRef<SettingsStore | null>(null);
+  /** Subscribers that must be notified when the editor instance changes. */
+  const editorSubscribersRef = useRef(new Set<(editor: PluginEditor | null) => void>());
+  /** Fingerprint of the current editor, used to detect an actual change. */
+  const editorKeyRef = useRef('');
   const [pluginVersion, setPluginVersion] = useState(0);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
@@ -104,6 +108,27 @@ export function App() {
     };
   };
 
+  /**
+   * Notifies the plugin host when the editor instance changes.
+   *
+   * The effect runs after every render: the editor handle appears after the
+   * note is in the store, so a store-only subscription would report "no
+   * editor" exactly once and then never again.
+   */
+  useEffect(() => {
+    const key = `${currentPathRef.current ?? ''}|${editorRef.current ? '1' : '0'}`;
+    if (key === editorKeyRef.current) return;
+    editorKeyRef.current = key;
+    const editor = pluginEditor();
+    for (const cb of editorSubscribersRef.current) {
+      try {
+        cb(editor);
+      } catch {
+        // A broken plugin subscriber must not break the application.
+      }
+    }
+  });
+
   // The host is created once and disposed when the application goes away.
   useEffect(() => {
     const registry = new PluginRegistry();
@@ -121,6 +146,13 @@ export function App() {
       settings,
       createApi: () => createPluginApi(),
       getEditor: () => pluginEditor(),
+      subscribeEditor: (cb) => {
+        editorSubscribersRef.current.add(cb);
+        cb(pluginEditor());
+        return () => {
+          editorSubscribersRef.current.delete(cb);
+        };
+      },
     });
     hostRef.current = host;
 

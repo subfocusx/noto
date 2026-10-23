@@ -956,3 +956,28 @@ body {
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Built-in plugin: Word Count. The plugin ships its own prefixed classes so
+   that the plugin styles cannot collide with the application styles. */
+.noto-word-count {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.noto-word-count-words {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.noto-word-count-chars {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.noto-word-count-empty {
+  color: var(--muted);
+  font-style: italic;
+}

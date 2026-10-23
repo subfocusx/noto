@@ -90,7 +90,14 @@ function isJsonCompatible(value: unknown): boolean {
 }
 
 export class SettingsStore {
-  /** Reads a setting, falling back to `fallback` when it is missing or broken. */
+  /**
+   * Reads a setting, falling back to `fallback` when it is missing or broken.
+   *
+   * A value is broken when it is not JSON compatible OR when its type does
+   * not match the type of the fallback (the default of the manifest): a
+   * string stored in a numeric setting is not a valid number and must not be
+   * handed to the plugin as one.
+   */
   async get<T>(pluginId: string, key: string, fallback: T): Promise<T> {
     const database = await db();
     let record: SettingRecord | undefined;
@@ -102,6 +109,13 @@ export class SettingsStore {
     if (!record) return fallback;
     if (!isJsonCompatible(record.value)) {
       console.warn(`[noto:settings] corrupted value for ${pluginId}:${key}, using default`);
+      return fallback;
+    }
+    if (fallback !== undefined && typeof record.value !== typeof fallback) {
+      console.warn(
+        `[noto:settings] value for ${pluginId}:${key} has type ${typeof record.value}, ` +
+          `expected ${typeof fallback}, using default`,
+      );
       return fallback;
     }
     return record.value as T;

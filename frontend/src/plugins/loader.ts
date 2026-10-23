@@ -4,13 +4,16 @@
 // `import()`, no `import.meta.glob`, no remote code loading and no `eval`.
 // Plugin ids and display strings are never used as a module specifier.
 //
-// The list is filled in by the integration wave that adds the example
-// plugins; until then it stays empty and the platform works unchanged.
+// The list is static on purpose: it is the only way to ship plugins without
+// introducing an arbitrary code execution path into the application.
 import type { Plugin } from './contract';
+import { insertTemplatePlugin } from './builtin/insert-template';
+import { wordCountPlugin } from './builtin/word-count';
 
 /**
  * The built-in plugins known to this build.
  *
  * Each entry is a static object literal created by the integration layer.
+ * The order defines the order in the plugin manager panel.
  */
-export const builtinPlugins: Plugin[] = [];
+export const builtinPlugins: Plugin[] = [wordCountPlugin, insertTemplatePlugin];

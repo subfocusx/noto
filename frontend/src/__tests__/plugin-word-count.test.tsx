@@ -12,6 +12,7 @@ import type {
   PluginEventMap,
   PluginPanel,
 } from '../plugins/contract';
+import { PluginPermissionError } from '../plugins/contract';
 import { validateManifest } from '../plugins/manifest';
 import { PluginRegistry } from '../plugins/registry';
 import { PluginHost } from '../plugins/host';
@@ -86,6 +87,9 @@ function makeFakeContext(editor: PluginEditor | null, countChars: boolean | unde
   const panels: PluginPanel[] = [];
   const deactivateCallbacks: Array<() => void> = [];
   const saveNote = vi.fn();
+  const editorWatchers = new Set<(e: PluginEditor | null) => void>();
+  const onEditorUnsubscribeSpy = vi.fn();
+  let currentEditor: PluginEditor | null = editor;
 
   const api: PluginApi = {
     getNote: async () => ({
@@ -106,7 +110,10 @@ function makeFakeContext(editor: PluginEditor | null, countChars: boolean | unde
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     permissions: wordCount.wordCountManifest.permissions,
     api,
-    editor,
+    // The editor is live: it is asked for on every access.
+    get editor(): PluginEditor | null {
+      return currentEditor;
+    },
     settings: {
       get: async <T,>(key: string): Promise<T | undefined> =>
         key === 'countChars' ? (countChars as T | undefined) : undefined,
@@ -127,16 +134,38 @@ function makeFakeContext(editor: PluginEditor | null, countChars: boolean | unde
     registerToolbarItem: () => () => undefined,
     registerSettingsSection: () => () => undefined,
     on: () => () => undefined,
+    onEditor: (cb) => {
+      editorWatchers.add(cb);
+      // Like the host: the callback is called with the current editor at once.
+      cb(currentEditor);
+      return () => {
+        onEditorUnsubscribeSpy();
+        editorWatchers.delete(cb);
+      };
+    },
     onDeactivate: (cb) => {
       deactivateCallbacks.push(cb);
     },
   };
 
-  return { ctx, commands, panels, deactivateCallbacks, saveNote };
+  return {
+    ctx,
+    commands,
+    panels,
+    deactivateCallbacks,
+    saveNote,
+    onEditorUnsubscribeSpy,
+    /** Simulates the appearance (or the removal) of an editor. */
+    emitEditor(next: PluginEditor | null) {
+      currentEditor = next;
+      for (const cb of Array.from(editorWatchers)) cb(next);
+    },
+    editorWatcherCount: () => editorWatchers.size,
+  };
 }
 
 /** A real host, so that the lifecycle of the plugin is the real one. */
-function makeHost(editor: PluginEditor | null) {
+function makeHost(getEditor: () => PluginEditor | null) {
   const registry = new PluginRegistry();
   const bus = new EventBus<PluginEventMap>();
   const commands = new CommandRegistry();
@@ -147,7 +176,7 @@ function makeHost(editor: PluginEditor | null) {
     commands,
     settings,
     createApi: () => createPluginApi(),
-    getEditor: () => editor,
+    getEditor,
   });
   return { registry, bus, commands, settings, host };
 }
@@ -161,14 +190,18 @@ describe('word-count manifest', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('asks for the read access to the editor only', () => {
+  it('asks for the read access to the editor and for the UI contributions', () => {
     expect(wordCount.wordCountManifest.id).toBe('word-count');
     expect(wordCount.wordCountManifest.name).toBe('Word Count');
     expect(wordCount.wordCountManifest.version).toBe('1.0.0');
     expect(wordCount.wordCountManifest.manifestVersion).toBe(1);
     expect(wordCount.wordCountManifest.minApiVersion).toBe('1.0.0');
     expect(wordCount.wordCountManifest.author).toBe('Noto');
-    expect(wordCount.wordCountManifest.permissions).toEqual(['editor.read']);
+    // The panel and the command need `ui.contribute`, the text needs
+    // `editor.read`. The plugin never asks for a write permission.
+    expect(wordCount.wordCountManifest.permissions).toEqual(['editor.read', 'ui.contribute']);
+    expect(wordCount.wordCountManifest.permissions).not.toContain('editor.write');
+    expect(wordCount.wordCountManifest.permissions).not.toContain('notes.write');
   });
 
   it('declares the "countChars" setting', () => {
@@ -279,16 +312,81 @@ describe('word-count activation', () => {
     expect(screen.queryByText(/^Слов:/)).toBeNull();
   });
 
+  it('starts working when the editor appears after the activation', async () => {
+    const fake = makeFakeContext(null);
+    await wordCount.wordCountPlugin.activate(fake.ctx);
+
+    render(fake.panels[0].render());
+    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+
+    // The note is opened after the activation: the plugin is notified.
+    const { editor } = makeFakeEditor('Привет мир');
+    act(() => {
+      fake.emitEditor(editor);
+    });
+
+    expect(screen.getByText('Слов: 2')).toBeTruthy();
+    expect(screen.getByText('Символов: 10')).toBeTruthy();
+  });
+
+  it('drops the subscription of the previous editor when another one appears', async () => {
+    const first = makeFakeEditor('one');
+    const second = makeFakeEditor('two words');
+    const fake = makeFakeContext(null);
+    await wordCount.wordCountPlugin.activate(fake.ctx);
+
+    render(fake.panels[0].render());
+
+    act(() => {
+      fake.emitEditor(first.editor);
+    });
+    expect(first.listenerCount()).toBe(1);
+
+    act(() => {
+      fake.emitEditor(second.editor);
+    });
+
+    expect(first.listenerCount()).toBe(0);
+    expect(first.unsubscribeSpy).toHaveBeenCalledTimes(1);
+    expect(second.listenerCount()).toBe(1);
+
+    // The changes of the old editor are ignored.
+    act(() => {
+      first.emit('a lot of words in the old editor');
+    });
+    expect(screen.getByText('Слов: 2')).toBeTruthy();
+  });
+
+  it('shows the placeholder when the note is closed again', async () => {
+    const fakeEditor = makeFakeEditor('hello world');
+    const fake = makeFakeContext(fakeEditor.editor);
+    await wordCount.wordCountPlugin.activate(fake.ctx);
+
+    render(fake.panels[0].render());
+    expect(screen.getByText('Слов: 2')).toBeTruthy();
+
+    act(() => {
+      fake.emitEditor(null);
+    });
+
+    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(fakeEditor.listenerCount()).toBe(0);
+  });
+
   it('removes the editor subscription on deactivation', async () => {
     const fakeEditor = makeFakeEditor('hello world');
     const fake = makeFakeContext(fakeEditor.editor);
     await wordCount.wordCountPlugin.activate(fake.ctx);
     expect(fakeEditor.listenerCount()).toBe(1);
+    expect(fake.editorWatcherCount()).toBe(1);
 
     for (const cb of fake.deactivateCallbacks) cb();
 
     expect(fakeEditor.unsubscribeSpy).toHaveBeenCalledTimes(1);
     expect(fakeEditor.listenerCount()).toBe(0);
+    // The subscription of the editor itself is cancelled too.
+    expect(fake.onEditorUnsubscribeSpy).toHaveBeenCalledTimes(1);
+    expect(fake.editorWatcherCount()).toBe(0);
 
     // After the deactivation the plugin ignores the changes.
     act(() => {
@@ -296,13 +394,36 @@ describe('word-count activation', () => {
     });
     render(fake.panels[0].render());
     expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+
+    // A new editor does not revive the deactivated plugin.
+    const revived = makeFakeEditor('hello again');
+    act(() => {
+      fake.emitEditor(revived.editor);
+    });
+    expect(revived.listenerCount()).toBe(0);
+  });
+
+  it('cannot write the note: the API refuses it without "notes.write"', async () => {
+    const api = createPluginApi(
+      {},
+      { pluginId: 'word-count', permissions: wordCount.wordCountManifest.permissions },
+    );
+
+    await expect(api.saveNote('notes/a.md', 'hacked', 1)).rejects.toBeInstanceOf(
+      PluginPermissionError,
+    );
+
+    // The plugin itself never writes anything.
+    const fake = makeFakeContext(null);
+    await wordCount.wordCountPlugin.activate(fake.ctx);
+    expect(fake.saveNote).not.toHaveBeenCalled();
   });
 });
 
 describe('word-count in the host', () => {
   it('is activated and deactivated by the host', async () => {
     const fakeEditor = makeFakeEditor('hello world');
-    const { registry, commands, host } = makeHost(fakeEditor.editor);
+    const { registry, commands, host } = makeHost(() => fakeEditor.editor);
 
     registry.register(wordCount.wordCountPlugin);
     registry.enable('word-count');
@@ -322,12 +443,33 @@ describe('word-count in the host', () => {
   });
 
   it('is activated without an editor and does not fail', async () => {
-    const { registry, host } = makeHost(null);
+    const { registry, host } = makeHost(() => null);
     registry.register(wordCount.wordCountPlugin);
     registry.enable('word-count');
 
     await expect(host.activate('word-count')).resolves.toBeUndefined();
     expect(registry.get('word-count')?.state).toBe('active');
     expect(host.panels()).toHaveLength(1);
+  });
+
+  it('starts working when a note is opened after the activation', async () => {
+    let current: PluginEditor | null = null;
+    const { registry, host } = makeHost(() => current);
+    registry.register(wordCount.wordCountPlugin);
+    registry.enable('word-count');
+    await host.activate('word-count');
+
+    render(host.panels()[0].render());
+    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+
+    // The note is opened: the host notices the new editor.
+    const fakeEditor = makeFakeEditor('Привет мир');
+    current = fakeEditor.editor;
+    act(() => {
+      host.emit('editor.available', { path: 'notes/a.md' });
+    });
+
+    expect(screen.getByText('Слов: 2')).toBeTruthy();
+    expect(screen.getByText('Символов: 10')).toBeTruthy();
   });
 });

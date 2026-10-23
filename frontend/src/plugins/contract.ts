@@ -11,6 +11,16 @@
 import type { ComponentChildren } from 'preact';
 import type { Node, NoteContent, SaveNoteResponse, SearchHit } from '../types';
 
+/**
+ * The error thrown when a plugin tries to do something it did not ask for in
+ * its manifest.
+ *
+ * The class lives in `core/api/pluginApi.ts` (the core layer must not import
+ * from `src/plugins/**`, rule R1) and is re-exported here, so that plugins
+ * can catch it by type.
+ */
+export { PluginPermissionError } from '../core/api/pluginApi';
+
 /** Version of the plugin API implemented by this build. */
 export const PLUGIN_API_VERSION = '1.0.0';
 
@@ -183,6 +193,11 @@ export interface PluginEventMap {
   'folder.created': { path: string };
   'folder.moved': { path: string; previousPath: string };
   'editor.saved': { path: string; revision: number };
+  /**
+   * The editor of the application became available (or was replaced by
+   * another one). The path is `null` when no note is open.
+   */
+  'editor.available': { path: string | null };
   'workspace.opened': { path: string | null };
 }
 
@@ -202,6 +217,26 @@ export interface PluginSettings {
  *
  * The context is the security boundary of the platform: it carries no
  * references to application internals, only the capabilities listed here.
+ *
+ * The permissions of the manifest are ENFORCED, not only declared:
+ *
+ * | operation                                  | permission     |
+ * | ------------------------------------------ | -------------- |
+ * | `api.getNote`                              | `notes.read`   |
+ * | `api.saveNote`                             | `notes.write`  |
+ * | `api.getTree`                              | `tree.read`    |
+ * | `api.search`                               | `search.read`  |
+ * | `editor.getText/getSelection/getCursor`    | `editor.read`  |
+ * | `editor.onChange/onSelectionChange`        | `editor.read`  |
+ * | `editor.insert/insertAt/replaceSelection`  | `editor.write` |
+ * | `registerCommand` and the other UI hooks   | `ui.contribute`|
+ * | `settings.set` / `settings.reset`          | `settings.write`|
+ *
+ * Reading the own settings of the plugin (`settings.get` / `settings.all`)
+ * needs no permission: the namespace belongs to the plugin itself.
+ *
+ * A forbidden operation throws a {@link PluginPermissionError} into the code
+ * of the plugin — it is never a silent no-op.
  */
 export interface PluginContext {
   readonly id: string;
@@ -209,6 +244,13 @@ export interface PluginContext {
   readonly logger: PluginLogger;
   readonly permissions: readonly PluginPermission[];
   readonly api: PluginApi;
+  /**
+   * The editor of the application, or `null` when no note is open.
+   *
+   * The value is computed on every access, so a plugin that is activated
+   * before the first note is opened still gets the editor later. Plugins that
+   * need to be notified should use {@link PluginContext.onEditor}.
+   */
   readonly editor: PluginEditor | null;
   readonly settings: PluginSettings;
   registerCommand(cmd: PluginCommand): () => void;
@@ -218,6 +260,17 @@ export interface PluginContext {
   registerToolbarItem(i: PluginToolbarItem): () => void;
   registerSettingsSection(s: PluginSettingsSection): () => void;
   on<K extends PluginEventName>(event: K, cb: (payload: PluginEventMap[K]) => void): () => void;
+  /**
+   * Subscribes to the editor of the application.
+   *
+   * The callback is called immediately with the current editor (or `null`)
+   * and then on every change. The returned function cancels the subscription
+   * and is idempotent.
+   *
+   * The field is optional so that contexts built by hand (in the tests of
+   * the components) stay valid.
+   */
+  onEditor?(cb: (editor: PluginEditor | null) => void): () => void;
   onDeactivate(cb: () => void): void;
 }
 

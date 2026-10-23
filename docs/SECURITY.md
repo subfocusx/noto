@@ -38,6 +38,7 @@ ignores entirely.
 | Oversized requests and zip bombs | `http.MaxBytesReader` bounds every request body, including the total size of a multipart upload (`NOTO_MAX_UPLOAD_MB`); archives have a separate uncompressed-size cap. |
 | Lost updates from concurrent writes | Every note carries a revision. A write with a stale revision is rejected with `409 revision_conflict` and the current server copy is returned instead of being overwritten. Renaming or moving a folder takes a hierarchical lock that also covers writes inside it, so a concurrent write can never split the tree. A write to a note that was moved away returns `409 conflict`, and a write to a missing parent folder returns `not_found` instead of re-creating the folder. |
 | Information disclosure through error messages | Errors return a stable code and a short message. Stack traces and absolute server paths are never returned; they are logged server side. Note contents are never logged. |
+| Private API payloads surviving in the browser cache | The service worker serves every `/api/*` route `network-only` (`frontend/public/sw.js`): a private response is never written to a cache, an offline request fails with an explicit `503 network_error` envelope instead of a stale body, and a successful mutation purges any leftover private-API cache. Only static assets and the app shell are cached. |
 | Resource exhaustion from a slow client | Every request is bounded by `NOTO_REQUEST_TIMEOUT_SEC` and shutdown by `NOTO_SHUTDOWN_TIMEOUT_SEC`. |
 
 ### Out of scope — the server does **not** defend against these
@@ -56,6 +57,50 @@ ignores entirely.
   stored unencrypted. Use full-disk encryption (BitLocker, LUKS, FileVault)
   if that matters.
 * **Audit logging.** There is no record of who changed what.
+* **A malicious built-in plugin.** Plugins run as trusted code inside the
+  application; see the section below.
+
+## Plugins
+
+Phase 2 added a plugin platform. The short version: **a built-in plugin is
+trusted code, not a sandboxed extension.** The full model is in
+[`docs/PLUGIN_SECURITY.md`](PLUGIN_SECURITY.md).
+
+* **Trust model.** Built-in plugins are compiled into the application and
+  execute in the same context as the app itself. There is **no** iframe
+  sandbox, no separate origin, no separate process and no capability
+  sandboxing. The plugin management screen says so explicitly.
+* **Permissions are enforced at runtime.** A manifest may request eight
+  permissions (`notes.read`, `notes.write`, `tree.read`, `search.read`,
+  `editor.read`, `editor.write`, `ui.contribute`, `settings.write`). The
+  manifest validator rejects unknown names and duplicates, and every capability
+  handed to a plugin checks the declared rights before the call: a refusal
+  raises a `PluginPermissionError` (`frontend/src/core/api/pluginApi.ts`,
+  `frontend/src/plugins/host.ts`). The checks cover the data API, the editor,
+  the UI contributions and the settings; they do **not** cover network requests
+  the plugin makes itself (`fetch` is still available to it), and there is no
+  sandbox.
+* **No dynamic loading.** There is no `eval`, no `new Function`, no dynamic
+  `import()` by a runtime path, no `import.meta.glob` and no remote code
+  loading in `frontend/src/plugins/**`. The list of plugins is a static array
+  (`frontend/src/plugins/loader.ts`); plugin ids are never used as a path or a
+  module specifier, and a plugin cannot register itself under an id that comes
+  from user input.
+* **No plugin installation from disk or the network.** Only built-in plugins
+  exist in this phase. User-supplied plugins with an iframe sandbox and a
+  strict CSP are a possible future phase, not a current feature.
+* **Data integrity is still enforced.** A plugin writes only through
+  `ctx.api.saveNote(path, content, revision)`, i.e. with optimistic locking:
+  a stale revision is rejected with `409 revision_conflict` and the current
+  server copy is returned, so a plugin cannot silently overwrite someone
+  else's edit. Note events are emitted after the operation succeeded.
+* **Private API responses are never cached.** Because `/api/*` is
+  `network-only`, data a plugin fetched through the API does not survive
+  offline in a cache.
+
+Because plugins are trusted code, the practical mitigation is the supply chain:
+plugins live in this repository, are reviewed like any other code and are
+covered by the same tests and boundary checks (`npm run check:boundaries`).
 
 ## Hardening checklist
 

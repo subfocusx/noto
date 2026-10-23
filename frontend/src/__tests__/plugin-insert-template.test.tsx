@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../plugins/manifest';
+import { PluginPermissionError } from '../core/api/pluginApi';
 import type {
   Plugin,
   PluginCommand,
@@ -7,6 +8,7 @@ import type {
   PluginEditor,
   PluginLogger,
   PluginManifest,
+  PluginPermission,
   PluginSettings,
 } from '../plugins/contract';
 
@@ -39,13 +41,22 @@ const { DEFAULT_TEMPLATE, INSERT_TEMPLATE_COMMAND_ID } = pluginModule;
 
 /* --------------------------------------------------------------- fixtures */
 
-function createLogger(): PluginLogger & { info: ReturnType<typeof vi.fn> } {
+const ALL_PERMISSIONS: PluginPermission[] = [
+  'editor.read',
+  'editor.write',
+  'ui.contribute',
+];
+
+function createLogger(): PluginLogger & {
+  info: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+} {
   return {
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  } as PluginLogger & { info: ReturnType<typeof vi.fn> };
+  } as PluginLogger & { info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 }
 
 function createSettings(values: Record<string, unknown> = {}): PluginSettings {
@@ -60,31 +71,84 @@ function createSettings(values: Record<string, unknown> = {}): PluginSettings {
   return settings;
 }
 
+/**
+ * An editor that enforces the permissions the way the host does it, so the
+ * plugin is tested against the real enforcement rules.
+ */
+function createEditor(cursor = { from: 3, to: 3 }, permissions: PluginPermission[] = ALL_PERMISSIONS) {
+  const insertAt = vi.fn();
+  const insert = vi.fn();
+  const need = (permission: PluginPermission): void => {
+    if (!permissions.includes(permission)) {
+      throw new PluginPermissionError('insert-template', permission);
+    }
+  };
+  const editor: PluginEditor = {
+    getText: () => {
+      need('editor.read');
+      return 'abc';
+    },
+    getSelection: () => {
+      need('editor.read');
+      return '';
+    },
+    getCursor: () => {
+      need('editor.read');
+      return cursor;
+    },
+    insert: (text: string) => {
+      need('editor.write');
+      insert(text);
+    },
+    insertAt: (text: string, from: number, to: number) => {
+      need('editor.write');
+      insertAt(text, from, to);
+    },
+    replaceSelection: vi.fn(),
+    focus: vi.fn(),
+    openSearch: vi.fn(),
+    getPath: () => 'notes/a.md',
+    onChange: () => () => undefined,
+    onSelectionChange: () => () => undefined,
+  };
+  return { editor, insert, insertAt };
+}
+
 interface Harness {
   ctx: PluginContext;
   commands: Map<string, PluginCommand>;
-  logger: PluginLogger & { info: ReturnType<typeof vi.fn> };
+  logger: PluginLogger & { info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   deactivateCallbacks: Array<() => void>;
+  /** Opens (or closes) the note in the editor after the activation. */
+  setEditor(editor: PluginEditor | null): void;
 }
 
 function createHarness(options: {
   editor?: PluginEditor | null;
   settings?: Record<string, unknown>;
+  permissions?: PluginPermission[];
 } = {}): Harness {
   const commands = new Map<string, PluginCommand>();
   const logger = createLogger();
   const deactivateCallbacks: Array<() => void> = [];
-  const editor = options.editor === undefined ? null : options.editor;
+  const permissions = options.permissions ?? ALL_PERMISSIONS;
+  // The editor of the application is live: it may appear after the activation.
+  let currentEditor: PluginEditor | null = options.editor === undefined ? null : options.editor;
 
   const ctx: PluginContext = {
     id: 'insert-template',
     version: '1.0.0',
     logger,
-    permissions: ['editor.write'],
+    permissions,
     api: {} as PluginContext['api'],
-    editor,
+    get editor(): PluginEditor | null {
+      return currentEditor;
+    },
     settings: createSettings(options.settings ?? {}),
     registerCommand: (cmd: PluginCommand) => {
+      if (!permissions.includes('ui.contribute')) {
+        throw new PluginPermissionError('insert-template', 'ui.contribute');
+      }
       commands.set(cmd.id, cmd);
       return () => {
         commands.delete(cmd.id);
@@ -96,31 +160,24 @@ function createHarness(options: {
     registerToolbarItem: () => () => undefined,
     registerSettingsSection: () => () => undefined,
     on: () => () => undefined,
+    onEditor: (cb: (editor: PluginEditor | null) => void) => {
+      cb(currentEditor);
+      return () => undefined;
+    },
     onDeactivate: (cb: () => void) => {
       deactivateCallbacks.push(cb);
     },
   };
 
-  return { ctx, commands, logger, deactivateCallbacks };
-}
-
-function createEditor(cursor = { from: 3, to: 3 }) {
-  const insertAt = vi.fn();
-  const insert = vi.fn();
-  const editor: PluginEditor = {
-    getText: () => 'abc',
-    getSelection: () => '',
-    getCursor: () => cursor,
-    insert,
-    insertAt,
-    replaceSelection: vi.fn(),
-    focus: vi.fn(),
-    openSearch: vi.fn(),
-    getPath: () => 'notes/a.md',
-    onChange: () => () => undefined,
-    onSelectionChange: () => () => undefined,
+  return {
+    ctx,
+    commands,
+    logger,
+    deactivateCallbacks,
+    setEditor: (editor: PluginEditor | null) => {
+      currentEditor = editor;
+    },
   };
-  return { editor, insert, insertAt };
 }
 
 /* ----------------------------------------------------------------- tests */
@@ -132,7 +189,7 @@ describe('insert-template: manifest', () => {
     expect(validation.ok).toBe(true);
   });
 
-  it('declares the expected identity and permissions', () => {
+  it('declares the expected identity', () => {
     expect(insertTemplateManifest.id).toBe('insert-template');
     expect(insertTemplateManifest.name).toBe('Insert Template');
     expect(insertTemplateManifest.version).toBe('1.0.0');
@@ -140,7 +197,14 @@ describe('insert-template: manifest', () => {
     expect(insertTemplateManifest.minApiVersion).toBe('1.0.0');
     expect(insertTemplateManifest.author).toBe('Noto');
     expect(insertTemplateManifest.description).toBeTruthy();
-    expect(insertTemplateManifest.permissions).toEqual(['editor.write']);
+  });
+
+  it('declares the permissions it actually uses', () => {
+    // The command needs `ui.contribute`, the cursor needs `editor.read` and
+    // the insertion needs `editor.write`.
+    expect(insertTemplateManifest.permissions).toEqual(
+      expect.arrayContaining(['ui.contribute', 'editor.read', 'editor.write']),
+    );
   });
 
   it('declares the template setting with a default value', () => {
@@ -189,6 +253,23 @@ describe('insert-template: command', () => {
     expect(insertAt).toHaveBeenCalledWith(DEFAULT_TEMPLATE, 3, 3);
   });
 
+  it('uses the editor that is open at the moment of the call', async () => {
+    const plugin = createInsertTemplatePlugin();
+    const { ctx, commands, setEditor } = createHarness({ editor: null });
+
+    // The plugin is activated without an open note.
+    plugin.activate(ctx);
+
+    // The note is opened later: the live editor of the context must be used.
+    const { editor, insertAt } = createEditor({ from: 5, to: 5 });
+    setEditor(editor);
+
+    await commands.get(INSERT_TEMPLATE_COMMAND_ID)?.run();
+
+    expect(insertAt).toHaveBeenCalledTimes(1);
+    expect(insertAt).toHaveBeenCalledWith(DEFAULT_TEMPLATE, 5, 5);
+  });
+
   it('uses the template from the settings instead of the default', async () => {
     const plugin = createInsertTemplatePlugin();
     const { editor, insertAt } = createEditor({ from: 0, to: 0 });
@@ -223,6 +304,25 @@ describe('insert-template: command', () => {
     plugin.activate(ctx);
     await expect(commands.get(INSERT_TEMPLATE_COMMAND_ID)?.run()).resolves.toBeUndefined();
     expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not insert anything without the editor.write permission', async () => {
+    const plugin = createInsertTemplatePlugin();
+    const { editor, insertAt } = createEditor({ from: 0, to: 0 }, ['editor.read', 'ui.contribute']);
+    const { ctx, commands, logger } = createHarness({ editor });
+
+    plugin.activate(ctx);
+    await expect(commands.get(INSERT_TEMPLATE_COMMAND_ID)?.run()).resolves.toBeUndefined();
+
+    expect(insertAt).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('cannot register the command without the ui.contribute permission', () => {
+    const plugin = createInsertTemplatePlugin();
+    const { ctx } = createHarness({ permissions: ['editor.read', 'editor.write'] });
+
+    expect(() => plugin.activate(ctx)).toThrow(PluginPermissionError);
   });
 
   it('does not execute the command after the deactivation', async () => {

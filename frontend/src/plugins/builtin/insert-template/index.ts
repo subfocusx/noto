@@ -10,6 +10,14 @@
 //     application, so the autosave works as usual);
 //   * `ctx.logger`          — reports everything that cannot be done.
 //
+// The permissions of the manifest are enforced by the host, so the plugin
+// declares exactly what it uses: `ui.contribute` for the command,
+// `editor.read` for the cursor position and `editor.write` for the insertion.
+//
+// The editor is read through the live getter of the context inside the
+// command, so the plugin also works when it was activated before the first
+// note was opened.
+//
 // Boundary rule R3 allows a built-in plugin to use only
 // `src/plugins/contract.ts`, so the whole plugin lives in this one file.
 import type { Plugin, PluginContext, PluginEditor, PluginManifest } from '../../contract';
@@ -46,8 +54,10 @@ export const insertTemplateManifest: PluginManifest = {
   description:
     'Вставляет настраиваемый Markdown-шаблон в активную заметку по позиции курсора.',
   author: 'Noto',
-  // The plugin only writes text into the editor of the open note.
-  permissions: ['editor.write'],
+  // The plugin contributes a command (`ui.contribute`), reads the cursor
+  // position of the editor (`editor.read`) and writes the template into it
+  // (`editor.write`).
+  permissions: ['editor.read', 'editor.write', 'ui.contribute'],
   settings: [
     {
       key: TEMPLATE_SETTING_KEY,
@@ -89,11 +99,27 @@ function insertAtCursor(editor: PluginEditor, text: string): void {
 }
 
 /**
+ * True when the error is a permission error of the plugin platform.
+ *
+ * The class itself cannot be imported as a value (a built-in plugin may only
+ * use the contract as a type-only module), so the error is recognized by its
+ * name.
+ */
+function isPermissionError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'PluginPermissionError';
+}
+
+/**
  * Runs the command.
+ *
+ * The editor is taken from the live getter of the context, so the command
+ * also works when the plugin was activated before the first note was opened.
  *
  * Never throws: every failure is logged, the application is not disturbed.
  */
 async function runInsertTemplate(ctx: PluginContext): Promise<void> {
+  // The editor is live: it is the editor that is open NOW, not the one that
+  // was open when the plugin was activated.
   const editor = ctx.editor;
   if (!editor) {
     // No note is open: there is nothing to insert into. The contract has no
@@ -109,6 +135,10 @@ async function runInsertTemplate(ctx: PluginContext): Promise<void> {
     insertAtCursor(editor, template);
     ctx.logger.debug('шаблон вставлен в заметку');
   } catch (err) {
+    if (isPermissionError(err)) {
+      ctx.logger.error('шаблон не вставлен: недостаточно прав', err);
+      return;
+    }
     ctx.logger.error('не удалось вставить шаблон в заметку', err);
   }
 }

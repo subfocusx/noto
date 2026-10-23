@@ -27,6 +27,35 @@ E:\Code\Software\noto
 
 Root-owned packages are frozen: read them, import them, but do not modify them.
 
+### Phase 2 ownership (plugin platform)
+
+Phase 2 added a plugin platform. The following files belong to it and are
+owned by the plugin-platform component; the integration layer (`App.tsx`) is
+owned by root.
+
+```
+frontend/src/plugins/contract.ts          public plugin contract (types + PLUGIN_API_VERSION)
+frontend/src/plugins/manifest.ts          manifest validation, version compatibility
+frontend/src/plugins/registry.ts          registry of built-in plugins, lifecycle states
+frontend/src/plugins/host.ts              activation, ownership of registrations
+frontend/src/plugins/loader.ts            static list of the built-in plugins
+frontend/src/plugins/builtin/<id>/        the built-in plugins themselves
+frontend/src/core/events/eventBus.ts      typed event bus (plugin events)
+frontend/src/core/commands/commandRegistry.ts  command registry (plugin commands)
+frontend/src/core/settings/settingsStore.ts    plugin settings storage (IndexedDB `noto-plugins`)
+frontend/src/core/diagnostics/logger.ts   scoped logger `[noto:<scope>]`
+frontend/src/core/api/pluginApi.ts        the only HTTP facade for plugins
+frontend/src/components/PluginSlots.tsx   contribution points (sidebar, panels, toolbar, context menu, commands)
+frontend/src/components/PluginManagerPanel.tsx  plugin management screen
+frontend/scripts/check-boundaries.mjs     architectural boundary rules R1-R8
+backend/internal/notes/noteapi.go        backend extension point: NoteService, NoteEvent, Hook, AddHook
+docs/PLUGIN_API.md, docs/PLUGIN_SECURITY.md, docs/PLUGIN_DEVELOPMENT.md   plugin documentation
+```
+
+Built-in plugins may import `frontend/src/plugins/contract.ts` and their own
+files only; the rules are enforced by `npm run check:boundaries`
+(`frontend/scripts/check-boundaries.mjs`).
+
 Toolchain: Go is installed at `E:\Code\Software\noto\.tools\goroot\go\bin\go.exe`
 (equivalent to `go` on PATH). Node 24 + npm 11 are on PATH.
 Always run Go commands with `$go = "E:\Code\Software\noto\.tools\goroot\go\bin\go.exe"; & $go ...`
@@ -233,6 +262,16 @@ contents. Log method, path (API path), status, duration.
  hand written service worker.
 * All HTTP access goes through `frontend/src/api/client.ts` with a single
   `request()` helper that throws a typed error carrying `code` and `message`.
+* Plugin facade: plugins never call `fetch` and never import
+  `frontend/src/api/client.ts` directly. The only HTTP path available to a
+  plugin is `frontend/src/core/api/pluginApi.ts` (`createPluginApi()`), which
+  delegates to `frontend/src/api/{notes,tree,search}.ts` and therefore to
+  `frontend/src/api/client.ts`. A direct `fetch` from a plugin is forbidden by
+  the boundary rules (R8) and is not part of the plugin contract.
+* Plugins are built-in code only: there is no dynamic `import()`, no
+  `import.meta.glob`, no remote code loading and no `eval` in
+  `frontend/src/plugins/**`. The public plugin contract lives in
+  `frontend/src/plugins/contract.ts`; see `docs/PLUGIN_API.md`.
 * Editor: CodeMirror 6 with markdown language, one editor instance only,
   recreated or reconfigured when the note changes.
 * Preview: `marked` + `dompurify` (sanitize the rendered HTML; never inject raw
@@ -245,6 +284,10 @@ contents. Log method, path (API path), status, duration.
 * PWA: `manifest.webmanifest` with icons 192/512, `display: standalone`,
   theme and background colors, a service worker with an offline app shell and
   a network-first API strategy with a cache fallback for `GET` requests.
+  Updated in phase 2: every `/api/*` route is served `network-only` — private
+  API responses are never written to a cache and an offline request fails with
+  an explicit `network_error` envelope instead of a stale body
+  (`frontend/public/sw.js`); only static assets and the app shell are cached.
 * Responsive: CSS with a mobile breakpoint at 820px; sidebar becomes a drawer;
   touch targets at least 44px.
 * Dark and light themes via `prefers-color-scheme` and a manual toggle stored

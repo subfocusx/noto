@@ -716,3 +716,243 @@ body {
     min-height: 44px;
   }
 }
+
+/* ------------------------------------------------------------------ plugins
+   The contribution points of the plugins. Every class of this section is
+   prefixed with `.noto-plugin-`, so the styles of the plugins cannot collide
+   with the styles of the application. */
+
+.noto-plugin-sidebar {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noto-plugin-sidebar-item {
+  margin: 0;
+}
+
+.noto-plugin-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.noto-plugin-button:hover {
+  background: var(--editor-active-line);
+}
+
+.noto-plugin-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.noto-plugin-icon {
+  font-size: 14px;
+}
+
+.noto-plugin-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noto-plugin-shortcut {
+  font-family: var(--mono-font);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.noto-plugin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+}
+
+.noto-plugin-sidebar-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.noto-plugin-panels {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  margin: 8px 0;
+  flex: none;
+  width: min(320px, 90vw);
+  overflow: auto;
+}
+
+.noto-plugin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.noto-plugin-tabs button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.noto-plugin-tabs button.active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.noto-plugin-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.noto-plugin-tabpanel {
+  padding: 10px;
+}
+
+.noto-plugin-context-menu,
+.noto-plugin-commands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.noto-plugin-error {
+  padding: 6px 8px;
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.noto-plugin-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.noto-plugin-trust-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.noto-plugin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.noto-plugin-list-item {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.noto-plugin-list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.noto-plugin-name {
+  font-weight: 600;
+}
+
+.noto-plugin-version,
+.noto-plugin-author,
+.noto-plugin-description {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.noto-plugin-description,
+.noto-plugin-author {
+  margin: 4px 0 0;
+}
+
+.noto-plugin-status {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.noto-plugin-status-active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.noto-plugin-status-failed {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.noto-plugin-status-incompatible {
+  color: var(--muted);
+}
+
+.noto-plugin-error-text {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+  font-family: var(--mono-font);
+}
+
+.noto-plugin-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.noto-plugin-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}

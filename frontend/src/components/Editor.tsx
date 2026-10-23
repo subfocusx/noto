@@ -7,12 +7,39 @@ import { openSearchPanel, search, searchKeymap } from '@codemirror/search';
 import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, placeholder } from '@codemirror/view';
 
+/** A range of the document (CodeMirror positions). */
+export interface EditorRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * The imperative handle of the editor.
+ *
+ * The first five methods are the original API; they are kept unchanged so
+ * that the existing application code keeps working. The rest is the
+ * extension point for plugins.
+ */
 export interface EditorHandle {
   getText(): string;
   setText(text: string): void;
   insert(text: string): void;
   focus(): void;
   openSearch(): void;
+  /** The text inside the main selection. */
+  getSelection(): string;
+  /** The main selection range. */
+  getCursor(): EditorRange;
+  /** Replaces the range `[from, to)` with `text` and reports the change. */
+  insertAt(text: string, from: number, to: number): void;
+  /** Replaces the current selection with `text` and reports the change. */
+  replaceSelection(text: string): void;
+  /** Subscribes to document changes; returns the unsubscribe function. */
+  onChange(cb: (text: string) => void): () => void;
+  /** Subscribes to selection changes; returns the unsubscribe function. */
+  onSelectionChange(cb: (sel: EditorRange) => void): () => void;
+  /** Replaces the CodeMirror extensions contributed by plugins. */
+  setExtensions(extensions: Extension[]): void;
 }
 
 interface EditorProps {
@@ -88,9 +115,16 @@ export function MarkdownEditor(props: EditorProps) {
   const pathRef = useRef(props.path);
   const languagesCompartment = useRef<Compartment | null>(null);
   const languagesRequested = useRef(false);
+  /** Holds the CodeMirror extensions contributed by plugins. */
+  const pluginCompartment = useRef<Compartment | null>(null);
+  const pluginExtensions = useRef<Extension[]>([]);
+  /** Subscribers of the plugin facing events. */
+  const changeSubscribers = useRef(new Set<(text: string) => void>());
+  const selectionSubscribers = useRef(new Set<(sel: EditorRange) => void>());
   /** Set while the editor state is replaced, so no change is reported. */
   const suppress = useRef(false);
   if (!languagesCompartment.current) languagesCompartment.current = new Compartment();
+  if (!pluginCompartment.current) pluginCompartment.current = new Compartment();
 
   onChange.current = props.onChange;
   onSave.current = props.onSave;
@@ -115,42 +149,73 @@ export function MarkdownEditor(props: EditorProps) {
     });
   };
 
-  useEffect(() => {
-    if (!host.current) return;
-    const extensions: Extension[] = [
-      lineNumbers(),
-      history(),
-      languagesCompartment.current!.of(markdown({ base: markdownLanguage })),
-      search({ top: true }),
-      keymap.of([
-        {
-          key: 'Mod-s',
-          preventDefault: true,
-          run: () => {
-            onSave.current();
-            return true;
-          },
+  /**
+   * Builds the extension set of the editor.
+   *
+   * The array is not frozen in the closure of the mount effect any more: it
+   * is rebuilt whenever the extensions of a plugin change, so the same
+   * builder can be used for the initial state and for the state that is
+   * created when the note is switched.
+   */
+  const buildExtensions = (): Extension[] => [
+    lineNumbers(),
+    history(),
+    languagesCompartment.current!.of(markdown({ base: markdownLanguage })),
+    /** The extensions of the plugins; empty by default. */
+    pluginCompartment.current!.of(pluginExtensions.current),
+    search({ top: true }),
+    keymap.of([
+      {
+        key: 'Mod-s',
+        preventDefault: true,
+        run: () => {
+          onSave.current();
+          return true;
         },
-        { key: 'Mod-b', preventDefault: true, run: toggleWrap('**') },
-        { key: 'Mod-i', preventDefault: true, run: toggleWrap('*') },
-        ...searchKeymap,
-        ...defaultKeymap,
-        ...historyKeymap,
-      ]),
-      placeholder(props.placeholderText ?? 'Write something…'),
-      editorTheme,
-      EditorView.lineWrapping,
-      EditorView.updateListener.of((update) => {
-        if (!update.docChanged) return;
+      },
+      { key: 'Mod-b', preventDefault: true, run: toggleWrap('**') },
+      { key: 'Mod-i', preventDefault: true, run: toggleWrap('*') },
+      ...searchKeymap,
+      ...defaultKeymap,
+      ...historyKeymap,
+    ]),
+    placeholder(props.placeholderText ?? 'Write something…'),
+    editorTheme,
+    EditorView.lineWrapping,
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
         const text = update.state.doc.toString();
         valueRef.current = text;
         ensureCodeLanguages(text);
-        if (suppress.current) return;
         const external = update.transactions.some((tr) => tr.annotation(EXTERNAL) === true);
-        if (external) return;
-        onChange.current(text);
-      }),
-    ];
+        // The application only hears about changes that came from the user,
+        // the plugins hear about every change of the document.
+        if (!external && !suppress.current) onChange.current(text);
+        for (const cb of [...changeSubscribers.current]) {
+          try {
+            cb(text);
+          } catch {
+            /* a broken subscriber must not break the editor */
+          }
+        }
+      }
+      if (update.selectionSet) {
+        const main = update.state.selection.main;
+        const range: EditorRange = { from: main.from, to: main.to };
+        for (const cb of [...selectionSubscribers.current]) {
+          try {
+            cb(range);
+          } catch {
+            /* a broken subscriber must not break the editor */
+          }
+        }
+      }
+    }),
+  ];
+
+  useEffect(() => {
+    if (!host.current) return;
+    const extensions = buildExtensions();
     extensionsRef.current = extensions;
 
     // Only the content of the current note may be shown.
@@ -184,10 +249,63 @@ export function MarkdownEditor(props: EditorProps) {
         openSearchPanel(instance);
         instance.focus();
       },
+      getSelection: () => {
+        const { from, to } = instance.state.selection.main;
+        return instance.state.sliceDoc(from, to);
+      },
+      getCursor: () => {
+        const { from, to } = instance.state.selection.main;
+        return { from, to };
+      },
+      insertAt: (text: string, from: number, to: number) => {
+        const max = instance.state.doc.length;
+        const start = Math.max(0, Math.min(from, max));
+        const end = Math.max(start, Math.min(to, max));
+        const cursor = start + text.length;
+        // No `EXTERNAL` annotation: the application must see the change so
+        // that the autosave and the draft work as usual.
+        instance.dispatch({
+          changes: { from: start, to: end, insert: text },
+          selection: { anchor: cursor },
+        });
+      },
+      replaceSelection: (text: string) => {
+        const { from, to } = instance.state.selection.main;
+        const cursor = from + text.length;
+        instance.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: cursor },
+        });
+      },
+      onChange: (cb: (text: string) => void) => {
+        changeSubscribers.current.add(cb);
+        return () => {
+          changeSubscribers.current.delete(cb);
+        };
+      },
+      onSelectionChange: (cb: (sel: EditorRange) => void) => {
+        selectionSubscribers.current.add(cb);
+        return () => {
+          selectionSubscribers.current.delete(cb);
+        };
+      },
+      setExtensions: (next: Extension[]) => {
+        pluginExtensions.current = next;
+        // The extensions of the view are reconfigured, the document and the
+        // history of the note are kept.
+        instance.dispatch({
+          effects: pluginCompartment.current!.reconfigure(next),
+        });
+        // A state that is created later (note switch) uses the same set.
+        extensionsRef.current = buildExtensions();
+      },
     };
     handleCallback.current?.(handle);
 
     return () => {
+      // The listeners of the destroyed view must not survive it.
+      changeSubscribers.current.clear();
+      selectionSubscribers.current.clear();
       instance.destroy();
       view.current = null;
     };

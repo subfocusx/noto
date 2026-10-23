@@ -43,8 +43,9 @@ Noto — персональное PWA-приложение для Markdown-за�
    Браузер / PWA          │  frontend/src (Preact + TypeScript + Vite)        │
                           │                                                   │
                           │  main.tsx → App.tsx (225 LOC, только композиция)    │
-                          │      ├── core/store/{appStore,hooks,types}         │
+                          │      ├── core/store/{appStore,actions,state,types,hooks}         │
                           │      │      └── actions → api/* → fetch (http.ts)  │
+                          │      ├── plugins/{contract,manifest} (контракт)    │
                           │      ├── components/{Sidebar,Editor,Preview,…}     │
                           │      └── lib/{autosave,drafts,markdown,wiki,tree,   │
                           │               debounce,errors,format,ordering}     │
@@ -179,6 +180,13 @@ DeleteAttachment
 * **Типизированные ошибки** — `errors.go`: коды (`:11-23`), sentinels
   (`:27-39`), `Error` (`:44-53`), `Code` (`:85`), `Message` (`:120`),
   `CurrentContent` (`:133`).
+* **Точки расширения домена** — `noteapi.go` (125 LOC): узкий интерфейс
+  `NoteService` (`:79-85`) для потребителей-плагинов, типы событий
+  `NoteOp` (`:12-32`) и `NoteEvent` (`:36-47`), тип хука `Hook` (`:53`),
+  регистрация `AddHook` (`:93-100`), вызов `fireHooks` (`:108-122`) с
+  восстановлением паники (`:125-135`). Хуки вызываются после освобождения
+  блокировок, когда диск, индекс и метаданные согласованы
+  (`backend/internal/notes/notes.go:306-316`).
 
 ### 3.3. `internal/sqlitestore`
 
@@ -211,11 +219,19 @@ DeleteAttachment
 
 | Модуль | LOC (всего) | Назначение |
 |---|---|---|
-| `src/core/store/appStore.ts` | 485 (552) | Единственный источник состояния приложения: `AppState`, 24 действия, автосохранение, черновики, диалоги, тема, онлайн-статус |
+| `src/core/store/actions.ts` | 370 (399) | 30 действий приложения: дерево, заметка, автосохранение, черновики, диалоги, тема, баннер |
+| `src/core/store/state.ts` | 95 (109) | Состояние: начальный снимок, `update`, `patchNote`, `subscribe`, `getSnapshot`, `resetState`, внутренние ссылки |
 | `src/core/store/types.ts` | 71 (79) | Типы состояния: `TreeState`, `NoteState`, `UiState`, `EnvState`, `DialogState`, `AppState` |
+| `src/core/store/appStore.ts` | 88 (93) | Фасад стора: подписка, жизненный цикл (`start`/`stop`/`reset`), ссылка на `actions` |
 | `src/core/store/hooks.ts` | 16 (18) | Привязка стора к Preact: `useSyncExternalStore` (`hooks.ts:11-13`), `useAppActions` (`:16-18`) |
+| `src/core/events/eventBus.ts` | 89 (96) | Шина событий приложения (в работе: хост плагинов) |
+| `src/core/commands/commandRegistry.ts` | 80 (87) | Реестр команд (в работе: хост плагинов) |
+| `src/core/settings/settingsStore.ts` | 197 (211) | Хранилище настроек (в работе: хост плагинов) |
+| `src/core/diagnostics/logger.ts` | 37 (41) | Логирование для плагинов (в работе) |
 | `src/App.tsx` | 203 (225) | Оболочка приложения: подписка на стор, горячие клавиши, композиция панелей, производные `useMemo` |
 | `src/main.tsx` | 12 (14) | Точка входа: `render(<App/>)`, подключение `styles.css` |
+| `src/plugins/contract.ts` | 207 (229) | Публичный контракт плагинов: версия API, разрешения, манифест, интерфейсы API и точек вклада в UI, карта событий |
+| `src/plugins/manifest.ts` | 158 (179) | Валидация манифеста (`validateManifest`), список разрешений, проверка совместимости версий |
 | `src/api/http.ts` | 97 (106) | Транспорт: единственная точка `fetch` (`:70`), `ApiError` (`:8`), разбор конверта ошибок (`:46`), `jsonInit` (`:100`) |
 | `src/api/{notes,tree,search,transfer,trash,attachments,health}.ts` | 6–34 каждый | Тонкие обёртки над `request()`; 23 функции |
 | `src/api/client.ts` | 14 (14) | Фасад: реэкспорт функций `src/api/*` для совместимости импортов |
@@ -252,7 +268,7 @@ DeleteAttachment
 
 ```
 Sidebar.onSelect(path)
-  → App.tsx:134  → actions.openNote(path)   frontend/src/core/store/appStore.ts (openNote)
+  → App.tsx:134  → actions.openNote(path)   frontend/src/core/store/actions.ts:113
       ├─ autosave.flush() (если были правки)
       ├─ сброс содержимого ('' и contentPath = null)
       ├─ getNote(path)                       frontend/src/api/notes.ts:5
@@ -270,7 +286,7 @@ Sidebar.onSelect(path)
 
 ```
 CodeMirror onChange
-  → App.tsx:158  → actions.editContent(text)   frontend/src/core/store/appStore.ts
+  → App.tsx:158  → actions.editContent(text)   frontend/src/core/store/actions.ts:161
       ├─ patchNote({content, dirty:true})
       ├─ putDraft({path, content, revision, updatedAt})  → IndexedDB
       └─ autosave.markDirty(path, text, revision)  frontend/src/lib/autosave.ts
@@ -278,11 +294,11 @@ CodeMirror onChange
                 → save(path, content, revision)  → saveNote  frontend/src/api/notes.ts:9
                      → PUT /api/notes
                          → api.handlePutNote     backend/internal/api/handlers_notes.go
-                             → notes.Write       backend/internal/notes/notes.go:184
-                                 1) проверка ревизии            notes.go:225-244
-                                 2) запись на диск               notes.go:245
-                                 3) обновление индекса          notes.go:268
-                                 4) запись метаданных           notes.go:271
+                             → notes.Write       backend/internal/notes/notes.go:203
+                                 1) проверка ревизии            notes.go:240-271
+                                 2) запись на диск               notes.go:272
+                                 3) обновление индекса          notes.go:295
+                                 4) запись метаданных           notes.go:298
 ```
 
 Порядок «диск → индекс → метаданные» зафиксирован в коде и является
@@ -348,15 +364,15 @@ AttachmentsPanel → uploadAttachment(file, notePath)  frontend/src/api/attachme
 ### 5.6. Корзина
 
 ```
-Delete → notes.Delete                backend/internal/notes/trash.go:17
-   ├─ блокировка пути                trash.go:25
-   ├─ movePath(abs, <trash>/<randomID>/<rel>)  trash.go:37-41
-   ├─ collectTrashEntries — обход поддерева   trash.go:65
-   └─ для каждой записи: store.PutTrash + store.DeleteNote + removeFromIndex  trash.go:46-52
+Delete → notes.Delete                backend/internal/notes/trash.go:18
+   ├─ блокировка пути                trash.go:26
+   ├─ movePath(abs, <trash>/<randomID>/<rel>)  trash.go:45
+   ├─ collectTrashEntries — обход поддерева   trash.go:89
+   └─ для каждой записи: store.PutTrash + store.DeleteNote + removeFromIndex  trash.go:56-62
 
-Список:        GET /api/trash → notes.Trash     trash.go:105
-Восстановление: POST /api/notes/restore → notes.Restore  trash.go:128
-   ├─ блокировка исходного пути       trash.go:146
+Список:        GET /api/trash → notes.Trash     trash.go:129
+Восстановление: POST /api/notes/restore → notes.Restore  trash.go:152
+   ├─ блокировка исходного пути       trash.go:171
    ├─ movePath обратно в notes-корень
    └─ удаление записи корзины
 ```
@@ -386,17 +402,17 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
   (`NoteState`: path/content/contentPath/revision/status/dirty/saveError) +
   `dialog` (`DialogState`) + `ui` (`UiState`: mode/expanded/searchOpen/drawerOpen) +
   `env` (`EnvState`: online/theme) + `draftOffer` + `banner`.
-* **Хранилище**: один объект состояния, подписчики — `Set<() => void>`
-  (`appStore.ts:83`), обновление через `update(recipe)`
-  (`appStore.ts:86`) с иммутабельным обновлением; `patchNote` (`:93`)
-  обновляет только срез заметки.
-* **Действия**: 24 метода в `AppActions` (`appStore.ts:488-513`) —
-  работа с деревом, заметкой, автосохранением, черновиками, диалогами,
-  темой, баннером. Ссылка стабильна (`appStore.ts:515`).
+* **Хранилище** (`frontend/src/core/store/state.ts`): один объект состояния,
+  подписчики — `Set<() => void>` (`state.ts:90`), обновление через
+  `update(recipe)` (`state.ts:72`) с иммутабельным обновлением; `patchNote`
+  (`state.ts:85`) обновляет только срез заметки; `getSnapshot` (`state.ts:98`).
+* **Действия**: 30 методов в `AppActions` (`frontend/src/core/store/actions.ts:347-373`),
+  реализация — `actions` (`actions.ts:374`): дерево, заметка, автосохранение,
+  черновики, диалоги, тема, баннер. Ссылка стабильна.
 * **Жизненный цикл**: `appStore.start()` / `appStore.stop()`
-  (`appStore.ts:440`, `:476`), вызываются из `App.tsx:31-34`;
-  `start` поднимает автосохранение, слушатели `online`/`theme`, первичную
-  загрузку дерева.
+  (`frontend/src/core/store/appStore.ts:29`, `:65`), вызываются из
+  `App.tsx:31-34`; `start` поднимает автосохранение, слушатели
+  `online`/`offline`, первичную загрузку дерева.
 * **Производные данные** остаются в компонентах: дерево
   (`App.tsx:60-63`), резолвер wiki-ссылок (`:65`), список папок (`:67-70`).
 * **Локальное персистентное состояние**: черновики в IndexedDB
@@ -419,26 +435,26 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
   (глубина, путь); `acquireLocks` (`locks.go:49`) сортирует ключи и берёт их
   в этом порядке → дедлоки исключены.
 * Операции, берущие блокировки:
-  * `Write` — `lockKeys(norm)` (`backend/internal/notes/notes.go:198`),
+  * `Write` — `lockKeys(norm)` (`backend/internal/notes/notes.go:217`),
   * `CreateFolder` / `CreateFile` (`notes.go:26`, `:66`),
-  * `Delete` (`backend/internal/notes/trash.go:25`),
-  * `Restore` (`trash.go:146`),
+  * `Delete` (`backend/internal/notes/trash.go:26`),
+  * `Restore` (`trash.go:171`),
   * `relocate` — четыре группы ключей: источник, цель, родитель цели,
-    родитель источника (`backend/internal/notes/notes_move.go:84`),
+    родитель источника (`backend/internal/notes/notes_move.go:89`),
   * `importOne` (`backend/internal/notes/import_files.go:108`).
 * Карта `moved` (`backend/internal/notes/service.go:38-39`): `markMoved`
   (`locks.go:80`), `wasMoved` (`locks.go:104`, TTL 5 минут). Поздняя запись
   по перемещённому пути возвращает `conflict`, а не создаёт файл заново
-  (`backend/internal/notes/notes.go:217-222`).
+  (`backend/internal/notes/notes.go:240-249`).
 * Хранилище обязано быть безопасно при конкурентном использовании
   (`backend/internal/port/port.go:13-14`).
 
 ### 7.2. Конфликт ревизии
 
 * Клиент отправляет `revision`; `0` означает «записать принудительно»
-  (`backend/internal/notes/notes.go:182-183`).
+  (`backend/internal/notes/notes.go:203, :260-271`).
 * При расхождении — ошибка `revision_conflict` с текущим серверным
-  содержимым в `current` (`notes.go:233-244`,
+  содержимым в `current` (`notes.go:260-271`,
   `backend/internal/notes/errors.go:44-53`,
   `backend/internal/api/errors.go:59-61`).
 * Фронтенд хранит черновик до и после запроса
@@ -450,15 +466,15 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * Запись атомарна на уровне файла (temp + `rename`,
   `backend/internal/notes/fsatomic.go:22`), но не транзакционна между
   файлом, индексом и метаданными: шаги диск → индекс → метаданные
-  (`backend/internal/notes/notes.go:245`, `:268`, `:271`). Сбой на шаге 3
+  (`backend/internal/notes/notes.go:272`, `:295`, `:298). Сбой на шаге 3
   оставляет файл новым, а ревизию — прежней.
 * Компенсация — `Reindex` (`backend/internal/notes/search.go:66`): полный
   обход notes-корня, перезапись метаданных и индекса. Вызывается при старте
   сервера (`backend/cmd/noto/main.go:65-69`) и доступен как
   `POST /api/search/reindex`.
-* `rekey` при перемещении (`backend/internal/notes/notes_move.go:151`)
+* `rekey` при перемещении (`backend/internal/notes/notes_move.go:175`)
   перезаписывает индекс заново; ошибки `store.MoveNote` и `store.DeleteNote`
-  в нём намеренно игнорируются (`notes_move.go:152-154`).
+  в нём намеренно игнорируются (`notes_move.go:175-178`).
 * `sqlitestore` хранит два индекса: `notes_fts` (теневой, всегда) и
   `notes_fts_v` (FTS5) — при отсутствии FTS5 теневой таблицы достаточно для
   LIKE-фолбэка.
@@ -484,9 +500,11 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 | `porttest.Run` | `backend/internal/port/porttest/porttest.go:67` | Переиспользуемый conformance-набор для любой реализации `port.Store` |
 | `model.*` | `backend/internal/model/model.go` | Контракт JSON; изменение = ломающее изменение API |
 | `notes.Error` + коды | `backend/internal/notes/errors.go:11-53` | Новые машинно-читаемые ошибки (требуют правки `statusFor`) |
+| `notes.NoteService` | `backend/internal/notes/noteapi.go:79-85` | Узкий интерфейс «прочитать/записать одну заметку» для потребителей-плагинов |
+| `notes.AddHook` / `NoteEvent` | `backend/internal/notes/noteapi.go:53`, `:93-100` | Событийная точка расширения домена: «после создания/записи/переименования/перемещения/удаления/восстановления» |
 | Маршруты `api` | `backend/internal/api/api.go:46-68` | Новые эндпоинты; каждый — отдельный хендлер |
 | `request()` | `frontend/src/api/http.ts:67-91` | Единая точка для аутентификации, ретраев, трассировки |
-| `AppActions` | `frontend/src/core/store/appStore.ts:488-513` | Единая точка входа для новых пользовательских намерений; слой «компоненты → стор» |
+| `AppActions` | `frontend/src/core/store/actions.ts:347-373` | Единая точка входа для новых пользовательских намерений; слой «компоненты → стор» |
 | `AppState` | `frontend/src/core/store/types.ts` | Единый срез состояния, пригодный для передачи плагин-хосту (комментарий `types.ts:1-3`) |
 | `EditorHandle` | `frontend/src/components/Editor.tsx:10-18` | Управление редактором извне |
 | `renderSafeMarkdown` | `frontend/src/lib/markdown.ts` | Подключение новых расширений Markdown |
@@ -494,21 +512,33 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 | `createAutosave` | `frontend/src/lib/autosave.ts:43` | Альтернативная политика автосохранения |
 | `buildTree` | `frontend/src/lib/tree.ts:29` | Альтернативная модель дерева |
 
-### 8.2. Заявленные, но отсутствующие в коде
+### 8.2. Объявленные, но не доведённые до конца точки расширения
 
-* **Плагинный API фронтенда.** `frontend/scripts/check-boundaries.mjs`
-  (не закоммичен) описывает слои `src/core/`, `src/plugins/`,
-  `src/plugins/builtin/`, `src/plugins/contract`, `src/plugins/host`,
-  `src/plugins/registry` и правила импортов. В дереве `frontend/src`
-  существует только `src/core/store/`; каталогов `src/plugins/**` нет.
-  Проверка сейчас проходит (`node scripts/check-boundaries.mjs` → «OK: 44
-  файлов проверено, нарушений нет»), но описывает лишь часть будущей
-  структуры; подключён как `npm run check:boundaries`
-  (`frontend/package.json:15`) и не входит в `npm run build`.
-* **`notes.NoteService` + хуки.** Интерфейса с таким именем нет: `api`
-  работает с конкретным `*notes.Service`
-  (`backend/internal/api/api.go:22`). Точек для событий «после записи»,
-  «после перемещения», «перед удалением» в коде также нет.
+* **Плагинный API фронтенда — в незакоммиченной части дерева.**
+  `frontend/src/plugins/contract.ts` (229 LOC) — единственная разрешённая точка
+  входа для плагинов: `PLUGIN_API_VERSION` (`:15`), набор разрешений
+  `PluginPermission` (`:18-26`), манифест `PluginManifest` (`:38-61`),
+  интерфейс API `PluginApi` (`:117`), точки вклада в UI
+  (`PluginCommand` `:125`, `PluginPanel` `:134`, `PluginSidebarItem` `:141`,
+  `PluginContextMenuItem` `:149`, `PluginToolbarItem` `:157`,
+  `PluginSettingsSection` `:165`), карта событий `PluginEventMap` (`:177`),
+  контекст `PluginContext` (`:206`) и интерфейс плагина `Plugin` (`:225`).
+  `frontend/src/plugins/manifest.ts` (179 LOC) — валидация манифеста
+  `validateManifest` (`:48`), список разрешений `PLUGIN_PERMISSIONS` (`:16`),
+  проверка совместимости версий `isCompatible` (`:168`).
+  Хост плагинов собирается: `core/events/eventBus.ts`,
+  `core/commands/commandRegistry.ts`, `core/settings/settingsStore.ts`,
+  `core/diagnostics/logger.ts`, компоненты `PluginSlots` и
+  `PluginManagerPanel`. Финальный прогон `check-boundaries.mjs` — «OK: 65
+  файлов проверено, нарушений нет» (в промежуточном состоянии правило R2
+  давало два нарушения). Остаточные риски: скрипт не входит в
+  `npm run build`, и 4 фронтенд-теста падают на незакоммиченном коде.
+* **Плагинный API бэкенда.** Интерфейс `notes.NoteService` и хуки
+  `notes.AddHook` присутствуют (`backend/internal/notes/noteapi.go:79-85`,
+  `:93-100`), но потребителей у них нет: ни `api`, ни `cmd/noto` не
+  регистрируют хуков и не используют `NoteService`. Комментарий с примером
+  ссылается на несуществующую функцию `notes.NewPluginService`
+  (`backend/internal/notes/noteapi.go:65`).
 
 ---
 
@@ -534,7 +564,7 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * **XSS**: единственный барьер перед `dangerouslySetInnerHTML` — DOMPurify
   (`frontend/src/lib/markdown.ts`, `frontend/src/components/Preview.tsx:32`).
 * **Утечки**: абсолютные пути сервера в сообщениях об ошибках не
-  используются (`backend/internal/notes/errors.go:46-47`), содержимое заметок
+  используются (`backend/internal/notes/errors.go:47`), содержимое заметок
   не логируется (`backend/internal/api/middleware.go:197-198`).
 
 Контракт этих правил зафиксирован тестом
@@ -578,7 +608,7 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * Порядок внутренних вызовов внутри `notes` при сохранении инвариантов:
   порядок блокировок, порядок «диск → индекс → метаданные», запрет
   пересоздания отсутствующего родителя при записи
-  (`backend/internal/notes/notes.go:207-212`).
+  (`backend/internal/notes/notes.go:231-235`).
 
 ---
 
@@ -612,7 +642,8 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * `internal/notes/importexport.go` (453 строки) удалён, вместо него
   `export.go`, `import_files.go`, `import_zip.go`.
 * `internal/notes/service.go` разделен: выделены `locks.go`, `fsatomic.go`,
-  `notes_move.go` (перенос/переименование).
+  `notes_move.go` (перенос/переименование), `noteapi.go` (интерфейс
+  `NoteService` и хуки).
 * `internal/sqlitestore/store.go` (672 строки) разделен: `store_schema.go`,
   `store_notes.go`, `store_index.go`, `store_attachments.go`, `store_trash.go`.
 * `internal/deps` (мёртвый код) удалён.
@@ -630,7 +661,7 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * `src/lib/utils.ts` (64 строки) превращён в фасад на 8 строк; реализация
   разнесена по `debounce.ts`, `errors.ts`, `format.ts`, `ordering.ts`.
 * Состояние вынесено из `App.tsx` (679 → 225 строк) в
-  `src/core/store/{appStore,hooks,types}.ts`; появились компоненты
+  `src/core/store/{appStore,actions,state,types,hooks}.ts`; появились компоненты
   `AppHeader.tsx`, `AppFooter.tsx`, `NoteDialogs.tsx`.
 * `vite.config.ts`: добавлены `manualChunks` и `chunkSizeWarningLimit: 800`.
 * `public/sw.js`: `/api/*` переведено с `network-first` на `network-only`,
@@ -638,6 +669,20 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * Добавлен `frontend/scripts/check-boundaries.mjs`.
 
 Прочее: `PHASE2_PLAN.md`, `scripts/verify.ps1` — новые файлы.
+
+Позже (после коммита `89c1b32`) в рабочем дереве появились ещё:
+
+* `frontend/src/plugins/contract.ts` и `manifest.ts` — публичный контракт
+  плагинов;
+* `frontend/src/components/PluginSlots.tsx`, `PluginManagerPanel.tsx` —
+  интеграционные компоненты (в момент снимка нарушают правило R2);
+* `backend/internal/testutil/search.go`, правки `testutil/store.go`,
+  `port/porttest/porttest.go`, `port/store_conformance_test.go`,
+  `frontend/src/components/Editor.tsx`.
+
+Коммит `89c1b32` («phase2 wave0-1: golden contract tests, backend split,
+frontend store/api split, PWA privacy + chunking, plugin extension point»)
+фиксирует большую часть перечисленных выше изменений бэкенда и фронтенда.
 
 ---
 
@@ -647,15 +692,22 @@ cmd/backup → runBackup                backend/cmd/backup/main.go:56
 * `go test ./...` в `backend/` — все пакеты с тестами проходят
   (`api`, `notes`, `port`, `sqlitestore`, `web`, `cmd/noto`, `cmd/backup`);
   `cmd/smoke`, `model`, `config`, `testutil`, `port/porttest` — без тестов.
-* `npm run test` в `frontend/` — 8 файлов, 51 тест, все пройдены.
+* `npm run test` в `frontend/` — 14 файлов, 107 тестов; **4 теста падают**
+  (`src/__tests__/preview-lazy.test.tsx` — 2, `src/__tests__/store.test.tsx` — 1,
+  `src/__tests__/app.test.tsx` — 1). Это незакоммиченная работа по ленивому
+  превью и хосту плагинов, выполняемая параллельно; на более раннем срезе
+  (до появления этих файлов) прогон был полностью зелёным — 11 файлов,
+  71 тест.
 * `npm run build` (`tsc --noEmit && vite build`) — успешно; `postbuild`
   скопировал `dist` в `backend/internal/web/dist`.
-* `node scripts/check-boundaries.mjs` — «OK: 44 файлов проверено, нарушений нет».
-* `node scripts/measure-bundle.mjs` — см. §9.1 и раздел аудита:
-  entry-чанк 33 559 B (11 253 B gzip), 118 JS-чанков, JS всего
-  1 672,47 kB raw / 616,01 kB gzip; крупнейший чанк — `codemirror`
-  528,76 kB raw / 182,44 kB gzip.
-* Измерение API на временном каталоге с 2 000 заметок: `GET /api/tree` —
-  ≈ 428 мс на запрос (5 прогонов), `GET /api/search?q=lorem&limit=50` —
-  ≈ 29 мс, `GET /api/notes` — ≈ 12 мс; базовый накладной расход клиента
-  (`/api/health`) — ≈ 36 мс.
+* `node scripts/check-boundaries.mjs` — «OK: 65 файлов проверено, нарушений
+  нет» (в промежуточном срезе скрипт падал с двумя нарушениями R2 —
+  `src/components/PluginManagerPanel.tsx:6` и
+  `src/components/PluginSlots.tsx:11` импортировали `src/plugins/contract`
+  напрямую; к финальному прогону нарушения устранены).
+* `node scripts/measure-bundle.mjs` — entry-чанк 37 393 B (12 242 B gzip),
+  118 JS-чанков, JS всего 1 681,90 kB raw / 619,07 kB gzip.
+* Измерение API на временном каталоге с 2 000 заметок (сборка текущего
+  дерева): `GET /api/tree` — ≈ 418 мс на запрос (5 прогонов),
+  `GET /api/search?q=lorem&limit=50` — ≈ 29 мс, `GET /api/notes` — ≈ 12 мс;
+  базовый накладной расход клиента (`/api/health`) — ≈ 17,5 мс.

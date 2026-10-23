@@ -1,5 +1,5 @@
 // Local draft persistence in IndexedDB (never lose edits on network errors).
-import { openDB, type IDBPDatabase } from 'idb';
+import type { IDBPDatabase } from 'idb';
 
 export interface Draft {
   path: string;
@@ -14,15 +14,29 @@ const STORE = 'drafts';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
+/**
+ * Opens the draft database on first use.
+ *
+ * `idb` is imported dynamically so that the IndexedDB helper stays out of the
+ * start-up bundle; it is only needed once drafts are actually read or written.
+ */
 function db(): Promise<IDBPDatabase> {
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        if (!database.objectStoreNames.contains(STORE)) {
-          database.createObjectStore(STORE, { keyPath: 'path' });
-        }
-      },
-    });
+    dbPromise = import('idb')
+      .then(({ openDB }) =>
+        openDB(DB_NAME, DB_VERSION, {
+          upgrade(database) {
+            if (!database.objectStoreNames.contains(STORE)) {
+              database.createObjectStore(STORE, { keyPath: 'path' });
+            }
+          },
+        }),
+      )
+      .catch((error: unknown) => {
+        // Allow a later call to retry opening the database.
+        dbPromise = null;
+        throw error;
+      });
   }
   return dbPromise;
 }

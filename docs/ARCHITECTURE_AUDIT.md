@@ -23,11 +23,11 @@
 |---|---|---|
 | Слоистость бэкенда | Хорошо | `api → notes → port ← sqlitestore`, циклов нет, `notes` не знает про SQL |
 | Связность бэкенда | Средняя | `api` держит конкретный `*notes.Service`; домен дублирует часть логики хранилища (перенос поддерева, поиск по имени) |
-| Связность фронтенда | Средняя | «God-компонент» заменён на «god-стор»: `core/store/appStore.ts` — 485 LOC, 26 действий, состояние + автосохранение + черновики + UI |
+| Связность фронтенда | Средняя | «God-компонент» разделён на стор (`core/store/{actions,state,types}`), но `actions.ts` — 399 LOC на 30 действий разных доменов |
 | Контракты | Хорошо | Коды ошибок, JSON-контракт, маршруты и схема БД закреплены тестами (`contract_test.go`, `schema_compat_test.go`) |
 | Безопасность | Хорошо для локального приложения | Защита от выхода за корень ФС и от junction; аутентификации нет by design |
 | Производительность | Средняя | `GET /api/tree` — ≈ 418 мс на 2 000 заметок (N+1 к БД); поиск вычитывает полный текст совпадений |
-| Тесты | Средняя | 51 фронтенд-тест, бэкенд-пакеты с тестами; `cmd/smoke` — бинарник, а не `go test`; ветки не покрыты |
+| Тесты | Средняя | 71 фронтенд-тест, бэкенд-пакеты с тестами; `cmd/smoke` — бинарник, а не `go test`; ветки не покрыты |
 | Инфраструктура | Не проверена | Docker в среде отсутствует; E2E — на локальном кэше Chromium |
 
 ---
@@ -70,7 +70,9 @@ model, config, web — листья, обратных зависимостей �
 ### 2.2. Фронтенд
 
 ```
-main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
+main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,actions,state,types,hooks}
+                        ├──▶ plugins/{contract,manifest}   (контракт плагинов,
+                        │      интеграция в работе: хост/реестр/слоты отсутствуют)
                         │        └──▶ api/client.ts ──▶ api/{http,notes,tree,
                         │            search,transfer,trash,attachments,health}
                         │                  └──▶ fetch (единственная точка)
@@ -90,7 +92,8 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
 * `components/Preview.tsx:32` — единственное место с `dangerouslySetInnerHTML`;
   барьер — DOMPurify внутри `renderSafeMarkdown`.
 * Границы проверяются скриптом `frontend/scripts/check-boundaries.mjs`
-  (не закоммичен): прогон — «OK: 44 файлов проверено, нарушений нет».
+  (не закоммичен): финальный прогон — «OK: 65 файлов проверено, нарушений
+  нет» (в промежуточном состоянии правило R2 давало два нарушения).
 
 ---
 
@@ -114,14 +117,14 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
    (`backend/internal/notes/locks.go:28`, `:43`, `:49`), а `relocate` берёт
    сразу четыре группы ключей, чтобы параллельная запись внутрь
    перемещаемой папки не разорвала дерево
-   (`backend/internal/notes/notes_move.go:84`).
+   (`backend/internal/notes/notes_move.go:89`).
 5. **Атомарность записи на уровне файла.** Temp-файл в том же каталоге,
    `fsync`, `chmod`, `rename` (`backend/internal/notes/fsatomic.go:22`);
    `writeFileAtomicNoMkdir` не даёт пересоздать исчезнувший родительский
-   каталог (`backend/internal/notes/notes.go:207-212`).
+   каталог (`backend/internal/notes/notes.go:231-235`).
 6. **Защита от «записи по перемещённому пути».** Карта `moved` с TTL 5 минут
    превращает позднюю запись в `conflict`, а не в создание дубликата
-   (`backend/internal/notes/notes.go:217-222`,
+   (`backend/internal/notes/notes.go:240-249`,
    `backend/internal/notes/locks.go:104`).
 7. **Версионирование схемы.** `PRAGMA user_version` + отказ открывать БД новее
    поддерживаемой версии (`backend/internal/sqlitestore/store_schema.go:11`,
@@ -153,16 +156,22 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
 14. **Единая точка входа в состояние фронтенда.** `core/store` даёт
     компонентам подписку (`useSyncExternalStore`,
     `frontend/src/core/store/hooks.ts:11-13`) и стабильный набор действий
-    (`frontend/src/core/store/appStore.ts:515`) — вместо 19 независимых
+    (`frontend/src/core/store/actions.ts:374`) — вместо 19 независимых
     `useState` в компоненте.
-15. **Conformance-набор для хранилища.** `porttest` проверяет любую реализацию
+15. **Событийная точка расширения в домене.** `notes.AddHook` + `NoteEvent`
+    (`backend/internal/notes/noteapi.go:53`, `:93-100`) вызываются после
+    полного завершения операции (диск → индекс → метаданные) и после
+    освобождения блокировок, поэтому обработчик всегда видит согласованное
+    состояние (`backend/internal/notes/notes.go:306-316`); паника хука
+    восстанавливается и не ломает операцию (`noteapi.go:125-135`).
+16. **Conformance-набор для хранилища.** `porttest` проверяет любую реализацию
     `port.Store` по общему набору сценариев
     (`backend/internal/port/porttest/porttest.go:67`), и `go test ./...` в
     пакете `port` проходит.
-16. **Graceful shutdown и защита от не-loopback.** `srv.Shutdown` с таймаутом
+17. **Graceful shutdown и защита от не-loopback.** `srv.Shutdown` с таймаутом
     (`backend/cmd/noto/main.go:105-109`) и отказ стартовать на публичном
     адресе без явного флага (`backend/cmd/noto/main.go:136-155`).
-17. **Консистентный бэкап.** `wal_checkpoint(TRUNCATE)` + `VACUUM INTO` дают
+18. **Консистентный бэкап.** `wal_checkpoint(TRUNCATE)` + `VACUUM INTO` дают
     согласованную копию БД; в архив попадает и корзина
     (`backend/cmd/backup/main.go:92`, `:164`).
 
@@ -181,8 +190,21 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
 * Любая новая доменная возможность тянет изменение `api` — «бог-интерфейс»
   из 26 публичных методов `notes.Service`
   (`backend/internal/notes/*.go`; перечень — `docs/ARCHITECTURE.md` §3.2).
-* Нет места для сквозных хуков (события «после записи», «перед удалением»):
-  точки расширения в коде отсутствуют.
+* Нет места для сквозных хуков в HTTP-слое: `api` не может подписаться на
+  события домена.
+
+Смягчающий фактор: в домене уже есть узкий интерфейс для потребителей и
+событийная точка расширения — `notes.NoteService`
+(`backend/internal/notes/noteapi.go:79-85`) и `notes.AddHook`
+(`:93-100`), вызываемые после освобождения блокировок
+(`backend/internal/notes/notes.go:306-316`,
+`backend/internal/notes/notes_move.go:140`,
+`backend/internal/notes/trash.go:71`, `:229`). Но **потребителей у них
+нет**: ни `api`, ни `cmd/noto` не регистрируют хуков и не работают через
+`NoteService`, то есть механизм объявлен, но не задействован. Кроме того,
+пример в документирующем комментарии ссылается на несуществующую функцию
+`notes.NewPluginService` (`backend/internal/notes/noteapi.go:65`) — пример
+не компилируется.
 
 ### 4.2. Домен дублирует поиск по имени файла
 
@@ -204,7 +226,7 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
 ### 4.4. Перемещение поддерева реализовано дважды
 
 * Домен: `collectSubtree` + `rekey` для каждого потомка
-  (`backend/internal/notes/notes_move.go:102-118`, `:124-140`, `:145-175`).
+  (`backend/internal/notes/notes_move.go:120-124`, `:151-174`, `:175-204`).
 * Хранилище: `Store.MoveNote` сам переименовывает всех потомков префиксной
   заменой в одной транзакции
   (`backend/internal/sqlitestore/store_notes.go:69`, `:97-120`).
@@ -212,25 +234,28 @@ main.tsx ──▶ App.tsx ──┬──▶ core/store/{appStore,hooks,types}
 При этом ошибки вызовов хранилища в `rekey` **намеренно игнорируются**:
 
 ```go
-_ = s.store.MoveNote(ctx, oldPath, newPath)          // notes_move.go:152
+_ = s.store.MoveNote(ctx, oldPath, newPath)          // notes_move.go:176
 if _, found, err := s.store.GetNote(ctx, oldPath); err == nil && found {
-    _ = s.store.DeleteNote(ctx, oldPath)              // notes_move.go:154
+    _ = s.store.DeleteNote(ctx, oldPath)              // notes_move.go:178
 }
 ```
 
-`backend/internal/notes/notes_move.go:151-154` — рассинхронизация метаданных и
+`backend/internal/notes/notes_move.go:175-178` — рассинхронизация метаданных и
 индекса при ошибке БД обнаруживается только косвенно (поиск перестаёт находить
 файл), без диагностики в лог.
 
-### 4.5. God-компонент сменился на god-стор
+### 4.5. Связность фронтенда переехала в `actions.ts`
 
-`frontend/src/core/store/appStore.ts` — 485 LOC: типы состояния, 26 действий,
-автосохранение, черновики, диалоги, тема, онлайн-статус, баннеры
-(`:488-513` — интерфейс `AppActions`, `:515` — реализация). `App.tsx`
-сократился до 225 строк и превратился в композицию, но связность не ушла —
-она переехала в одно место. Модуль не разделён по доменам (дерево / заметка /
-импорт / настройки), поэтому любое новое состояние требует правки
-`appStore.ts` и `core/store/types.ts`.
+`App.tsx` сократился до 225 строк и превратился в композицию, а состояние
+вынесено во внешний стор (`frontend/src/core/store/`). Но модуль действий
+по-прежнему смешивает домены: `frontend/src/core/store/actions.ts` — 399 LOC,
+30 действий от дерева и заметок до тем, баннеров и черновиков
+(`actions.ts:347-373` — интерфейс `AppActions`, `:374` — реализация).
+Состояние разделено (`state.ts` — 109 LOC, `types.ts` — 79), фасад
+`appStore.ts` — 93 LOC, поэтому прежний «god-компонент» действительно
+разобран; остаточная проблема — в модуле действий, а не в состоянии.
+Дальнейшее дробление по доменам (tree / note / transfer / ui) дало бы
+независимые модули и упростило бы подключение плагинов к действиям.
 
 ### 4.6. `Sidebar` — 16 пропсов и рекурсивное перепротаскивание
 
@@ -279,6 +304,19 @@ Conformance-набор (`porttest`) частично компенсирует э
 в `go test ./...` пакет отображается как «no test files», а при падении
 сценария прогон `go test` остаётся зелёным.
 
+### 4.12. Проверка границ фронтенда не входит в сборку
+
+`frontend/scripts/check-boundaries.mjs` кодифицирует правила импортов между
+`src/core`, `src/components`, `src/plugins` и `src/lib`. Правило R2
+запрещает `src/components/**` импортировать `src/plugins/**` напрямую;
+в промежуточном состоянии дерева это давало «FAIL: 2 нарушения в 52 файлах»
+(`src/components/PluginManagerPanel.tsx:6`,
+`src/components/PluginSlots.tsx:11`), к финальному прогону нарушения
+устранены — «OK: 65 файлов проверено, нарушений нет». Проблема не в самих
+нарушениях, а в том, что скрипт подключён как `npm run check:boundaries`
+(`frontend/package.json:15`) и **не входит** в `npm run build` и в
+`npm run test`: регрессия границ не остановит ни сборку, ни тесты.
+
 ---
 
 ## 5. Дублирование ответственности
@@ -286,8 +324,8 @@ Conformance-набор (`porttest`) частично компенсирует э
 | Что | Где дублируется | Файл:строка |
 |---|---|---|
 | Поиск по имени файла | хранилище (FTS5-колонка `name`) и домен (`ListNotes` + `strings.Contains`) | `backend/internal/sqlitestore/search.go:55-93` и `backend/internal/notes/search.go:38-57` |
-| Перенос поддерева | `collectSubtree`+`rekey` в домене и префиксная замена в `Store.MoveNote` | `backend/internal/notes/notes_move.go:102-118` и `backend/internal/sqlitestore/store_notes.go:97-120` |
-| Обход дерева файлов | `walkNotes` (обход + метаданные) и `Reindex` (обход + метаданные + индекс) | `backend/internal/notes/service.go:172-183` и `backend/internal/notes/search.go:66` |
+| Перенос поддерева | `collectSubtree`+`rekey` в домене и префиксная замена в `Store.MoveNote` | `backend/internal/notes/notes_move.go:151-174` и `backend/internal/sqlitestore/store_notes.go:97-120` |
+| Обход дерева файлов | `walkNotes` (обход + метаданные) и `Reindex` (обход + метаданные + индекс) | `backend/internal/notes/service.go:188-207` и `backend/internal/notes/search.go:66` |
 | Рекурсивное копирование | `copyPath` в `notes` и `copyTree`/`copyFile` в `cmd/backup` | `backend/internal/notes/fsatomic.go:74` и `backend/cmd/backup/main.go:111-163` |
 | Экспорт | `ExportFolder`/`ExportAll` (в поток) и `ExportFolderBytes`/`ExportAllBytes` (в память) | `backend/internal/notes/export.go:41`, `:64`, `:125`, `:134` |
 | Сопоставление кодов ошибок со статусами | `api.statusFor` и `http.codeForStatus` на фронтенде | `backend/internal/api/errors.go:15-34` и `frontend/src/api/http.ts:27-40` |
@@ -306,7 +344,7 @@ Conformance-набор (`porttest`) частично компенсирует э
 
 | Файл | LOC (всего) | Чем плох |
 |---|---|---|
-| `frontend/src/core/store/appStore.ts` | 485 (552) | Состояние + 26 действий + автосохранение + черновики + диалоги + тема в одном модуле; нет внутреннего деления по доменам |
+| `frontend/src/core/store/actions.ts` | 370 (399) | 30 действий разных доменов (дерево, заметка, черновики, диалоги, тема, баннер) в одном модуле; нет внутреннего деления по доменам |
 | `backend/internal/notes/notes.go` | 285 (297) | CRUD заметок + создание папок/файлов + конфликт ревизии |
 | `backend/internal/notes/service.go` | 236 (257) | Состояние сервиса, обход дерева, `Tree` |
 | `backend/internal/notes/paths.go` | 238 (252) | Нормализация, проверки границ, `checkComponents` |
@@ -334,9 +372,10 @@ Conformance-набор (`porttest`) частично компенсирует э
 | Имена и типы полей `Node`, `NoteContent`, `SearchHit`, `Attachment`, `ImportResult`, конверт ошибки | `backend/internal/model/model.go:19-66` ↔ `frontend/src/types.ts:5-46` | `backend/internal/api/contract_test.go:517` (только Go-сторона) |
 | Коды ошибок и соответствие HTTP-статусам | `backend/internal/notes/errors.go:11-23`, `backend/internal/api/errors.go:15-34` | `backend/internal/api/contract_test.go:610` |
 | Формат пути: slash-разделитель, относительно корня notes, без ведущего слэша | `backend/internal/model/model.go:17-18`, `backend/internal/notes/paths.go` | Тестов нет — риск |
-| Поведение `revision`: `0` — принудительная запись, иначе — проверка | `backend/internal/notes/notes.go:182-183`, `:233-244` | Тестов нет на уровне API — риск |
+| Поведение `revision`: `0` — принудительная запись, иначе — проверка | `backend/internal/notes/notes.go:203`, `:260-271` | Тестов нет на уровне API — риск |
 | Схема БД и `PRAGMA user_version = 1` | `backend/internal/sqlitestore/store_schema.go:11`, `:58` | `backend/internal/sqlitestore/schema_compat_test.go:140`, `:206` |
 | Интерфейс `port.Store` (17 методов) | `backend/internal/port/port.go:15-53` | `backend/internal/port/store_conformance_test.go`, `porttest/porttest.go:67` |
+| Интерфейс `notes.NoteService` и события `NoteOp`/`NoteEvent` | `backend/internal/notes/noteapi.go:12-85` | Контракт для потребителей-плагинов; значения `NoteOp` (`created`, `updated`, `deleted`, `renamed`, `moved`, `restored`) — часть API |
 | Политика service worker для `/api/*` (`network-only`) | `frontend/public/sw.js:116-126` | Тестов нет — риск |
 | Семантика `EditorHandle.setText` — не вызывает `onChange` | `frontend/src/components/Editor.tsx:30`, `:169-176` | Покрыт лишь частично (`frontend/src/__tests__/editor.test.tsx`) |
 | Список разрешённых MIME вложений | `backend/internal/notes/attachments.go:16-35` | Тестов нет — риск |
@@ -377,7 +416,7 @@ Conformance-набор (`porttest`) частично компенсирует э
   (`backend/internal/api/handlers_attachments.go`), поэтому загруженный SVG не
   исполняется в origin приложения.
 * **Утечки.** Абсолютные пути сервера не попадают в сообщения об ошибках
-  (`backend/internal/notes/errors.go:46-47`); содержимое заметок не
+  (`backend/internal/notes/errors.go:47`); содержимое заметок не
   логируется (`backend/internal/api/middleware.go:197-198`).
 
 ### 8.2. Осознанные ограничения (не дефекты)
@@ -432,22 +471,23 @@ Conformance-набор (`porttest`) частично компенсирует э
 | Сборка | Entry-чанк | gzip | JS-чанков | JS всего (raw/gzip) |
 |---|---|---|---|---|
 | коммит `5c3523b` (без `manualChunks`) | 658 056 B | 227 414 B | 114 | 1 672,70 kB / 615,57 kB |
-| текущее дерево (с `manualChunks`) | 33 559 B | 11 253 B | 118 | 1 672,47 kB / 616,01 kB |
+| текущее дерево (с `manualChunks`) | 37 393 B | 12 242 B | 118 | 1 681,90 kB / 619,07 kB |
 
-Крупнейший чанк после разделения — `codemirror`: 528,76 kB raw / 182,44 kB
-gzip. Число чанков (118) определяется ленивым импортом
-`@codemirror/language-data` (`frontend/src/components/Editor.tsx:107`):
-около сотни языковых режимов попадают в отдельные файлы — это осознанный
-размен «entry-чанк против числа запросов».
+Крупнейший чанк после разделения — `codemirror` (528,76 kB raw / 182,44 kB
+gzip по замеру до появления плагин-хоста). Число чанков (118) определяется
+ленивым импортом `@codemirror/language-data`
+(`frontend/src/components/Editor.tsx:107`): около сотни языковых режимов
+попадают в отдельные файлы — это осознанный размен «entry-чанк против числа
+запросов».
 
 ### 9.2. `GET /api/tree` — N+1 к базе и полный обход ФС
 
 `notes.Tree` обходит весь notes-корень
-(`backend/internal/notes/service.go:172-183`) и **для каждого** узла делает
-отдельный `store.GetNote` (`backend/internal/notes/service.go:211`) — 1 + N
+(`backend/internal/notes/service.go:188-207`) и **для каждого** узла делает
+отдельный `store.GetNote` (`backend/internal/notes/service.go:216`) — 1 + N
 обращений к SQLite за один запрос дерева. При 2 000 заметок это ~2 000
 round-trip'ов за ≈ 400 мс. Дерево запрашивается при каждом обновлении UI
-(`frontend/src/core/store/appStore.ts`), то есть после каждого создания,
+(`frontend/src/core/store/actions.ts:75`), то есть после каждого создания,
 переименования, перемещения, удаления и импорта.
 
 Устранение: один запрос `SELECT … FROM notes` с построением дерева в памяти
@@ -472,7 +512,7 @@ FTS5-запрос выбирает колонку `body` целиком
 
 `relocate` обходит поддерево и для каждого потомка вызывает `rekey`, который
 сам вызывает `store.MoveNote`, `store.GetNote` и `store.DeleteNote`
-(`backend/internal/notes/notes_move.go:124-140`, `:145-175`), хотя
+(`backend/internal/notes/notes_move.go:120-124`, `:175-204`), хотя
 `sqlitestore.MoveNote` уже переименовал всех потомков одной транзакцией
 (`backend/internal/sqlitestore/store_notes.go:69`, `:97-120`). На дереве из M
 узлов — примерно 5M SQL-операций вместо M.
@@ -486,7 +526,7 @@ FTS5-запрос выбирает колонку `body` целиком
 ### 9.6. Перезапись индекса при перемещении
 
 `rekey` перечитывает файл и полностью переиндексирует его
-(`backend/internal/notes/notes_move.go:161-170`) — для больших заметок это
+(`backend/internal/notes/notes_move.go:196-204`) — для больших заметок это
 лишнее чтение и запись в FTS5 при каждом переименовании.
 
 ### 9.7. Перерисовка предпросмотра
@@ -519,13 +559,13 @@ FTS5-запрос выбирает колонку `body` целиком
 |---|---|
 | `cmd/smoke` — бинарник, а не go-тест | `backend/cmd/smoke/` (7 файлов); в `go test ./...` отображается как «no test files», падение сценария не ломает `go test` |
 | TS-зеркало Go-модели не сверяется | `frontend/src/types.ts` дублирует `backend/internal/model/model.go` без кодогенерации; `contract_test.go:517` проверяет только Go-имена |
-| Формат пути и семантика `revision` не закреплены тестами | `backend/internal/model/model.go:17-18`, `backend/internal/notes/notes.go:182-183` — нет golden-теста |
-| Политика service worker не покрыта | `frontend/src/__tests__/` — 9 файлов; SW не покрыт ни одним тестом, при том что кэширование приватных данных — security-значимое поведение |
+| Формат пути и семантика `revision` не закреплены тестами | `backend/internal/model/model.go:17-18`, `backend/internal/notes/notes.go:203, :260-271` — нет golden-теста |
+| Политика service worker не покрыта | `frontend/src/__tests__/` — 11 файлов; SW не покрыт ни одним тестом, при том что кэширование приватных данных — security-значимое поведение |
 | `EditorHandle` покрыт частично | `frontend/src/__tests__/editor.test.tsx` — 2 теста; `setText`/`insert`/`openSearch` не проверены, хотя именно `setText` не вызывает `onChange` (`frontend/src/components/Editor.tsx:169-176`) |
 | Панели покрыты частично | Тесты есть для `SearchPanel` и `Sidebar`; `TransferPanel`, `TrashPanel`, `AttachmentsPanel`, `Dialog` — без тестов |
 | LIKE-фолбэк поиска практически не покрыт | Ветка `searchLike` (`backend/internal/sqlitestore/search.go:123-160`) требует окружения без FTS5; в тестах не моделируется |
-| Частичная запись (диск → индекс → метаданные) не проверяется на сбои | Порядок в `backend/internal/notes/notes.go:245`, `:268`, `:271`; нет теста на отказ `UpsertNote`/`IndexContent` |
-| Ошибки хранилища в `rekey` игнорируются без теста | `backend/internal/notes/notes_move.go:151-154`; нет теста, фиксирующего ожидаемое поведение при ошибке БД |
+| Частичная запись (диск → индекс → метаданные) не проверяется на сбои | Порядок в `backend/internal/notes/notes.go:272`, `:295`, `:298`; нет теста на отказ `UpsertNote`/`IndexContent` |
+| Ошибки хранилища в `rekey` игнорируются без теста | `backend/internal/notes/notes_move.go:175-178`; нет теста, фиксирующего ожидаемое поведение при ошибке БД |
 | Нет бенчмарков | В `backend/` нет ни одной функции `Benchmark`; узкие места §9.2–9.6 измеряются вручную |
 | Миграций схемы больше одной нет | `schemaVersion = 1` (`backend/internal/sqlitestore/store_schema.go:11`); механизм миграции проверен лишь на текущей версии и на отказе открыть более новую (`schema_compat_test.go:206`) |
 
@@ -536,13 +576,13 @@ FTS5-запрос выбирает колонку `body` целиком
 ### P0 — немедленно (риск потери данных и корректности)
 
 1. **Не игнорировать ошибки хранилища в `rekey`.**
-   `backend/internal/notes/notes_move.go:151-154`: ошибка БД при перемещении
+   `backend/internal/notes/notes_move.go:175-178`: ошибка БД при перемещении
    оставляет файл на диске, а метаданные и индекс — на старом пути, без
    диагностики. Нужен `errors.Join`/лог и явная транзакционная семантика.
 2. **Устранить двойную реализацию переноса поддерева.** Выбрать одного
    владельца (хранилище: `sqlitestore.MoveNote` уже переносит потомков в
    транзакции, `store_notes.go:97-120`) и убрать второй проход
-   (`notes_move.go:124-140`).
+   (`notes_move.go:120-124`).
 3. **Вернуть ранжирование поиска.** Не сортировать объединённый результат по
    пути (`backend/internal/notes/search.go:58-61`): ранжирование `bm25`
    должно сохраняться, а имя и содержимое — иметь явный приоритет.
@@ -555,7 +595,7 @@ FTS5-запрос выбирает колонку `body` целиком
 ### P1 — ближайший цикл (связность и производительность)
 
 6. **Убрать N+1 в `Tree`:** один запрос метаданных вместо `GetNote` на каждый
-   узел (`backend/internal/notes/service.go:211`).
+   узел (`backend/internal/notes/service.go:216`).
 7. **Убрать дублирование поиска по имени:** либо хранилище возвращает именные
    совпадения, либо домен — но не оба
    (`backend/internal/notes/search.go:38-57` против
@@ -563,11 +603,13 @@ FTS5-запрос выбирает колонку `body` целиком
 8. **Не читать `body` целиком в FTS5-запросе:** вычислять сниппет средствами
    SQLite (`snippet()`) вместо выборки всей колонки
    (`backend/internal/sqlitestore/search.go:60-62`).
-9. **Ввести интерфейс вместо `*notes.Service` в `api`**
-   (`backend/internal/api/api.go:22`): узкий интерфейс на используемые
-   методы либо набор интерфейсов по ресурсам. Это разблокирует тестирование
-   HTTP-слоя без хранилища и даст точку для хуков.
-10. **Разделить `core/store/appStore.ts` (485 LOC)** на доменные модули
+9. **Перевести `api` на интерфейс.** Узкий `notes.NoteService` уже есть
+   (`backend/internal/notes/noteapi.go:79-85`), но `api` по-прежнему держит
+   `*notes.Service` (`backend/internal/api/api.go:22`). Нужны интерфейсы по
+   ресурсам (дерево, заметки, поиск, корзина, вложения), через которые `api`
+   работает с сервисом, и хотя бы один потребитель `notes.AddHook` (сейчас
+   хуки никто не слушает).
+10. **Разделить `core/store/actions.ts` (399 LOC)** на доменные модули
     (`tree`, `note`, `transfer`, `ui`, `env`) с единым фасадом
     `actions` — по образцу уже сделанного разбиения бэкенда.
 11. **Сократить пропсы `Sidebar`:** передавать контекст операций одним
@@ -585,11 +627,11 @@ FTS5-запрос выбирает колонку `body` целиком
 
 ### P2 — дальнейшее развитие (структура и производительность)
 
-16. **Реализовать или удалить объявленные плагинные слои.** `check-boundaries.mjs`
-    описывает `src/plugins/{contract,host,registry,builtin}`, которых нет;
-    скрипт подключён как `npm run check:boundaries`, но не входит в
-    `npm run build` — сейчас это «зелёная» проверка несуществующей
-    архитектуры.
+16. **Включить проверку границ в сборку.** Контракт плагинов написан
+    (`frontend/src/plugins/contract.ts` — 229 LOC, `manifest.ts` — 179 LOC),
+    проверка `check-boundaries.mjs` проходит, но выполняется только вручную:
+    нужно добавить `check:boundaries` в `npm run build` и в сводную проверку
+    (`scripts/verify.ps1`), иначе регрессия границ не остановит сборку.
 17. **Разделить `backend/internal/sqlitestore/search.go`** (309 LOC) на
     FTS5-часть, LIKE-фолбэк и построение сниппетов.
 18. **Разделить `backend/internal/api/handlers_notes.go`** (176 LOC) по
@@ -629,11 +671,16 @@ FTS5-запрос выбирает колонку `body` целиком
   (`frontend/public/sw.js:191-202`); синхронизации между устройствами,
   разрешения конфликтов на клиенте и очереди операций нет.
 * **Аудит выполнялся на изменяющемся рабочем дереве:** параллельно шёл
-  рефакторинг (разбиение `api/handlers.go`, `notes/importexport.go`,
-  `sqlitestore/store.go`, `cmd/smoke/main.go`; выделение `core/store`;
-  удаление `internal/deps`; добавление `contract_test.go`,
-  `schema_compat_test.go`, `porttest`). Ссылки `file:line` соответствуют
-  состоянию на момент чтения; при продолжении рефакторинга они сместятся.
+  рефакторинг, частично зафиксированный коммитом `89c1b32`
+  («phase2 wave0-1: golden contract tests, backend split, frontend store/api
+  split, PWA privacy + chunking, plugin extension point»): разбиение
+  `api/handlers.go`, `notes/importexport.go`, `sqlitestore/store.go`,
+  `cmd/smoke/main.go`; выделение `core/store`; удаление `internal/deps`;
+  добавление `notes/noteapi.go` (интерфейс `NoteService` и хуки),
+  `contract_test.go`, `schema_compat_test.go`, `porttest`, а также
+  `frontend/src/plugins/{contract,manifest}.ts` и компонентов
+  `PluginSlots`/`PluginManagerPanel`. Ссылки `file:line` соответствуют
+  состоянию на момент чтения.
   Два промежуточных состояния дерева были временно не компилируемыми
   (`internal/notes/trash.go` без импорта `time`; рассогласование
   `internal/web/dist` при параллельной пересборке фронтенда) — это следствие
@@ -644,11 +691,19 @@ FTS5-запрос выбирает колонку `body` целиком
   (потомки не переносятся при `MoveNote`, поиск по имени не выполняется,
   `limit` для именных совпадений не соблюдается, пустой запрос возвращает
   совпадения) зафиксированы как известные особенности набора
-  (`backend/internal/port/porttest/porttest.go:213-380`) и требуют отдельного
+  (`backend/internal/port/porttest/porttest.go:19-37`) и требуют отдельного
   решения — либо исправления `MemStore`, либо ослабления ожиданий набора.
 * **Нагрузочное тестирование не проводилось:** измерения §9.1 выполнены на
   синтетическом наборе из 2 000 файлов; поведение при 10 000+ заметок и при
   параллельной нагрузке не измерялось.
+* **Фронтенд-тесты фронтенд-стека в промежуточном состоянии.** На финальном
+  прогоне `npm run test` в `frontend/` — 14 файлов, 107 тестов, **4 теста
+  падают**: `src/__tests__/preview-lazy.test.tsx` (2 — ленивая загрузка
+  превью), `src/__tests__/store.test.tsx` (1 — сброс состояния при размонтировании),
+  `src/__tests__/app.test.tsx` (1 — «opens a note and shows its preview»).
+  Падения вызваны незакоммиченной работой по ленивому превью и хосту
+  плагинов, выполняемой параллельно с аудитом; на более раннем срезе
+  прогон был полностью зелёным (11 файлов, 71 тест).
 * **Внешние интеграции отсутствуют:** OAuth, синхронизация, плагины сторонних
   разработчиков не оценивались, так как соответствующего кода в репозитории
   нет.

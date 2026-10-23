@@ -39,12 +39,11 @@ func (d Divergence) String() string {
 
 // KnownDivergences are the differences between the implementations that are
 // already known and that must not be hidden by the conformance suite.
-var KnownDivergences = map[string]bool{
-	"move note relocates the descendants of a moved folder":   true,
-	"search returns the matches of a file name":               true,
-	"search honours the limit for the matches of a file name": true,
-	"an empty query returns no hits":                          true,
-}
+//
+// Every implementation of port.Store must satisfy the whole suite, so no
+// difference is tracked at the moment: a difference that is observed is a
+// defect of the implementation that is reported.
+var KnownDivergences = map[string]bool{}
 
 // suite holds the state of a single run of the conformance suite.
 type suite struct {
@@ -215,8 +214,6 @@ func (s *suite) caseMoveNote() {
 
 // caseMoveDescendants checks that the descendants of a moved folder are
 // relocated with it.
-//
-// Known divergence: the in-memory store does not relocate the descendants.
 func (s *suite) caseMoveDescendants() {
 	ctx := context.Background()
 	store := s.store()
@@ -278,8 +275,6 @@ func (s *suite) caseSearchContent() {
 }
 
 // caseSearchName checks that the name of a file is searched as well.
-//
-// Known divergence: the in-memory store searches the content only.
 func (s *suite) caseSearchName() {
 	ctx := context.Background()
 	store := s.store()
@@ -335,9 +330,6 @@ func (s *suite) caseSearchLimit() {
 
 // caseSearchNameLimit checks that the limit of a search is honoured for the
 // matches of a file name.
-//
-// Known divergence: the in-memory store does not search the names at all, so
-// the limit of the name matches cannot be observed.
 func (s *suite) caseSearchNameLimit() {
 	ctx := context.Background()
 	store := s.store()
@@ -362,9 +354,6 @@ func (s *suite) caseSearchNameLimit() {
 }
 
 // caseEmptyQuery checks that an empty query returns no hits.
-//
-// Known divergence: the in-memory store matches every indexed entry with an
-// empty query.
 func (s *suite) caseEmptyQuery() {
 	ctx := context.Background()
 	store := s.store()

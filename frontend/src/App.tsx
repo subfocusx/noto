@@ -1,26 +1,59 @@
-import { useEffect, useMemo, useRef } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AppFooter } from './components/AppFooter';
 import { AppHeader } from './components/AppHeader';
 import { AttachmentsPanel } from './components/AttachmentsPanel';
 import { Dialog } from './components/Dialog';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteDialogs } from './components/NoteDialogs';
+import {
+  PluginCommandSlot,
+  PluginContextMenuSlot,
+  PluginPanelSlot,
+  PluginSidebarSlot,
+  PluginToolbarSlot,
+} from './components/PluginSlots';
+import {
+  PluginManagerPanel,
+  type PluginManagerEntry,
+  type PluginManagerStatus,
+} from './components/PluginManagerPanel';
 import { Preview } from './components/Preview';
 import { SearchPanel } from './components/SearchPanel';
 import { Sidebar } from './components/Sidebar';
 import { TrashPanel } from './components/TrashPanel';
 import { TransferPanel } from './components/TransferPanel';
+import { createPluginApi } from './core/api/pluginApi';
+import { CommandRegistry } from './core/commands/commandRegistry';
+import { EventBus } from './core/events/eventBus';
+import { SettingsStore } from './core/settings/settingsStore';
 import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
 import { buildTree } from './lib/tree';
 import { createWikiResolver } from './lib/wiki';
+import type { PluginEditor, PluginEventMap, PluginState } from './plugins/contract';
+import { PluginHost } from './plugins/host';
+import { builtinPlugins } from './plugins/loader';
+import { PluginRegistry } from './plugins/registry';
 
 /**
  * The application shell.
  *
  * All state lives in the store (`./core/store/appStore.ts`); this component
  * only composes the UI and forwards user intents to the store actions.
+ *
+ * The plugin platform is connected here as well: the host is created once,
+ * the built-in plugins are registered with it and the plugin contributions
+ * are rendered through the slots of `./components/PluginSlots.tsx`.
  */
+
+/** Maps the state of the registry onto the states of the manager panel. */
+function toManagerStatus(state: PluginState): PluginManagerStatus {
+  if (state === 'active' || state === 'loading' || state === 'enabled') return 'active';
+  if (state === 'failed') return 'failed';
+  if (state === 'incompatible') return 'incompatible';
+  return 'disabled';
+}
+
 export function App() {
   const state = useAppState();
   const actions = useAppActions();
@@ -33,7 +66,203 @@ export function App() {
     return () => appStore.stop();
   }, []);
 
-  /* --------------------------------------------------------- shortcuts */
+  /* ------------------------------------------------------------- plugins */
+
+  const hostRef = useRef<PluginHost | null>(null);
+  const registryRef = useRef<PluginRegistry | null>(null);
+  const commandsRef = useRef<CommandRegistry | null>(null);
+  const settingsRef = useRef<SettingsStore | null>(null);
+  const [pluginVersion, setPluginVersion] = useState(0);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [settingsPluginId, setSettingsPluginId] = useState<string | null>(null);
+
+  /** The path of the note that is open; the plugins read it through the editor. */
+  const currentPathRef = useRef<string | null>(note.path);
+  currentPathRef.current = note.path;
+
+  /**
+   * The editor as the plugins see it.
+   *
+   * The contract has no `setText()`: replacing the whole document behind the
+   * editor's back would bypass the autosave.
+   */
+  const pluginEditor = (): PluginEditor | null => {
+    const handle = editorRef.current;
+    if (!handle) return null;
+    return {
+      getText: () => handle.getText(),
+      getSelection: () => handle.getSelection(),
+      getCursor: () => handle.getCursor(),
+      insert: (text: string) => handle.insert(text),
+      insertAt: (text: string, from: number, to: number) => handle.insertAt(text, from, to),
+      replaceSelection: (text: string) => handle.replaceSelection(text),
+      focus: () => handle.focus(),
+      openSearch: () => handle.openSearch(),
+      getPath: () => currentPathRef.current,
+      onChange: (cb) => handle.onChange(cb),
+      onSelectionChange: (cb) => handle.onSelectionChange(cb),
+    };
+  };
+
+  // The host is created once and disposed when the application goes away.
+  useEffect(() => {
+    const registry = new PluginRegistry();
+    const bus = new EventBus<PluginEventMap>();
+    const commands = new CommandRegistry();
+    const settings = new SettingsStore();
+    registryRef.current = registry;
+    commandsRef.current = commands;
+    settingsRef.current = settings;
+
+    const host = new PluginHost({
+      registry,
+      bus,
+      commands,
+      settings,
+      createApi: () => createPluginApi(),
+      getEditor: () => pluginEditor(),
+    });
+    hostRef.current = host;
+
+    const offState = registry.onStateChange(() => setPluginVersion((v) => v + 1));
+
+    void (async () => {
+      // The enabled/disabled flags of the plugins survive a reload.
+      let states: Record<string, boolean> = {};
+      try {
+        states = await settings.getEnabledStates();
+      } catch {
+        states = {};
+      }
+      for (const plugin of builtinPlugins) {
+        const id = plugin.manifest.id;
+        const result = registry.register(plugin);
+        // A plugin with an invalid manifest or an incompatible one keeps its
+        // error state; it is never activated.
+        if (!result.ok) continue;
+        if (states[id] === false) {
+          registry.disable(id);
+          continue;
+        }
+        registry.enable(id);
+        await host.activate(id);
+      }
+      setPluginVersion((v) => v + 1);
+    })();
+
+    return () => {
+      offState();
+      void host.disposeAll();
+      hostRef.current = null;
+      registryRef.current = null;
+      commandsRef.current = null;
+      settingsRef.current = null;
+    };
+    // The host lives as long as the application does.
+  }, []);
+
+  /** Stores the enabled/disabled flags of the plugins. */
+  const persistEnabledStates = async (): Promise<void> => {
+    const registry = registryRef.current;
+    const settings = settingsRef.current;
+    if (!registry || !settings) return;
+    const states: Record<string, boolean> = {};
+    for (const entry of registry.list()) states[entry.plugin.manifest.id] = entry.enabled;
+    try {
+      await settings.setEnabledStates(states);
+    } catch {
+      /* the storage is not available */
+    }
+  };
+
+  const enablePlugin = async (id: string): Promise<void> => {
+    const registry = registryRef.current;
+    const host = hostRef.current;
+    if (!registry || !host) return;
+    registry.enable(id);
+    await host.activate(id);
+    await persistEnabledStates();
+  };
+
+  const disablePlugin = async (id: string): Promise<void> => {
+    const registry = registryRef.current;
+    const host = hostRef.current;
+    if (!registry || !host) return;
+    registry.disable(id);
+    await host.deactivate(id);
+    await persistEnabledStates();
+  };
+
+  const resetPluginSettings = async (id: string): Promise<void> => {
+    const settings = settingsRef.current;
+    if (!settings) return;
+    try {
+      await settings.reset(id);
+    } catch {
+      /* the storage is not available */
+    }
+  };
+
+  /* -------------------------------------------------------------- events */
+
+  /** Opens a note and tells the plugins about it. */
+  const openNote = async (path: string): Promise<void> => {
+    await actions.openNote(path);
+    const snapshot = appStore.getSnapshot();
+    const host = hostRef.current;
+    if (!host) return;
+    if (snapshot.note.path !== path || snapshot.note.status === 'error') return;
+    host.emit('note.updated', { path, revision: snapshot.note.revision });
+    host.emit('workspace.opened', { path });
+  };
+
+  /**
+   * Confirms the current dialog.
+   *
+   * The events are emitted only when the server confirmed the change: the
+   * new state of the tree is the proof of it.
+   */
+  const confirmDialog = async (): Promise<void> => {
+    const { kind, node, value, parentPath } = dialog;
+    await actions.confirmDialog();
+    const host = hostRef.current;
+    if (!host) return;
+    const snapshot = appStore.getSnapshot();
+    const paths = new Set(snapshot.tree.files.map((file) => file.path));
+
+    if (kind === 'create-file') {
+      const path = snapshot.note.path;
+      if (path && paths.has(path)) host.emit('note.created', { path });
+    } else if (kind === 'create-folder') {
+      const parent = parentPath ?? '';
+      const path = parent ? `${parent}/${value ?? ''}` : (value ?? '');
+      if (path) host.emit('folder.created', { path });
+    } else if (kind === 'rename' && node) {
+      const parent = node.parentPath ?? '';
+      const path = parent ? `${parent}/${value ?? ''}` : (value ?? '');
+      if (path && paths.has(path)) host.emit('note.renamed', { path, previousPath: node.path });
+    } else if (kind === 'move' && node) {
+      const parent = value ?? '';
+      const path = parent ? `${parent}/${node.name}` : node.name;
+      if (paths.has(path)) host.emit('note.moved', { path, previousPath: node.path });
+    } else if (kind === 'delete' && node) {
+      if (!paths.has(node.path)) host.emit('note.deleted', { path: node.path });
+    }
+  };
+
+  // A finished save is reported to the plugins.
+  const previousStatus = useRef(note.status);
+  useEffect(() => {
+    const previous = previousStatus.current;
+    previousStatus.current = note.status;
+    const host = hostRef.current;
+    if (!host) return;
+    if (note.status === 'saved' && previous === 'saving' && note.path) {
+      host.emit('editor.saved', { path: note.path, revision: note.revision });
+    }
+  }, [note.status, note.path, note.revision]);
+
+  /* ----------------------------------------------------------- shortcuts */
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -68,6 +297,53 @@ export function App() {
     () => tree.folders.map((f) => f.path).sort((a, b) => a.localeCompare(b)),
     [tree.folders],
   );
+
+  /* ---------------------------------------------- the plugin contributions */
+
+  const pluginEntries = useMemo<PluginManagerEntry[]>(() => {
+    const registry = registryRef.current;
+    if (!registry) return [];
+    return registry.list().map((entry) => ({
+      id: entry.plugin.manifest.id,
+      manifest: entry.plugin.manifest,
+      status: toManagerStatus(entry.state),
+      error: entry.error ?? null,
+    }));
+    // `pluginVersion` changes whenever the state of a plugin changes.
+  }, [pluginVersion]);
+
+  const pluginPanels = useMemo(
+    () => hostRef.current?.panels() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+  const pluginSidebarItems = useMemo(
+    () => hostRef.current?.sidebarItems() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+  const pluginToolbarItems = useMemo(
+    () => hostRef.current?.toolbarItems() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+  const pluginContextMenuItems = useMemo(
+    () => hostRef.current?.contextMenuItems() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+  const pluginCommands = useMemo(
+    () => commandsRef.current?.list() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+  const pluginSettingsSections = useMemo(
+    () => hostRef.current?.settingsSections() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginVersion],
+  );
+
+  const settingsPlugin = pluginEntries.find((entry) => entry.id === settingsPluginId) ?? null;
 
   const statusLabel =
     note.status === 'saving'
@@ -131,7 +407,7 @@ export function App() {
             currentPath={note.path ?? ''}
             expanded={ui.expanded}
             onToggle={actions.toggleFolder}
-            onSelect={(path) => void actions.openNote(path)}
+            onSelect={(path) => void openNote(path)}
             onCreateFolder={(parentPath) =>
               actions.openDialog({ kind: 'create-folder', parentPath, value: 'New folder' })
             }
@@ -147,10 +423,24 @@ export function App() {
             onRefresh={() => void actions.refreshTree()}
             loading={tree.loading}
           />
+
+          <div class="noto-plugin-sidebar-area">
+            <PluginSidebarSlot items={pluginSidebarItems} />
+            <PluginContextMenuSlot items={pluginContextMenuItems} path={note.path ?? ''} />
+            <button
+              type="button"
+              class="text-button"
+              aria-label="Plugins"
+              onClick={() => setPluginsOpen(true)}
+            >
+              Plugins
+            </button>
+          </div>
         </div>
 
         <main class="workspace">
           <div class="pane pane-editor">
+            <PluginToolbarSlot items={pluginToolbarItems} />
             <MarkdownEditor
               value={note.content}
               path={note.path ?? ''}
@@ -173,10 +463,11 @@ export function App() {
               <Preview
                 source={note.content}
                 resolve={wikiResolver}
-                onOpenNote={(path) => void actions.openNote(path)}
+                onOpenNote={(path) => void openNote(path)}
               />
             </div>
           ) : null}
+          <PluginPanelSlot panels={pluginPanels} />
         </main>
       </div>
 
@@ -190,7 +481,7 @@ export function App() {
       <SearchPanel
         open={ui.searchOpen}
         onClose={() => actions.setSearchOpen(false)}
-        onOpenNote={(path) => void actions.openNote(path)}
+        onOpenNote={(path) => void openNote(path)}
       />
 
       <TrashPanel
@@ -206,6 +497,42 @@ export function App() {
         onImported={() => void actions.refreshTree()}
       />
 
+      <Dialog title="Plugins" open={pluginsOpen} onClose={() => setPluginsOpen(false)}>
+        <PluginManagerPanel
+          plugins={pluginEntries}
+          onEnable={(id) => void enablePlugin(id)}
+          onDisable={(id) => void disablePlugin(id)}
+          onOpenSettings={(id) => setSettingsPluginId(id)}
+          onResetSettings={(id) => void resetPluginSettings(id)}
+        />
+        <PluginCommandSlot commands={pluginCommands} />
+      </Dialog>
+
+      <Dialog
+        title={settingsPlugin ? `Settings: ${settingsPlugin.manifest.name}` : 'Settings'}
+        open={settingsPlugin !== null}
+        onClose={() => setSettingsPluginId(null)}
+      >
+        {settingsPlugin?.manifest.settings?.length ? (
+          <ul class="noto-plugin-list" role="list" aria-label="Plugin settings">
+            {settingsPlugin.manifest.settings.map((schema) => (
+              <li key={schema.key} class="noto-plugin-list-item">
+                <span class="noto-plugin-name">{schema.label}</span>
+                <p class="noto-plugin-description">
+                  {schema.key} ({schema.type}): {String(schema.default)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {pluginSettingsSections.map((section) => (
+          <section key={section.id} class="noto-plugin-settings-section">
+            <h3>{section.title}</h3>
+            {section.render()}
+          </section>
+        ))}
+      </Dialog>
+
       <Dialog title="Attachments" open={dialog.kind === 'attachments'} onClose={actions.closeDialog}>
         <AttachmentsPanel notePath={note.path} onInsert={insertAtCursor} />
       </Dialog>
@@ -215,7 +542,7 @@ export function App() {
         folderPaths={treeFolderPaths}
         draftOffer={draftOffer}
         onClose={actions.closeDialog}
-        onConfirm={() => void actions.confirmDialog()}
+        onConfirm={() => void confirmDialog()}
         onChangeValue={actions.setDialogValue}
         onRestoreDraft={actions.restoreDraft}
         onDiscardDraft={actions.discardDraft}

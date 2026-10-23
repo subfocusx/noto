@@ -3,6 +3,8 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"strings"
 	"sync"
 
@@ -77,24 +79,68 @@ func (s *MemStore) DeleteNote(_ context.Context, path string) error {
 }
 
 // MoveNote implements port.Store.
+//
+// The whole subtree of a moved folder is relocated with it and the search index
+// rows of the moved paths follow, like the SQLite store does.
 func (s *MemStore) MoveNote(_ context.Context, fromPath, toPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n, ok := s.notes[fromPath]
-	if !ok {
+	if fromPath == "" || toPath == "" {
+		return errors.New("testutil: empty path")
+	}
+	if fromPath == toPath {
 		return nil
 	}
-	delete(s.notes, fromPath)
-	n.Path = toPath
-	n.ParentPath = parentOf(toPath)
-	n.Name = baseOf(toPath)
-	s.notes[toPath] = n
-	if e, ok := s.index[fromPath]; ok {
-		delete(s.index, fromPath)
-		e.name = n.Name
-		s.index[toPath] = e
+
+	// The moved node itself.
+	if n, ok := s.notes[fromPath]; ok {
+		delete(s.notes, fromPath)
+		s.notes[toPath] = relocated(n, toPath)
 	}
+
+	// The descendants of a moved folder.
+	prefix := fromPath + "/"
+	moved := map[string]string{}
+	for p := range s.notes {
+		if strings.HasPrefix(p, prefix) {
+			moved[p] = toPath + "/" + strings.TrimPrefix(p, prefix)
+		}
+	}
+	for p := range s.index {
+		if _, ok := moved[p]; ok || !strings.HasPrefix(p, prefix) {
+			continue
+		}
+		moved[p] = toPath + "/" + strings.TrimPrefix(p, prefix)
+	}
+	for p, np := range moved {
+		if n, ok := s.notes[p]; ok {
+			delete(s.notes, p)
+			s.notes[np] = relocated(n, np)
+		}
+		s.moveIndex(p, np)
+	}
+	s.moveIndex(fromPath, toPath)
 	return nil
+}
+
+// relocated returns the node with the path, the name and the parent of a new
+// location.
+func relocated(n model.Node, newPath string) model.Node {
+	n.Path = newPath
+	n.Name = baseOf(newPath)
+	n.ParentPath = parentOf(newPath)
+	return n
+}
+
+// moveIndex relocates the index row of a single path.
+func (s *MemStore) moveIndex(fromPath, toPath string) {
+	e, ok := s.index[fromPath]
+	if !ok {
+		return
+	}
+	delete(s.index, fromPath)
+	e.name = baseOf(toPath)
+	s.index[toPath] = e
 }
 
 // ListNotes implements port.Store.
@@ -124,26 +170,55 @@ func (s *MemStore) RemoveContent(_ context.Context, path string) error {
 	return nil
 }
 
-// Search implements port.Store with a simple case insensitive substring scan.
+// Search implements port.Store.
+//
+// The file name and the content of a note are searched, like the SQLite store
+// does. The matches of the names come first, the matches of the content
+// follow. An empty query matches nothing.
 func (s *MemStore) Search(_ context.Context, query string, limit int) ([]model.SearchHit, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if limit <= 0 {
 		limit = 50
 	}
-	q := strings.ToLower(query)
-	var out []model.SearchHit
+	tokens := tokenize(query)
+	if len(tokens) == 0 {
+		return []model.SearchHit{}, nil
+	}
+
+	var nameHits, contentHits []model.SearchHit
 	for path, e := range s.index {
-		if strings.Contains(strings.ToLower(e.body), q) {
-			out = append(out, model.SearchHit{
+		if matchesTokens(e.name, tokens) {
+			nameHits = append(nameHits, model.SearchHit{
+				Path:    path,
+				Name:    e.name,
+				Kind:    "name",
+				Snippet: snippet(e.name, tokens),
+			})
+		}
+		if matchesTokens(e.body, tokens) {
+			contentHits = append(contentHits, model.SearchHit{
 				Path:    path,
 				Name:    e.name,
 				Kind:    "content",
-				Snippet: snippet(e.body, query),
+				Snippet: snippet(e.body, tokens),
 			})
-			if len(out) >= limit {
-				break
-			}
+		}
+	}
+	sort.Slice(nameHits, func(i, j int) bool { return nameHits[i].Path < nameHits[j].Path })
+	sort.Slice(contentHits, func(i, j int) bool { return contentHits[i].Path < contentHits[j].Path })
+
+	out := []model.SearchHit{}
+	seen := map[string]bool{}
+	for _, h := range append(nameHits, contentHits...) {
+		key := h.Path + "\x00" + h.Kind
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, h)
+		if len(out) >= limit {
+			break
 		}
 	}
 	return out, nil
@@ -278,24 +353,4 @@ func baseOf(rel string) string {
 		return rel
 	}
 	return rel[i+1:]
-}
-
-func snippet(body, query string) string {
-	lower := strings.ToLower(body)
-	i := strings.Index(lower, strings.ToLower(query))
-	if i < 0 {
-		if len(body) > 80 {
-			return body[:80]
-		}
-		return body
-	}
-	start := i - 20
-	if start < 0 {
-		start = 0
-	}
-	end := i + 60
-	if end > len(body) {
-		end = len(body)
-	}
-	return body[start:end]
 }

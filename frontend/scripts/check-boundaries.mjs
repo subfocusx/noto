@@ -163,6 +163,28 @@ function inLayer(key, prefix) {
 }
 
 /**
+ * Returns the builtin package directory of a file key, e.g.
+ * `src/plugins/builtin/word-count/index.ts` -> `src/plugins/builtin/word-count`.
+ */
+function builtinPackageOf(fileKey) {
+  if (!inLayer(fileKey, LAYERS.builtin)) return null;
+  const rest = fileKey.slice(LAYERS.builtin.length);
+  const slash = rest.indexOf('/');
+  if (slash < 0) return LAYERS.builtin;
+  return LAYERS.builtin + rest.slice(0, slash);
+}
+
+/**
+ * True when `target` lives inside the same builtin plugin package as `fileKey`
+ * (a plugin may import its own modules, but never another plugin's).
+ */
+function isSameBuiltinPackage(fileKey, target) {
+  const pkg = builtinPackageOf(fileKey);
+  if (!pkg) return false;
+  return target === pkg || target.startsWith(`${pkg}/`);
+}
+
+/**
  * @param {string} fileKey POSIX path relative to `frontend/` (no extension)
  * @param {{specifier: string, typeOnly: boolean, line: number}} imp
  * @param {string} target POSIX path relative to `frontend/` (no extension)
@@ -181,11 +203,13 @@ function checkImport(fileKey, imp, target) {
     );
   }
 
-  // R2: api/lib/components must not depend on plugins.
+  // R2: api/lib must not depend on plugins; components may only use the
+  // explicitly allowed plugin modules (see R6 and the allow-list above).
   if (
     (inLayer(fileKey, LAYERS.api) ||
       inLayer(fileKey, LAYERS.lib) ||
-      inLayer(fileKey, LAYERS.components)) &&
+      (inLayer(fileKey, LAYERS.components) &&
+        !ALLOWED_COMPONENT_PLUGIN_IMPORTS.includes(target))) &&
     fromPlugins
   ) {
     const layer = fileKey.split('/')[1];
@@ -198,9 +222,13 @@ function checkImport(fileKey, imp, target) {
   }
 
   // R4: plugin imports from core and builtin must be type-only.
+  // Exception: a builtin plugin may import its own modules at runtime (they
+  // are part of the same plugin package and are bundled together).
+  const sameBuiltinPackage = isSameBuiltinPackage(fileKey, target);
   if (
     fromPlugins &&
-    (inLayer(fileKey, LAYERS.core) || inLayer(fileKey, LAYERS.builtin)) &&
+    (inLayer(fileKey, LAYERS.core) ||
+      (inLayer(fileKey, LAYERS.builtin) && !sameBuiltinPackage)) &&
     !imp.typeOnly
   ) {
     report(
@@ -211,14 +239,14 @@ function checkImport(fileKey, imp, target) {
     );
   }
 
-  // R3: builtin may only import src/plugins/contract.ts.
-  if (inLayer(fileKey, LAYERS.builtin)) {
+  // R3: builtin may only import src/plugins/contract.ts and its own files.
+  if (inLayer(fileKey, LAYERS.builtin) && !sameBuiltinPackage) {
     if (!ALLOWED_BUILTIN_PLUGIN_IMPORTS.includes(target)) {
       report(
         'R3',
         fileKey,
         imp.line,
-        `src/plugins/builtin/** may only import ${ALLOWED_BUILTIN_PLUGIN_IMPORTS.join(', ')} (imports "${target}")`,
+        `src/plugins/builtin/** may only import ${ALLOWED_BUILTIN_PLUGIN_IMPORTS.join(', ')} or its own package files (imports "${target}")`,
       );
     }
   }
@@ -256,7 +284,8 @@ function checkImport(fileKey, imp, target) {
   }
 
   // R7: builtin plugins are reachable only through src/plugins/**.
-  if (!inLayer(fileKey, LAYERS.plugins) && fromBuiltin) {
+  // Exception: unit tests may import a builtin plugin to verify it.
+  if (!inLayer(fileKey, LAYERS.plugins) && fromBuiltin && !inLayer(fileKey, 'src/__tests__/')) {
     report(
       'R7',
       fileKey,

@@ -2,8 +2,10 @@
 //
 // The menu is a small floating panel: it shows the actions of a note or of a
 // folder. Every action is an icon, and its name is carried by the accessible
-// label and by the native tooltip of the button. The menu is rendered by the
-// sidebar when a row asks for it, and it closes as soon as the user leaves it.
+// label and by the native tooltip of the button. The panel names the node it
+// acts on, so the user always knows which node the actions belong to. The
+// menu is rendered by the sidebar when a row asks for it, and it closes as
+// soon as the user leaves it.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { PluginContextMenuItem } from '../plugins/contract';
@@ -54,6 +56,17 @@ export interface TreeContextMenuProps {
 /** The distance kept between the menu and the edge of the viewport. */
 const MARGIN = 8;
 
+/**
+ * The name of the node the menu acts on.
+ *
+ * It is the last segment of the path: the menu says which node it acts on,
+ * so the user never mistakes the menu of a folder for the menu of another one.
+ */
+function nameOf(path: string): string {
+  const segments = path.split('/');
+  return segments[segments.length - 1] || path;
+}
+
 /** An entry of the menu: an icon, and the name of the action. */
 function MenuEntry(props: {
   /** The name of the action, used as label and as tooltip. */
@@ -83,6 +96,7 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const closedRef = useRef(false);
   const [position, setPosition] = useState({ left: props.x, top: props.y });
+  const name = nameOf(props.path);
 
   // The menu is measured after the first render: it is then moved back into
   // the viewport when it would overflow it.
@@ -146,9 +160,12 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
       ref={menuRef}
       class="context-menu"
       role="menu"
-      aria-label={props.isFolder ? 'Folder actions' : 'Note actions'}
+      aria-label={`Actions of ${name}`}
       style={{ position: 'fixed', left: `${position.left}px`, top: `${position.top}px` }}
     >
+      <div class="context-menu-title" title={name} aria-hidden="true">
+        {name}
+      </div>
       <MenuEntry label="Rename" onSelect={() => run(props.onRename)}>
         <Icon name="pencil" size={16} />
       </MenuEntry>

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/preact';
 import { Sidebar } from '../components/Sidebar';
 import { TreeFolderRow, TreeNoteRow, indentOf } from '../components/TreeRow';
+import type { TreeContextMenuPayload } from '../components/TreeContextMenu';
 import { buildTree } from '../lib/tree';
 import type { TreeFolder } from '../lib/tree';
 import type { Node } from '../types';
@@ -264,5 +265,83 @@ describe('the rows of the tree', () => {
     expect(view.container.querySelector('.tree-rail')).not.toBeNull();
     expect(filesByParent.size).toBeGreaterThan(0);
     expect(root.node.name).toBe('journal');
+  });
+});
+
+describe('the right click on a row', () => {
+  /** The tree of the tests: the folder `journal` and the note `a.md` inside it. */
+  function renderTree(onContextMenu: (payload: TreeContextMenuPayload) => void) {
+    const folders = [folder('journal', 'journal', '')];
+    const files = [file('journal/a.md', 'a.md', 'journal')];
+    const { roots, filesByParent } = buildTree(folders, files);
+    return render(
+      <TreeFolderRow
+        folder={roots[0] as TreeFolder}
+        filesByParent={filesByParent}
+        currentPath=""
+        expanded={new Set(['journal'])}
+        depth={0}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+        onContextMenu={onContextMenu}
+        onRenameInline={() => undefined}
+      />,
+    );
+  }
+
+  it('opens the menu of a folder at the pointer of the right click', () => {
+    const onContextMenu = vi.fn();
+    const view = renderTree(onContextMenu);
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.contextMenu(row, { clientX: 120, clientY: 240 });
+
+    expect(onContextMenu).toHaveBeenCalledTimes(1);
+    expect(onContextMenu).toHaveBeenCalledWith({
+      path: 'journal',
+      isFolder: true,
+      x: 120,
+      y: 240,
+    });
+  });
+
+  it('opens the menu of a note when the right click lands on it', () => {
+    const onContextMenu = vi.fn();
+    const view = renderTree(onContextMenu);
+    const row = view.getByText('a.md').closest('.tree-row') as HTMLElement;
+
+    fireEvent.contextMenu(row, { clientX: 30, clientY: 40 });
+
+    expect(onContextMenu).toHaveBeenCalledTimes(1);
+    expect(onContextMenu).toHaveBeenCalledWith({
+      path: 'journal/a.md',
+      isFolder: false,
+      x: 30,
+      y: 40,
+    });
+  });
+
+  it('does not open the menu when the right click lands in the rename field', () => {
+    const onContextMenu = vi.fn();
+    const view = renderTree(onContextMenu);
+    fireEvent.dblClick(view.getByText('journal'));
+    const input = view.getByLabelText('Rename journal');
+
+    fireEvent.contextMenu(input, { clientX: 10, clientY: 20 });
+
+    expect(onContextMenu).not.toHaveBeenCalled();
+  });
+
+  it('keeps the button of the menu of the row working', () => {
+    const onContextMenu = vi.fn();
+    const view = renderTree(onContextMenu);
+
+    fireEvent.click(view.getByLabelText('Menu journal'));
+
+    expect(onContextMenu).toHaveBeenCalledTimes(1);
+    expect(onContextMenu.mock.calls[0]?.[0]).toMatchObject({
+      path: 'journal',
+      isFolder: true,
+    });
   });
 });

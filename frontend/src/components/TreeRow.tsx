@@ -2,8 +2,10 @@
 //
 // A row is a line of the file tree: a folder with its toggle, its name and
 // its actions, or a note with its name and its actions. Both rows can be
-// renamed in place with a double click, and both rows can be dragged to
-// another folder.
+// renamed in place with a double click, both rows can be dragged to another
+// folder, and a right click on a row opens the menu of that row: the actions
+// of a folder include the creation of a folder inside it.
+import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
@@ -211,6 +213,41 @@ function RenameInput(props: {
 }
 
 /**
+ * Tells whether a native event happened inside the rename field of a row.
+ *
+ * The user who renames a node is editing a name, not asking for a menu: the
+ * right click inside the field must not open the menu of the row.
+ */
+function isInsideRenameInput(event: Event, rename: InlineRename): boolean {
+  if (!rename.renaming) return false;
+  return event.target === rename.inputRef.current;
+}
+
+/**
+ * Opens the menu of a row after a native right click.
+ *
+ * The browser menu never appears in the tree: the right click is one of the
+ * ways to reach the actions of a row, and the actions of a folder include the
+ * creation of a folder inside it.
+ */
+function openMenuOnRightClick(
+  event: JSX.TargetedMouseEvent<HTMLDivElement>,
+  node: Node,
+  isFolder: boolean,
+  rename: InlineRename,
+  onContextMenu?: (payload: TreeContextMenuPayload) => void,
+): void {
+  event.preventDefault();
+  if (isInsideRenameInput(event, rename)) return;
+  onContextMenu?.({
+    path: node.path,
+    isFolder,
+    x: event.clientX,
+    y: event.clientY,
+  });
+}
+
+/**
  * The actions of a row.
  *
  * The row carries one button: the menu of the row. Every action of the row
@@ -291,6 +328,10 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
     props.onDropOnFolder?.(node, node.path);
   };
 
+  const handleContextMenu = (event: JSX.TargetedMouseEvent<HTMLDivElement>): void => {
+    openMenuOnRightClick(event, node, true, rename, props.onContextMenu);
+  };
+
   return (
     <li class="tree-folder">
       <div
@@ -302,6 +343,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
         onDragOver={handleDragOver}
         onDragLeave={() => setOver(false)}
         onDrop={handleDrop}
+        onContextMenu={handleContextMenu}
       >
         <IndentGuides depth={props.depth} />
         <span class="tree-rail" style={{ width: `${RAIL_WIDTH}px` }}>
@@ -397,6 +439,10 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
     props.onDragStart?.({ path: file.path, isFolder: false });
   };
 
+  const handleContextMenu = (event: JSX.TargetedMouseEvent<HTMLDivElement>): void => {
+    openMenuOnRightClick(event, file, false, rename, props.onContextMenu);
+  };
+
   return (
     <li class={`tree-file${selected ? ' selected' : ''}`}>
       <div
@@ -405,6 +451,7 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
         draggable
         onDragStart={handleDragStart}
         onDragEnd={() => props.onDragEnd?.()}
+        onContextMenu={handleContextMenu}
       >
         <IndentGuides depth={props.depth} />
         <span class="tree-rail" style={{ width: `${RAIL_WIDTH}px` }} />

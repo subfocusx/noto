@@ -2061,3 +2061,14 @@ kbd {
   background: transparent;
   color: var(--fg-muted);
 }
+
+/* The header of the context menu: it names the node the menu acts on. */
+.context-menu-title {
+  max-width: 180px;
+  padding: var(--space-1) var(--space-2);
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

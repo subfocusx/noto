@@ -84,11 +84,15 @@ test.describe('editor', () => {
     await typeInEditor(page, 'Some content.\n');
     await waitForSaved(page);
 
-    // Count the write requests from now on.
+    // Count the write requests from now on. The query of the language is a
+    // read (it is a POST, but it changes nothing), so only the endpoints that
+    // write are counted here.
     const writes: string[] = [];
     page.on('request', (request) => {
+      const url = new URL(request.url()).pathname;
+      if (url.startsWith('/api/query')) return;
       if (request.method() === 'PUT' || request.method() === 'POST') {
-        writes.push(`${request.method()} ${request.url()}`);
+        writes.push(`${request.method()} ${url}`);
       }
     });
 

@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Noto (Markdown Notes PWA)
 
-Last updated: 2026-10-24 (phase 7). Status legend: **done** (implemented and
+Last updated: 2026-10-24 (phase 9). Status legend: **done** (implemented and
 verified here) · **partial** (implemented, some part unverified) · **planned**.
 
 ## Architecture
@@ -67,6 +67,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 10 | Phase 4: premium UI redesign, design system, accessibility, UX | done | see "Phase 4 status" below |
 | 11 | Phase 7: the redesign of the shell and the encrypted storage | done | see "Closed phases" below — commit `60d7ba8` |
 | 12 | Phase 8: the query language, the derived properties, the plugin API 1.2.0 | done | see "Phase 8 status" below |
+| 13 | Phase 9: the interface without documentation (the filter that works, the tags of the note, the conflict of the saving) | done | see "Phase 9 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -280,6 +281,52 @@ undo of a deletion, the card of the note and the synchronisation of the filter
 with the URL. The regular expressions are deliberately not supported: the
 operator `matches` answers «unknown operator».
 
+## Phase 9 status (the interface without documentation)
+
+The complaint of the user was precise: *the interface has to be understandable
+without the documentation*. Three defects were behind it, and all three were
+real, not cosmetic:
+
+1. the panels of the query language (the query, the saved views, the tags)
+   **computed the hits and showed nothing** — the block did not filter the
+   tree, so the user saw a query that did nothing;
+2. the icons of the sidebar were duplicated (the trash was in the list and in
+   the footer, the recent notes were a text row), and the manager of the
+   plugins was in Russian while the shell was in English;
+3. the tags of a note had no visible owner: they were a derived property of
+   the text, and the text was the only place where they could be seen.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P9-1 | The plugins of the query language failed to load: the right `query.read` was used by the built-in plugins but was missing in the list of the rights, so the host refused every one of them with «unknown permission». The contract did not change (it stays 1.2.0) — the list of the rights was wrong | done | `frontend/src/plugins/manifest.ts` |
+| P9-2 | The block of the selection is one block now (**Filter**): the field of the condition, the number of the hits, the chips of the tags and the saved filters as chips. The block says in plain words what it does («Shows only the notes that match the condition.») and the tags are flat chips with a counter instead of a tree nobody understood | done | `frontend/src/components/FilterPanel.tsx` (replaces `QueryBar.tsx`, `SavedViews.tsx`, `TagTree.tsx`) |
+| P9-3 | The filter **really filters the tree**: the hits of the query become the paths of the visible notes (`filterTree` in `frontend/src/lib/tree.ts`), the tree carries the badge «filtered» and the button of the reset brings the whole tree back. The notes stay in the storage and remain reachable through the tabs | done | `frontend/src/components/Sidebar.tsx`, `frontend/src/App.tsx` |
+| P9-4 | The duplicates of the icons are gone: the trash stays in the list of the notes (it was there twice), the footer of the sidebar holds only the import and the export, the recent notes became the icon of the clock in the actions of the explorer, and the manager of the plugins and the built-in plugins were translated into English | done | `frontend/src/components/Sidebar.tsx`, `frontend/src/components/PluginManagerPanel.tsx`, `frontend/src/plugins/builtin/**`, `frontend/src/ui/icons.tsx` (the new icons `link`, `tags`, `clock`, `hash`) |
+| P9-5 | The tags of the open note have a visible owner: the strip of the tags sits above the editor and is always there (it carries the button that adds the first tag). The tag is written into the text and cut out of the text — one source of truth, so it also works in the encrypted storage, where there is nowhere else to keep it | done | `frontend/src/components/NoteTags.tsx`, `frontend/src/App.tsx` |
+| P9-6 | The conflict of the saving is a dialog with three ways out (take the version of the server, keep mine, copy mine) instead of a line of error that says the saving is impossible. The race of two simultaneous savings of the same note is closed: the saves are serialized per note | done | `frontend/src/components/NoteConflictDialog.tsx`, `frontend/src/core/store/{types,state,actions}.ts`, `frontend/src/lib/autosave.ts` |
+| P9-7 | The buttons are tested by their **effect**, not by their presence: the new E2E file walks the buttons of the header, the panels of the actions, the clock, the trash, the footer, the toggles of the status bar, the filter of the tree, the chips of the tags and the tags of the note | done | `e2e/specs/shell-actions.spec.ts` (10 checks) |
+| P9-8 | The documentation of the change: the language in the interface (§9 of `docs/QUERY_LANGUAGE.md`), the block of the selection (§6.3 of `docs/DESIGN_SYSTEM.md`) and the plan of the phase | done | `docs/QUERY_LANGUAGE.md`, `docs/DESIGN_SYSTEM.md`, `PHASE9_PLAN.md` |
+
+### The measured effect of the phase 9
+
+| What | Phase 8 | Phase 9 |
+|---|---|---|
+| Entry chunk of the bundle | 43,41 kB gzip | **45,39 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 589 passed (48 files) | **604 passed (50 files)** |
+| End-to-end tests | 106 passed, 32 skipped | **116 passed, 32 skipped, 0 failed** (the 10 new checks of the buttons) |
+| Files of the frontend | 166 | 169 (the boundaries hold: R1–R16) |
+| The query language | the panels showed nothing | the filter narrows the tree |
+
+### What was left out of the phase 9
+
+The translation of the whole interface into Russian (F9.1) is **not** done: the
+shell of the application stays in English, so the manager of the plugins and the
+built-in plugins were translated into English as well. The items of the phase 8
+that were not taken (the highlighting of the matches in the editor, the
+completion of the tags, the focus mode, the undo of a deletion, the card of the
+note, the synchronisation of the filter with the URL) are still open in
+`PHASE8_PLAN.md`.
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the
@@ -467,6 +514,33 @@ The parity test of the phase 8 found a real defect: the moments of time are
 stored in the database in milliseconds, and the SQL compiler of the query
 language compared them in seconds. The two implementations of the language
 now answer the same questions the same way.
+
+### Phase 9 (2026-10-24, the interface without documentation)
+
+Commands that were actually executed for this status update, with their real
+output:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Backend build / vet | `go build ./...`, `go vet ./...` (`backend`) | exit 0 |
+| Backend tests | `go test ./... -count=1` (`backend`) | all packages `ok` |
+| Backend tests (race) | `CGO_ENABLED=1 go test ./... -race -count=1` (`backend`) | exit 0, all packages `ok` |
+| HTTP smoke suite | `go run ./cmd/smoke` (`backend`) | `PASS 43 / FAIL 0` |
+| Frontend type check | `npx tsc --noEmit` (`frontend`) | exit 0 |
+| Frontend unit tests | `npm test` (`frontend`) | 50 test files, **604 tests passed**, 0 failed |
+| Boundaries | `node scripts/check-boundaries.mjs` (`frontend`) | OK: 169 files, no violations (R1–R16) |
+| Frontend production build | `npm run build` (`frontend`) | exit 0 |
+| Bundle size | `npm run measure` (`frontend`) | entry chunk 149,69 kB (**gzip 45,42 kB**; the budget is 46 kB) |
+| The whole verification | `.\scripts\verify.ps1 -Skip e2e` | every step PASS (boundaries, build, vet, test, smoke, typecheck, unit, bundle, measure) |
+| End-to-end | `npx playwright test` | **116 passed, 32 skipped, 0 failed** (the 10 new checks of the buttons) |
+| The round trip of the backup | `.\scripts\restore-smoke.ps1` | `restore-smoke: OK (backup -> restore -> smoke, all green)` |
+
+The end-to-end suite found two real defects of this phase and not one false
+alarm: the strip of the tags was submitting the tag **twice** (the Enter key
+and the loss of the focus of the field), so the tag landed in the text twice
+and the cross of the chip removed only one of them; and the spec of the
+plugins still expected the Russian strings of the panels (`Слов: 2`,
+`Вставить шаблон`), which the plugins do not speak any more.
 
 ## Security findings and fixes
 

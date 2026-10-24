@@ -165,10 +165,14 @@ test.describe('the shell of the application', () => {
     await gotoApp(page);
     await openSidebarIfNeeded(page);
 
-    const trash = page.locator('.sidebar-footer').getByRole('button', { name: 'Trash' });
-    await expect(trash).toBeVisible();
+    // The footer holds the import and the export only: the trash lives in the
+    // list of the notes, it was in the footer as well (a duplicate).
+    const footer = page.locator('.sidebar-footer');
+    const transfer = footer.getByRole('button', { name: 'Import and export' });
+    await expect(transfer).toBeVisible();
     // The button carries no text: only the icon.
-    await expect(trash).toHaveText('');
+    await expect(transfer).toHaveText('');
+    await expect(footer.getByRole('button')).toHaveCount(1);
   });
 
   test('the tabs are flat: the active one is marked with an underline', async ({

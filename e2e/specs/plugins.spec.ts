@@ -79,8 +79,8 @@ test.describe('plugin platform', () => {
     await expect(pluginVersion(page, 'Link Cards')).toHaveText('1.2.0');
 
     // The commands of the active plugins are listed in the same dialog.
-    await expect(pluginCommand(page, 'Вставить шаблон')).toBeVisible();
-    await expect(pluginCommand(page, 'Word Count: показать счётчик')).toBeVisible();
+    await expect(pluginCommand(page, 'Insert template')).toBeVisible();
+    await expect(pluginCommand(page, 'Word Count: show the counter')).toBeVisible();
   });
 
   test('word count shows the number of words of the open note', async ({ page }) => {
@@ -97,8 +97,8 @@ test.describe('plugin platform', () => {
     await selectPluginPanel(page, WORD_COUNT);
 
     // The counter of the plugin reacts to the content of the note.
-    await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
-    await expect(wordCountChars(page)).toContainText('Символов: 10');
+    await expect(wordCountWords(page)).toContainText('Words: 2', { timeout: 15_000 });
+    await expect(wordCountChars(page)).toContainText('Characters: 10');
 
     // The panel belongs to the plugin and is rendered only once.
     await expect(wordCountPanel(page)).toHaveCount(1);
@@ -118,7 +118,7 @@ test.describe('plugin platform', () => {
     await typeInEditor(page, 'Привет мир');
     await waitForSaved(page);
     await selectPluginPanel(page, WORD_COUNT);
-    await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
+    await expect(wordCountWords(page)).toContainText('Words: 2', { timeout: 15_000 });
 
     /* ------------------------------------------------------------- disable */
     await openPluginManager(page);
@@ -137,7 +137,7 @@ test.describe('plugin platform', () => {
     await selectPluginPanel(page, WORD_COUNT);
     await expect(wordCountPanel(page)).toHaveCount(1);
     await expect(wordCountWords(page)).toHaveCount(1);
-    await expect(wordCountWords(page)).toContainText('Слов: 2', { timeout: 15_000 });
+    await expect(wordCountWords(page)).toContainText('Words: 2', { timeout: 15_000 });
 
     await deleteNote(page, note);
     await deleteFolder(page, folder);
@@ -158,13 +158,13 @@ test.describe('plugin platform', () => {
 
     // The command of the plugin is executed through the plugin manager.
     await openPluginManager(page);
-    await pluginCommand(page, 'Вставить шаблон').click();
+    await pluginCommand(page, 'Insert template').click();
     await closePluginManager(page);
 
     // The note really changed.
     await expect.poll(() => editorText(page), { timeout: 15_000 }).not.toBe(before);
-    await expect(page.locator('.cm-content')).toContainText('# Новая заметка');
-    await expect(page.locator('.cm-content')).toContainText('## Задачи');
+    await expect(page.locator('.cm-content')).toContainText('# New note');
+    await expect(page.locator('.cm-content')).toContainText('## Tasks');
 
     // The change was autosaved.
     await waitForSaved(page);
@@ -175,7 +175,7 @@ test.describe('plugin platform', () => {
     await expandFolder(page, folder);
     await treeFile(page, note).click();
     await expect(activeTabName(page)).toHaveText(note);
-    await expect(page.locator('.cm-content')).toContainText('# Новая заметка');
+    await expect(page.locator('.cm-content')).toContainText('# New note');
     await expect(page.getByTestId('save-status')).toHaveText('Saved');
 
     await deleteNote(page, note);
@@ -193,7 +193,7 @@ test.describe('plugin platform', () => {
     await expect(pluginStatus(page, INSERT_TEMPLATE)).toHaveText('Disabled');
     await expect(pluginStatus(page, WORD_COUNT)).toHaveText('Active');
     // The command of the disabled plugin is not offered any more.
-    await expect(pluginCommand(page, 'Вставить шаблон')).toHaveCount(0);
+    await expect(pluginCommand(page, 'Insert template')).toHaveCount(0);
 
     /* ------------------------------------------------------ enable + reload */
     await enablePlugin(page, INSERT_TEMPLATE);
@@ -202,7 +202,7 @@ test.describe('plugin platform', () => {
     await page.reload();
     await openPluginManager(page);
     await expect(pluginStatus(page, INSERT_TEMPLATE)).toHaveText('Active');
-    await expect(pluginCommand(page, 'Вставить шаблон')).toBeVisible();
+    await expect(pluginCommand(page, 'Insert template')).toBeVisible();
   });
 
   test('the core scenarios keep working with the plugins enabled and disabled', async ({ page }) => {

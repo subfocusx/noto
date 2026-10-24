@@ -39,12 +39,13 @@ test.describe('the keyboard operation', () => {
   test('the tree can be operated with the keyboard', async ({ page }) => {
     await gotoApp(page);
 
-    const toggle = page.getByRole('button', { name: 'Expand', exact: false }).first();
+    // The toggle of the column of the notes lives in the status bar.
+    const toggle = page.getByRole('button', { name: 'Toggle notes panel' }).first();
     if ((await toggle.count()) === 0) return;
 
     await toggle.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('button', { name: 'Collapse', exact: false }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Toggle notes panel' }).first()).toBeVisible();
   });
 
   test('every interactive element has an accessible name', async ({ page }) => {

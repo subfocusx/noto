@@ -185,3 +185,27 @@ The rules are simple and are covered by the golden vectors:
 * a task list is a line that starts with `- [ ]` or `- [x]` (also `*` and
   `+`); a task that is not done makes `has_incomplete_tasks` true;
 * an image is `![...](...)`, a link is `[[...]]` or `[...](...)`.
+
+---
+
+## 9. The language in the interface
+
+The block **Filter** of the left column is the entry point of the language. It
+holds three things, and each of them has one job:
+
+| Part | What it is | What it does |
+|---|---|---|
+| the field | the query itself (`tag == "work" && !has_task_list`) | narrows the tree of the notes to the notes that match; the number of the matches is shown next to the field |
+| **Tags** | the chips of the tags of the vault with their counters | a click puts `tag == "name"` into the field and runs it |
+| **Saved** | the filters under a name | a click applies the filter again; `+` saves the current one |
+
+The filter is a **view** of the tree, not of the storage: the notes that do not
+match stay in the vault and stay reachable through the tabs of the editor. The
+button with the cross in the field clears the filter and brings the whole tree
+back.
+
+The tags of a note are written in its text as `#word`. The strip of the tags
+above the editor shows them and lets the user add or remove one: adding a tag
+writes `#word` into the text at the cursor, removing it cuts the token out.
+There is no separate field for the tags of a note — the text is the only place
+where they live, also in the encrypted storage.

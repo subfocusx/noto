@@ -38,11 +38,6 @@ export interface TreeFolderRowProps {
   depth: number;
   onToggle(path: string): void;
   onSelect(path: string): void;
-  onCreateFolder(parentPath: string): void;
-  onCreateFile(parentPath: string): void;
-  onRename(node: Node): void;
-  onMove(node: Node): void;
-  onDelete(node: Node): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
   /** The path of the node that is currently dragged, if any. */
@@ -67,9 +62,6 @@ export interface TreeNoteRowProps {
   /** The depth of the row in the tree. */
   depth: number;
   onSelect(path: string): void;
-  onRename(node: Node): void;
-  onMove(node: Node): void;
-  onDelete(node: Node): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
   /** The path of the node that is currently dragged, if any. */
@@ -218,87 +210,37 @@ function RenameInput(props: {
   );
 }
 
-/** The actions of a row. */
+/**
+ * The actions of a row.
+ *
+ * The row carries one button: the menu of the row. Every action of the row
+ * lives in that menu, so the row stays narrow and the actions are never shown
+ * twice.
+ */
 function RowActions(props: {
   node: Node;
-  isFolder: boolean;
-  onRename(node: Node): void;
-  onMove(node: Node): void;
-  onDelete(node: Node): void;
-  onCreateFile?(parentPath: string): void;
-  onCreateFolder?(parentPath: string): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
 }) {
   const { node } = props;
+  if (!props.onContextMenu) return null;
   return (
     <span class="tree-actions">
-      {props.isFolder && props.onCreateFile ? (
-        <button
-          type="button"
-          class="icon-button"
-          title={`New note in ${node.name}`}
-          aria-label={`New note in ${node.name}`}
-          onClick={() => props.onCreateFile?.(node.path)}
-        >
-          <Icon name="plus" size={14} />
-        </button>
-      ) : null}
-      {props.isFolder && props.onCreateFolder ? (
-        <button
-          type="button"
-          class="icon-button"
-          title={`New folder in ${node.name}`}
-          aria-label={`New folder in ${node.name}`}
-          onClick={() => props.onCreateFolder?.(node.path)}
-        >
-          <Icon name="folder-plus" size={14} />
-        </button>
-      ) : null}
       <button
         type="button"
         class="icon-button"
-        title={`Rename ${node.name}`}
-        aria-label={`Rename ${node.name}`}
-        onClick={() => props.onRename(node)}
+        title={`Menu ${node.name}`}
+        aria-label={`Menu ${node.name}`}
+        onClick={(event) => {
+          props.onContextMenu?.({
+            path: node.path,
+            isFolder: node.type === 'folder',
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
       >
-        <Icon name="pencil" size={14} />
+        <Icon name="more-horizontal" size={14} />
       </button>
-      <button
-        type="button"
-        class="icon-button"
-        title={`Move ${node.name}`}
-        aria-label={`Move ${node.name}`}
-        onClick={() => props.onMove(node)}
-      >
-        <Icon name="move" size={14} />
-      </button>
-      <button
-        type="button"
-        class="icon-button danger"
-        title={`Delete ${node.name}`}
-        aria-label={`Delete ${node.name}`}
-        onClick={() => props.onDelete(node)}
-      >
-        <Icon name="trash" size={14} />
-      </button>
-      {props.onContextMenu ? (
-        <button
-          type="button"
-          class="icon-button"
-          title={`Menu ${node.name}`}
-          aria-label={`Menu ${node.name}`}
-          onClick={(event) => {
-            props.onContextMenu?.({
-              path: node.path,
-              isFolder: node.type === 'folder',
-              x: event.clientX,
-              y: event.clientY,
-            });
-          }}
-        >
-          <Icon name="more-horizontal" size={14} />
-        </button>
-      ) : null}
     </span>
   );
 }
@@ -391,16 +333,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
           </button>
         )}
         {count > 0 ? <span class="tree-count">{count}</span> : null}
-        <RowActions
-          node={node}
-          isFolder
-          onRename={props.onRename}
-          onMove={props.onMove}
-          onDelete={props.onDelete}
-          onCreateFile={props.onCreateFile}
-          onCreateFolder={props.onCreateFolder}
-          onContextMenu={props.onContextMenu}
-        />
+        <RowActions node={node} onContextMenu={props.onContextMenu} />
       </div>
       {rename.error ? (
         <p class="tree-rename-error" role="alert">
@@ -419,11 +352,6 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               depth={props.depth + 1}
               onToggle={props.onToggle}
               onSelect={props.onSelect}
-              onCreateFolder={props.onCreateFolder}
-              onCreateFile={props.onCreateFile}
-              onRename={props.onRename}
-              onMove={props.onMove}
-              onDelete={props.onDelete}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
               draggingPath={props.draggingPath}
@@ -441,9 +369,6 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               currentPath={props.currentPath}
               depth={props.depth + 1}
               onSelect={props.onSelect}
-              onRename={props.onRename}
-              onMove={props.onMove}
-              onDelete={props.onDelete}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
               draggingPath={props.draggingPath}
@@ -500,14 +425,7 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
             <TreeName name={file.name} />
           </button>
         )}
-        <RowActions
-          node={file}
-          isFolder={false}
-          onRename={props.onRename}
-          onMove={props.onMove}
-          onDelete={props.onDelete}
-          onContextMenu={props.onContextMenu}
-        />
+        <RowActions node={file} onContextMenu={props.onContextMenu} />
       </div>
       {rename.error ? (
         <p class="tree-rename-error" role="alert">

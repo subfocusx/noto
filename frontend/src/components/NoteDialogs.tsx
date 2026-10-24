@@ -5,7 +5,9 @@
 // their content and their buttons. The accessible names are part of the
 // contract of the application: the title of the dialog, the label `Name` of
 // the inputs and the names `OK` and `Delete` of the confirm buttons.
+import { useEffect, useState } from 'preact/hooks';
 import type { DialogState } from '../core/store/types';
+import { asksForName as dialogAsksForName } from '../core/store/types';
 import type { Draft } from '../lib/drafts';
 import { Dialog } from './Dialog';
 
@@ -37,9 +39,16 @@ function dialogTitle(kind: DialogState['kind']): string {
   return 'Delete';
 }
 
-/** True when the dialog asks for a name. */
-function asksForName(kind: DialogState['kind']): boolean {
-  return kind === 'create-folder' || kind === 'create-file' || kind === 'rename';
+/**
+ * The placeholder of the field of the name.
+ *
+ * The placeholder is not a value: the name of a new note or of a new folder
+ * is written by the user, never by the application.
+ */
+function namePlaceholder(kind: DialogState['kind']): string {
+  if (kind === 'create-folder') return 'Folder name';
+  if (kind === 'create-file') return 'Note name';
+  return 'Name';
 }
 
 /** The create/rename/move/delete dialog and the draft recovery dialog. */
@@ -52,7 +61,15 @@ export function NoteDialogs(props: NoteDialogsProps) {
     kind === 'move' ||
     kind === 'delete';
   const name = props.dialog.value ?? '';
-  const empty = asksForName(kind) && name.trim() === '';
+  const empty = dialogAsksForName(kind) && name.trim() === '';
+
+  // The warning about an empty name appears when the user has typed (and
+  // emptied) the field, not when the dialog has just been opened.
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    setTouched(false);
+  }, [kind]);
+  const showError = empty && touched;
 
   return (
     <>
@@ -102,11 +119,15 @@ export function NoteDialogs(props: NoteDialogsProps) {
               id="noto-note-name"
               type="text"
               aria-label="Name"
-              aria-invalid={empty ? 'true' : undefined}
+              aria-invalid={showError ? 'true' : undefined}
+              placeholder={namePlaceholder(kind)}
               value={name}
-              onInput={(event) => props.onChangeValue((event.target as HTMLInputElement).value)}
+              onInput={(event) => {
+                setTouched(true);
+                props.onChangeValue((event.target as HTMLInputElement).value);
+              }}
             />
-            {empty ? <span class="field-error">The name must not be empty.</span> : null}
+            {showError ? <span class="field-error">The name must not be empty.</span> : null}
           </div>
         )}
       </Dialog>

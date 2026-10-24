@@ -65,7 +65,8 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 8 | Phase 2: modularisation, PWA privacy, plugin platform | partial | see "Phase 2 status" below |
 | 9 | Phase 3: performance, backups, reconciliation, command palette | done | see "Phase 3 status" below |
 | 10 | Phase 4: premium UI redesign, design system, accessibility, UX | done | see "Phase 4 status" below |
-| 11 | Phase 7: the redesign of the shell and the encrypted storage | partial | see "Phase 7 status" below — everything is done except the end-to-end scenario that scans the disk for the plaintext |
+| 11 | Phase 7: the redesign of the shell and the encrypted storage | done | see "Closed phases" below — commit `60d7ba8` |
+| 12 | Phase 8: the query language, the derived properties, the plugin API 1.2.0 | done | see "Phase 8 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -237,7 +238,55 @@ and does not weigh on the entry.
 | `laurent22/joplin` | AGPL-3.0 | only the ideas were read: the uniform step of the indent. **No code was copied** |
 | `siyuan-note/siyuan` | AGPL-3.0 | only the ideas were read: the compact status bar. **No code was copied** |
 
-## Phase 7 status (the redesign of the shell and the encrypted storage)
+## Phase 8 status (the query language, the derived properties, the plugins)
+
+One idea: give the vault a **language of selection**. The notes carry derived
+properties (the title, the tags, the flags), the language selects the notes by
+them, and the interface offers the selection as a query, as saved views and as
+a tree of tags. The language is small and written by us (the ideas come from
+`usememos/memos`, MIT; `cel-go` is not used), and it has **two**
+implementations: SQL for the open storage and a predicate over the tree for
+the encrypted storage. The two are bound by one file of golden vectors, so
+they cannot drift apart.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P8-1 | The specification of the language and the golden vectors that bind the two implementations: 45 vectors of queries and 23 vectors of properties, the canonical JSON AST of every query | done | `docs/QUERY_LANGUAGE.md`, `shared/query-vectors.json` |
+| P8-2 | The core of the language on TypeScript and on Go: the parser, the IR, the compiler to SQL and the compiler to a predicate, the extraction of the properties | done | `frontend/src/core/query/{grammar,ir,schema,predicate,highlight}.ts`, `frontend/src/core/metadata/extract.ts`, `backend/internal/query/{grammar,ir,schema,render,predicate}.go`, `backend/internal/metadata/extract.go` |
+| P8-3 | The parity of the two implementations: the same questions on the same vault give the same answers. **The test found a real defect** — the moments of time are stored in milliseconds, and the compiler compared them in seconds | done | `backend/internal/query/parity_test.go` (28 questions), the fix in `backend/internal/query/render.go` |
+| P8-4 | The storage of the properties: the schema of SQLite is at version 2 (the table `note_props` and its index), the migration is idempotent, the properties are a cache of the text of the note and a failure marks the answer as `partial` | done | `backend/internal/sqlitastore/{store_schema.go,store_props.go}`, `schema_compat_test.go`, `backend/internal/notes/query.go` |
+| P8-5 | The HTTP API of the selection: `POST /api/query` and `GET /api/tags`, the golden contract and the tests of the endpoints | done | `backend/internal/api/handlers_query.go`, `backend/internal/api/contract_test.go`, `backend/internal/api/handlers_query_test.go`, `docs/CONTRACT.md`, `docs/API.md` |
+| P8-6 | The interface of the selection: the query bar with the counter of the matches, the saved views and the tree of tags, the actions of the store, the service that answers in both modes of the storage | done | `frontend/src/core/query/service.ts`, `frontend/src/core/store/actions.ts`, `frontend/src/components/{QueryBar,SavedViews,TagTree}.tsx`, `frontend/src/components/Sidebar.tsx` |
+| P8-7 | The plugin API 1.2.0: the capability `ctx.api.query()` and `ctx.api.tags()` behind the new right `query.read`, the four built-in plugins (the graph of the links, the tree of the tags, the calendar of the activity, the cards of the links) and the rules R13–R16 of the boundary checker. The change is additive — the plugins with `minApiVersion: "1.0.0"` keep working | done | `frontend/src/plugins/contract.ts`, `frontend/src/core/api/pluginQuery.ts`, `frontend/src/plugins/builtin/{graph,tags,activity,links}/index.ts`, `frontend/scripts/check-boundaries.mjs`, `docs/PLUGIN_API.md`, `docs/PLUGIN_DEVELOPMENT.md`, `docs/PLUGIN_SECURITY.md` |
+| P8-8 | The documentation and the continuous integration: the agreements of the repository, the vocabulary, the cards of the design, the journal of the API, the licences of the third parties, the workflows of the backend, the frontend, the end-to-end suite and the smoke test of the restore | done | `AGENTS.md`, `CONTEXT.md`, `docs/design/`, `docs/API-CHANGELOG.md`, `docs/THIRD_PARTY.md`, `.github/workflows/*.yml`, `scripts/restore-smoke.ps1` |
+
+### The measured effect of the phase 8
+
+| What | Phase 7 | Phase 8 |
+|---|---|---|
+| Entry chunk of the bundle | 41,88 kB gzip | 43,41 kB gzip (the panels of the plugins moved to their own chunk) |
+| Frontend unit tests | 473 passed (43 files) | **589 passed (48 files)** |
+| Backend tests | 1 suite of the port | **+ the parity of the two implementations, 8 tests of the endpoints, 2 cases of the port** |
+| End-to-end tests | 106 passed, 32 skipped | **106 passed, 32 skipped, 0 failed** |
+| Schema of SQLite | `user_version = 1` | `user_version = 2` (the migration is idempotent) |
+| Files of the frontend | 144 | 166 (the boundaries hold: R1–R16) |
+
+### What was left out of the phase 8
+
+The following ideas of the reference project were **not** taken in this phase
+and are written down as the next tasks in `PHASE8_PLAN.md`: the highlighting
+of the matches in the editor, the completion of the tags, the focus mode, the
+undo of a deletion, the card of the note and the synchronisation of the filter
+with the URL. The regular expressions are deliberately not supported: the
+operator `matches` answers «unknown operator».
+
+## Closed phases
+
+The closed phases are kept here as an archive: the cards of the phase are the
+evidence of what was done, and the plan of the phase that follows lives in its
+own file (`PHASE8_PLAN.md` for the phase 8).
+
+### Phase 7 (the redesign of the shell and the encrypted storage) — closed, commit `60d7ba8`
 
 Two changes: the interface was rebuilt around the rule *the action lives with
 the object it acts on, the state lives where the state belongs*, and the
@@ -394,6 +443,30 @@ The compact shell and the defects D30–D39 (see `docs/UI_AUDIT.md`).
 | Frontend unit tests | `npm test` (`frontend`) | 28 test files, **368 tests passed**, 0 failed |
 | Bundle size | `npm run measure` (`frontend`) | entry chunk 125,95 kB (gzip 37,19 kB) |
 | End-to-end | `npx playwright test` | **89 passed, 27 skipped, 0 failed** — two servers: the main one fixes the storage (`NOTO_VAULT_FIXED=1`), the second one allows the real change of the folder |
+
+### Phase 8 (2026-10-24, the query language)
+
+Commands that were actually executed for this status update, with their real
+output:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Backend build / vet | `go build ./...`, `go vet ./...` (`backend`) | exit 0 |
+| Backend tests | `go test ./... -count=1` (`backend`) | all packages `ok` (the new packages: `internal/query`, `internal/metadata`; the new tests: the parity of the two implementations, 8 tests of the endpoints, 2 cases of the port) |
+| Backend tests (race) | `CGO_ENABLED=1 go test ./... -race -count=1` (`backend`) | exit 0, all packages `ok` |
+| HTTP smoke suite | `go run ./cmd/smoke` (`backend`) | `PASS 43 / FAIL 0` |
+| Frontend type check | `npx tsc --noEmit` (`frontend`) | exit 0 |
+| Frontend unit tests | `npm test` (`frontend`) | 48 test files, **589 tests passed**, 0 failed |
+| Boundaries | `node scripts/check-boundaries.mjs` (`frontend`) | OK: 166 files, no violations (R1–R16) |
+| Frontend production build | `npm run build` (`frontend`) | exit 0 |
+| Bundle size | `npm run measure` (`frontend`) | entry chunk 143,19 kB (**gzip 43,41 kB**); the panels of the plugins moved into their own chunk |
+| End-to-end | `npx playwright test` | **106 passed, 32 skipped, 0 failed** — on the locally cached Chromium build |
+| The round trip of the backup | `.\scripts\restore-smoke.ps1` | `restore-smoke: OK (backup -> restore -> smoke, all green)` |
+
+The parity test of the phase 8 found a real defect: the moments of time are
+stored in the database in milliseconds, and the SQL compiler of the query
+language compared them in seconds. The two implementations of the language
+now answer the same questions the same way.
 
 ## Security findings and fixes
 

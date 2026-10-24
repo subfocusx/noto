@@ -69,6 +69,23 @@ network.
   FTS5 is unavailable.
 - Manual reindex endpoint.
 
+**Selection (the query language)**
+
+- The notes carry derived properties — the title (the first heading), the tags
+  (`#tag` without a space) and the flags (a task list, an unfinished task, a
+  code block, an image, a link) — and a small language selects the notes by
+  them: `tag == 'work' && !has_incomplete_tasks`. The language is described
+  in [`docs/QUERY_LANGUAGE.md`](docs/QUERY_LANGUAGE.md).
+- The selection works the same in the open storage (the server compiles the
+  query into SQL) and in the encrypted storage (the browser evaluates the
+  query over the decrypted notes). One file of golden vectors
+  (`shared/query-vectors.json`) binds the two implementations, and a parity
+  test asks both of them the same questions.
+- The interface offers the selection as a query bar with the number of the
+  matches, as saved views and as a tree of the tags with their counters.
+- The plugin API 1.2.0 gives the plugins the same capability
+  (`ctx.api.query()`, `ctx.api.tags()`) behind the new right `query.read`.
+
 **Data**
 
 - Import Markdown files or a whole zip archive, with `skip` / `rename` /
@@ -1049,6 +1066,8 @@ authentication — see [Security model](#security-model-and-limitations).
 | `GET` | `/api/trash` | List trashed entries. |
 | `GET` | `/api/search?q=…&limit=50` | Full-text search over names and bodies. |
 | `POST` | `/api/search/reindex` | Rebuild the search index from disk. |
+| `POST` | `/api/query` | Selection by the query language. Body `{"query":"tag == 'work'","limit":50}`. Answer `{"hits":[…],"total":N,"partial":false}`. |
+| `GET` | `/api/tags` | The tags of the vault with their counters: `{"tags":[{"tag":"work","count":3}]}`. |
 | `POST` | `/api/import/files` | Import Markdown files (`multipart`). |
 | `POST` | `/api/import/zip` | Import a zip archive (`multipart`). |
 | `GET` | `/api/export/note?path=…` | Download one note as `text/markdown`. |
@@ -1161,7 +1180,15 @@ noto/
 │   ├── DESIGN_SYSTEM.md      the visual rules of the application
 │   ├── PLUGIN_API.md         plugin contract reference
 │   ├── PLUGIN_SECURITY.md    plugin trust model and limitations
-│   └── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
+│   ├── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
+│   ├── QUERY_LANGUAGE.md     the query language: the grammar and the fields
+│   ├── API-CHANGELOG.md      the journal of the changes of the API
+│   ├── THIRD_PARTY.md        the licences of the third parties
+│   └── design/               the cards of the design of the phases
+├── shared/                   the data shared by the two languages (the golden vectors)
+├── AGENTS.md                 the working agreement of the repository
+├── CONTEXT.md                the vocabulary of the project
+├── PHASE8_PLAN.md            the plan of the phase 8 (the query language)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

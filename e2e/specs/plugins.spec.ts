@@ -63,7 +63,7 @@ test.describe('plugin platform', () => {
     await openPluginManager(page);
 
     // All built-in plugins are listed...
-    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(3);
+    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(7);
 
     // ...with their version and their state.
     await expect(pluginVersion(page, WORD_COUNT)).toHaveText('1.0.0');
@@ -71,6 +71,12 @@ test.describe('plugin platform', () => {
     await expect(pluginVersion(page, INSERT_TEMPLATE)).toHaveText('1.0.0');
     await expect(pluginStatus(page, INSERT_TEMPLATE)).toHaveText('Active');
     await expect(pluginVersion(page, 'Backlinks')).toHaveText('1.0.0');
+
+    // The plugins of the query language (API 1.2.0) are listed as well.
+    await expect(pluginVersion(page, 'Graph')).toHaveText('1.2.0');
+    await expect(pluginVersion(page, 'Tags')).toHaveText('1.2.0');
+    await expect(pluginVersion(page, 'Activity')).toHaveText('1.2.0');
+    await expect(pluginVersion(page, 'Link Cards')).toHaveText('1.2.0');
 
     // The commands of the active plugins are listed in the same dialog.
     await expect(pluginCommand(page, 'Вставить шаблон')).toBeVisible();

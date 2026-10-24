@@ -47,7 +47,21 @@ process.env.NOTO_E2E_RUN_ID = RUN_ID;
 const DATA_DIR = path.join(os.tmpdir(), 'noto-e2e', RUN_ID);
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const GO_BIN = path.join(__dirname, '.tools', 'goroot', 'go', 'bin', 'go.exe');
+const GO_BIN = resolveGoBin();
+
+/**
+ * Returns the Go binary that starts the backend of the tests.
+ *
+ * On this machine the toolchain is vendored in `.tools/goroot`; on CI the
+ * Go of the runner is used (`NOTO_GO_BIN` or the `go` of the PATH).
+ */
+function resolveGoBin(): string {
+  const fromEnv = process.env.NOTO_GO_BIN;
+  if (fromEnv) return fromEnv;
+  const vendored = path.join(__dirname, '.tools', 'goroot', 'go', 'bin', 'go.exe');
+  if (fs.existsSync(vendored)) return vendored;
+  return process.platform === 'win32' ? 'go.exe' : 'go';
+}
 
 export default defineConfig({
   testDir: './e2e',

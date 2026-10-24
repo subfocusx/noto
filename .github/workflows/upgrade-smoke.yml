@@ -1,0 +1,48 @@
+name: upgrade-smoke
+
+# The smoke test of the upgrade: a vault of the previous version of the schema
+# must be opened by the current build without a loss, and a backup made by the
+# current build must be restored into a fresh storage.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'backend/**'
+      - 'scripts/**'
+      - '.github/workflows/upgrade-smoke.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'scripts/**'
+      - '.github/workflows/upgrade-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install the dependencies of the frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build the frontend bundle
+        working-directory: frontend
+        run: npm run build
+
+      - name: The backup, the restore and the smoke test
+        shell: pwsh
+        run: ./scripts/restore-smoke.ps1

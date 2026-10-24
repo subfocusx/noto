@@ -41,7 +41,6 @@ import {
 } from '../reminders/types';
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
-import { getQueryService } from '../query/service';
 import { getVaultService } from '../vault/vaultService';
 import { getSealedVault } from '../vault/session';
 import {
@@ -850,6 +849,10 @@ export async function runQuery(text?: string, limit?: number): Promise<void> {
     return;
   }
 
+  // The service of the query language is loaded on demand: the parser of the
+  // query language is a heavy module, and the application has no use for it
+  // before the user asks a question.
+  const { getQueryService } = await import('../query/service');
   const outcome = await getQueryService().runQuery(query, limit ?? 50);
   // The user typed something else while the query was running.
   if (getSnapshot().ui.query.trim() !== query) return;
@@ -883,6 +886,7 @@ export function clearQuery(): void {
 /** Reads the tags of the vault and fills them in the state. */
 export async function loadTags(): Promise<void> {
   try {
+    const { getQueryService } = await import('../query/service');
     const tags = await getQueryService().loadTags();
     update((prev) => ({ ...prev, ui: { ...prev.ui, tags } }));
   } catch (err) {

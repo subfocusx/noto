@@ -34,7 +34,7 @@ import { getNote as apiGetNote, saveNote as apiSaveNote } from '../../api/notes'
 import { getTree as apiGetTree } from '../../api/tree';
 import { search as apiSearch } from '../../api/search';
 import {
-  createPluginQueryApi,
+  type PluginQueryApi,
   type PluginQueryResult,
 } from './pluginQuery';
 
@@ -295,6 +295,27 @@ export interface PluginApiOptions extends Partial<PluginApiRestrictions> {
 }
 
 /**
+ * The promise of the query capability of the plugins.
+ *
+ * The capability is loaded once and kept: a plugin that asks many questions
+ * pays for the module only once.
+ */
+let queryApiPromise: Promise<PluginQueryApi> | null = null;
+
+/**
+ * Loads the query capability of the plugins.
+ *
+ * The module behind it carries the parser of the query language, which is a
+ * heavy module: it must stay out of the entry chunk of the application.
+ */
+function loadQueryApi(): Promise<PluginQueryApi> {
+  if (!queryApiPromise) {
+    queryApiPromise = import('./pluginQuery').then((module) => module.createPluginQueryApi());
+  }
+  return queryApiPromise;
+}
+
+/**
  * Creates the plugin data API.
  *
  * @param deps optional overrides, used by tests and by hosts that want to
@@ -320,10 +341,12 @@ export function createPluginApi(
   const search = deps.search ?? ((query: string, limit?: number) => apiSearch(query, limit ?? 50));
   // The query capability knows both storage modes: it asks the server in the
   // open mode and evaluates the query locally over the decrypted notes in the
-  // sealed mode.
-  const queryApi = createPluginQueryApi();
-  const runQuery = deps.query ?? queryApi.query;
-  const fetchTags = deps.tags ?? queryApi.tags;
+  // sealed mode. It is loaded on demand: the capability carries the parser of
+  // the query language, and a plugin that never asks a question never loads it.
+  const runQuery =
+    deps.query ??
+    ((query: string, limit?: number) => loadQueryApi().then((api) => api.query(query, limit)));
+  const fetchTags = deps.tags ?? (() => loadQueryApi().then((api) => api.tags()));
 
   const api: PluginApiLike = {
     getNote(path: string): Promise<NoteContent> {

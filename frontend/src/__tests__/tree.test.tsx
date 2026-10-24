@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/preact';
+import { render, fireEvent, waitFor } from '@testing-library/preact';
 import { Sidebar } from '../components/Sidebar';
 import { TreeFolderRow, TreeNoteRow, indentOf } from '../components/TreeRow';
+import type { TreeDragState } from '../components/TreeRow';
 import type { TreeContextMenuPayload } from '../components/TreeContextMenu';
 import { buildTree } from '../lib/tree';
 import type { TreeFolder } from '../lib/tree';
@@ -343,5 +344,212 @@ describe('the right click on a row', () => {
       path: 'journal',
       isFolder: true,
     });
+  });
+});
+
+describe('the drag and the drop of the tree', () => {
+  /** The data transfer of a drag: it remembers what the row puts into it. */
+  function dataTransferMock() {
+    return {
+      setData: vi.fn(),
+      getData: vi.fn(),
+      clearData: vi.fn(),
+      setDragImage: vi.fn(),
+      effectAllowed: '',
+      dropEffect: '',
+      types: [] as string[],
+      files: [] as unknown[],
+      items: [] as unknown[],
+    };
+  }
+
+  /** The tree of the tests: the folder `journal`, its subfolder `archive` and
+   * the note `a.md` inside `archive`. */
+  function renderTree(props: {
+    onDragStart?: (state: TreeDragState) => void;
+    onDragEnd?: () => void;
+    onDropOnFolder?: (node: Node, targetParentPath: string) => void;
+    draggingPath?: string | null;
+  }) {
+    const folders = [
+      folder('journal', 'journal', ''),
+      folder('journal/archive', 'archive', 'journal'),
+    ];
+    const files = [file('journal/archive/a.md', 'a.md', 'journal/archive')];
+    const { roots, filesByParent } = buildTree(folders, files);
+    const root = roots.find((entry) => entry.node.path === 'journal') as TreeFolder;
+    return render(
+      <TreeFolderRow
+        folder={root}
+        filesByParent={filesByParent}
+        currentPath=""
+        expanded={new Set(['journal', 'journal/archive'])}
+        depth={0}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+        onContextMenu={() => undefined}
+        onRenameInline={() => undefined}
+        draggingPath={props.draggingPath ?? null}
+        onDragStart={props.onDragStart}
+        onDragEnd={props.onDragEnd}
+        onDropOnFolder={props.onDropOnFolder}
+      />,
+    );
+  }
+
+  it('starts the drag of a note with the path of the note', () => {
+    const onDragStart = vi.fn();
+    const dataTransfer = dataTransferMock();
+    const view = renderTree({ onDragStart });
+
+    fireEvent.dragStart(view.getByText('a.md').closest('.tree-row') as HTMLElement, { dataTransfer });
+
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    expect(onDragStart).toHaveBeenCalledWith({ path: 'journal/archive/a.md', isFolder: false });
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'journal/archive/a.md');
+  });
+
+  it('drops a node on a folder', () => {
+    const onDropOnFolder = vi.fn();
+    const view = renderTree({ onDropOnFolder });
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.drop(row, { dataTransfer: dataTransferMock() });
+
+    expect(onDropOnFolder).toHaveBeenCalledTimes(1);
+    const [node, targetParentPath] = onDropOnFolder.mock.calls[0] as [Node, string];
+    expect(node.path).toBe('journal');
+    expect(targetParentPath).toBe('journal');
+  });
+
+  it('shows the folder as the target of the drop', () => {
+    const view = renderTree({ draggingPath: 'journal/archive/a.md' });
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
+
+    expect(row.classList.contains('drop-target')).toBe(true);
+    expect(row.classList.contains('drop-refused')).toBe(false);
+    expect(view.getByText('Drop here')).toBeTruthy();
+  });
+
+  it('says that the drop is refused when the move is impossible', () => {
+    const view = renderTree({ draggingPath: 'journal' });
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
+
+    expect(row.classList.contains('drop-target')).toBe(true);
+    expect(row.classList.contains('drop-refused')).toBe(true);
+    expect(view.getByText('Cannot drop here')).toBeTruthy();
+  });
+
+  it('says that the drop is refused when the note is already in the folder', () => {
+    const view = renderTree({ draggingPath: 'journal/archive/a.md' });
+    const row = view.getByText('archive').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
+
+    expect(row.classList.contains('drop-refused')).toBe(true);
+    expect(view.getByText('Cannot drop here')).toBeTruthy();
+  });
+
+  it('does not drag a row while its name is being renamed', () => {
+    const onDragStart = vi.fn();
+    const view = renderTree({ onDragStart });
+    fireEvent.dblClick(view.getByText('journal'));
+    const input = view.getByLabelText('Rename journal');
+
+    fireEvent.dragStart(input, { dataTransfer: dataTransferMock() });
+
+    expect(onDragStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('the drag and the drop of the explorer', () => {
+  /** The data transfer of a drag: it remembers what the row puts into it. */
+  function dataTransferMock() {
+    return {
+      setData: vi.fn(),
+      getData: vi.fn(),
+      clearData: vi.fn(),
+      setDragImage: vi.fn(),
+      effectAllowed: '',
+      dropEffect: '',
+      types: [] as string[],
+      files: [] as unknown[],
+      items: [] as unknown[],
+    };
+  }
+
+  /** The explorer of the tests: the folders `journal` and `archive`. */
+  function renderExplorer(onMoveNode?: (node: Node, targetParentPath: string) => void) {
+    const folders = [folder('journal', 'journal', ''), folder('archive', 'archive', '')];
+    const files = [file('journal/a.md', 'a.md', 'journal')];
+    const { roots, filesByParent } = buildTree(folders, files);
+    return render(
+      <Sidebar
+        section="explorer"
+        folders={roots}
+        filesByParent={filesByParent}
+        currentPath=""
+        expanded={new Set(['journal'])}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+        onCreateFolder={() => undefined}
+        onCreateFile={() => undefined}
+        onRename={() => undefined}
+        onMove={() => undefined}
+        onDelete={() => undefined}
+        onOpenTransfer={() => undefined}
+        onRefresh={() => undefined}
+        onMoveNode={onMoveNode}
+        loading={false}
+      />,
+    );
+  }
+
+  it('tells the user that a note is moved by dropping it on a folder', () => {
+    const view = renderExplorer();
+
+    expect(view.getByText('Drag a note onto a folder to move it.')).toBeTruthy();
+  });
+
+  it('moves a folder into another folder when it is dropped on it', async () => {
+    const onMoveNode = vi.fn();
+    const view = renderExplorer(onMoveNode);
+
+    fireEvent.dragStart(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+    // The explorer shows the zone of the root as soon as the drag starts.
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    fireEvent.drop(view.getByText('archive').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledTimes(1));
+    expect(onMoveNode.mock.calls[0]?.[0]).toMatchObject({ path: 'journal', type: 'folder' });
+    expect(onMoveNode.mock.calls[0]?.[1]).toBe('archive');
+  });
+
+  it('refuses to move a folder into itself and says why', async () => {
+    const onMoveNode = vi.fn();
+    const view = renderExplorer(onMoveNode);
+
+    fireEvent.dragStart(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    fireEvent.drop(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+
+    await waitFor(() =>
+      expect(view.getByText('A folder cannot be moved into itself.')).toBeTruthy(),
+    );
+    expect(onMoveNode).not.toHaveBeenCalled();
   });
 });

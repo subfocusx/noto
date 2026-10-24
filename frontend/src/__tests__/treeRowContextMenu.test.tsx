@@ -1,4 +1,4 @@
-// The right click of a tree row and the header of the menu it opens.
+// The context menu of a row of the tree: its entries and its accessible name.
 import { describe, expect, it, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/preact';
 import { TreeContextMenu } from '../components/TreeContextMenu';
@@ -8,8 +8,8 @@ function entriesOf(container: Element): HTMLButtonElement[] {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('.context-menu-item'));
 }
 
-describe('the header of the context menu', () => {
-  it('names the node the menu acts on', () => {
+describe('the context menu of a row', () => {
+  it('does not show the name of the node', () => {
     const view = render(
       <TreeContextMenu
         path="journal/2026"
@@ -25,11 +25,11 @@ describe('the header of the context menu', () => {
       />,
     );
 
-    const title = view.container.querySelector('.context-menu-title');
-    expect(title?.textContent).toBe('2026');
+    expect(view.container.querySelector('.context-menu-title')).toBeNull();
+    expect(view.getByRole('menu').textContent).not.toContain('2026');
   });
 
-  it('names the note of the menu too', () => {
+  it('does not show the name of a note either', () => {
     const view = render(
       <TreeContextMenu
         path="journal/a.md"
@@ -45,8 +45,33 @@ describe('the header of the context menu', () => {
       />,
     );
 
-    const title = view.container.querySelector('.context-menu-title');
-    expect(title?.textContent).toBe('a.md');
+    expect(view.container.querySelector('.context-menu-title')).toBeNull();
+    expect(view.getByRole('menu').textContent).not.toContain('a.md');
+  });
+
+  it('holds nothing but the actions, so the panel stays narrow', () => {
+    const view = render(
+      <TreeContextMenu
+        path="journal"
+        isFolder
+        x={10}
+        y={10}
+        onClose={() => undefined}
+        onRename={() => undefined}
+        onMove={() => undefined}
+        onDelete={() => undefined}
+        onCreateFile={() => undefined}
+        onCreateFolder={() => undefined}
+      />,
+    );
+
+    const menu = view.getByRole('menu');
+    for (const child of Array.from(menu.children)) {
+      expect(
+        child.classList.contains('context-menu-item') ||
+          child.classList.contains('context-menu-separator'),
+      ).toBe(true);
+    }
   });
 
   it('gives the menu the accessible name of its target', () => {
@@ -67,6 +92,26 @@ describe('the header of the context menu', () => {
 
     const menu = view.getByRole('menu');
     expect(menu.getAttribute('aria-label')).toBe('Actions of journal');
+  });
+
+  it('names the note of the menu in its accessible name too', () => {
+    const view = render(
+      <TreeContextMenu
+        path="journal/a.md"
+        isFolder={false}
+        x={10}
+        y={10}
+        onClose={() => undefined}
+        onRename={() => undefined}
+        onMove={() => undefined}
+        onDelete={() => undefined}
+        onCreateFile={() => undefined}
+        onCreateFolder={() => undefined}
+      />,
+    );
+
+    const menu = view.getByRole('menu');
+    expect(menu.getAttribute('aria-label')).toBe('Actions of a.md');
   });
 
   it('still offers the creation of a note and of a folder inside a folder', () => {

@@ -5,10 +5,16 @@
 // renamed in place with a double click, both rows can be dragged to another
 // folder, and a right click on a row opens the menu of that row: the actions
 // of a folder include the creation of a folder inside it.
+//
+// A note that the user marked as a favorite carries a small star next to its
+// name: the mark is visible in the tree, not only in the section of the
+// favorites.
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useAppSelector } from '../core/store/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
+import { parentPathOf } from '../lib/tree';
 import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { Icon } from '../ui/icons';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
@@ -292,6 +298,38 @@ function TreeName(props: { name: string }) {
   );
 }
 
+/**
+ * Tells whether the node that is dragged may be dropped on a folder.
+ *
+ * The rules are the ones of the explorer: a folder cannot be moved into itself
+ * or into one of its own subfolders, and a node cannot be moved into the
+ * folder it already lives in. The row knows the path of the dragged node and
+ * the notes of the tree, so it can tell the user *before* the drop that the
+ * move is going to be refused.
+ */
+export function canDropInto(
+  draggingPath: string,
+  targetPath: string,
+  filesByParent: Map<string, Node[]>,
+): boolean {
+  // The folder is dropped on itself.
+  if (draggingPath === targetPath) return false;
+  // The dragged node lives inside the target folder.
+  if (draggingPath.startsWith(`${targetPath}/`)) {
+    const parent = parentPathOf(draggingPath);
+    const isNote = (filesByParent.get(parent) ?? []).some((note) => note.path === draggingPath);
+    // A note of a subfolder may still be moved up to the target folder; a
+    // folder may not: it would land inside itself.
+    if (!isNote) return false;
+    // The note already lives in the target folder.
+    return parent !== targetPath;
+  }
+  // The target folder is inside the dragged folder: the folder would swallow
+  // itself.
+  if (targetPath.startsWith(`${draggingPath}/`)) return false;
+  return true;
+}
+
 /** A folder of the tree, with its children. */
 export function TreeFolderRow(props: TreeFolderRowProps) {
   const { folder } = props;
@@ -302,6 +340,11 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   const [over, setOver] = useState(false);
   const isDragging = props.draggingPath === node.path;
   const count = props.noteCountsByPath?.get(node.path) ?? props.noteCount ?? 0;
+  // The drop is only possible when the move is not refused: the row tells the
+  // user so before the drop, instead of refusing it afterwards.
+  const canDrop = props.draggingPath
+    ? canDropInto(props.draggingPath, node.path, props.filesByParent)
+    : true;
 
   // The highlight of a drop target disappears with the drag itself.
   useEffect(() => {
@@ -309,6 +352,11 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   }, [props.draggingPath]);
 
   const handleDragStart = (event: DragEvent): void => {
+    // The user who renames a node is selecting a text, not dragging a row.
+    if (isInsideRenameInput(event, rename)) {
+      event.preventDefault();
+      return;
+    }
     if (event.dataTransfer) {
       event.dataTransfer.setData('text/plain', node.path);
       event.dataTransfer.effectAllowed = 'move';
@@ -335,7 +383,9 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   return (
     <li class="tree-folder">
       <div
-        class={`tree-row${isDragging ? ' dragging' : ''}${over ? ' drop-target' : ''}`}
+        class={`tree-row${isDragging ? ' dragging' : ''}${over ? ' drop-target' : ''}${
+          over && !canDrop ? ' drop-refused' : ''
+        }`}
         style={{ paddingLeft: `${indentOf(props.depth)}px` }}
         draggable
         onDragStart={handleDragStart}
@@ -374,6 +424,12 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             <TreeName name={node.name} />
           </button>
         )}
+        {over ? (
+          <span class={`tree-drop-badge${canDrop ? '' : ' refused'}`}>
+            <Icon name={canDrop ? 'move' : 'x'} size={12} />
+            {canDrop ? 'Drop here' : 'Cannot drop here'}
+          </span>
+        ) : null}
         {count > 0 ? <span class="tree-count">{count}</span> : null}
         <RowActions node={node} onContextMenu={props.onContextMenu} />
       </div>
@@ -430,8 +486,18 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
   const selected = file.path === props.currentPath;
   const rename = useInlineRename(file, props.onRenameInline);
   const isDragging = props.draggingPath === file.path;
+  // The list of the favorites lives in the store: the row reads it there, so
+  // the star of a note appears and disappears without a new property in the
+  // props of the rows. The subscription is narrow: the row is redrawn when
+  // its own star changes, not on every keystroke of the editor.
+  const favorite = useAppSelector((state) => state.ui.favorites.includes(file.path));
 
   const handleDragStart = (event: DragEvent): void => {
+    // The user who renames a node is selecting a text, not dragging a row.
+    if (isInsideRenameInput(event, rename)) {
+      event.preventDefault();
+      return;
+    }
     if (event.dataTransfer) {
       event.dataTransfer.setData('text/plain', file.path);
       event.dataTransfer.effectAllowed = 'move';
@@ -469,7 +535,14 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
             <span class="tree-icon">
               <Icon name="file-text" size={16} />
             </span>
-            <TreeName name={file.name} />
+            <span class="tree-file-label">
+              <TreeName name={file.name} />
+              {favorite ? (
+                <span class="tree-favorite" aria-hidden="true">
+                  <Icon name="star" size={12} />
+                </span>
+              ) : null}
+            </span>
           </button>
         )}
         <RowActions node={file} onContextMenu={props.onContextMenu} />

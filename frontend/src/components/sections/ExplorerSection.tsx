@@ -279,13 +279,17 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 title="Command palette"
                 onClick={() => props.onOpenPalette?.()}
               />
-              <IconButton label="Plugins" icon="bookmark" onClick={() => props.onOpenPlugins?.()} />
+              <IconButton label="Plugins" icon="puzzle" onClick={() => props.onOpenPlugins?.()} />
               <ConnectionIndicator
                 connection={props.connection ?? 'connecting'}
                 onRetry={props.onRetryConnection}
               />
             </div>
           </div>
+
+          {isEmpty ? null : (
+            <p class="explorer-hint">Drag a note onto a folder to move it.</p>
+          )}
 
           {drag.path ? (
             <div

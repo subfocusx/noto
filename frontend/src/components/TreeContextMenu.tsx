@@ -2,12 +2,17 @@
 //
 // The menu is a small floating panel: it shows the actions of a note or of a
 // folder. Every action is an icon, and its name is carried by the accessible
-// label and by the native tooltip of the button. The panel names the node it
-// acts on, so the user always knows which node the actions belong to. The
-// menu is rendered by the sidebar when a row asks for it, and it closes as
-// soon as the user leaves it.
+// label and by the native tooltip of the button. The panel is a narrow column
+// of icons: the name of the node is not shown, it only lives in the accessible
+// name of the menu, which tells the assistive technology what the menu acts
+// on. The menu is rendered by the sidebar when a row asks for it, and it
+// closes as soon as the user leaves it.
+//
+// A note can also be marked as a favorite. The menu carries that action: it
+// adds the note to the favorites of the user, or takes it out of them.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useAppActions, useAppState } from '../core/store/hooks';
 import type { PluginContextMenuItem } from '../plugins/contract';
 import { Icon } from '../ui/icons';
 import { PluginContextMenuSlot } from './PluginSlots';
@@ -59,8 +64,9 @@ const MARGIN = 8;
 /**
  * The name of the node the menu acts on.
  *
- * It is the last segment of the path: the menu says which node it acts on,
- * so the user never mistakes the menu of a folder for the menu of another one.
+ * It is the last segment of the path. The name is not shown in the panel — the
+ * panel is a narrow column of icons — but it is the accessible name of the
+ * menu, so the assistive technology tells the user what the menu acts on.
  */
 function nameOf(path: string): string {
   const segments = path.split('/');
@@ -96,7 +102,11 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const closedRef = useRef(false);
   const [position, setPosition] = useState({ left: props.x, top: props.y });
+  const state = useAppState();
+  const actions = useAppActions();
   const name = nameOf(props.path);
+  // Only a note can be a favorite: a folder is not a note.
+  const favorite = !props.isFolder && state.ui.favorites.includes(props.path);
 
   // The menu is measured after the first render: it is then moved back into
   // the viewport when it would overflow it.
@@ -163,9 +173,6 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
       aria-label={`Actions of ${name}`}
       style={{ position: 'fixed', left: `${position.left}px`, top: `${position.top}px` }}
     >
-      <div class="context-menu-title" title={name} aria-hidden="true">
-        {name}
-      </div>
       <MenuEntry label="Rename" onSelect={() => run(props.onRename)}>
         <Icon name="pencil" size={16} />
       </MenuEntry>
@@ -185,6 +192,14 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
       {!props.isFolder && props.onDuplicate ? (
         <MenuEntry label="Duplicate" onSelect={() => run(props.onDuplicate as () => void)}>
           <Icon name="copy" size={16} />
+        </MenuEntry>
+      ) : null}
+      {!props.isFolder ? (
+        <MenuEntry
+          label={favorite ? 'Remove from favorites' : 'Add to favorites'}
+          onSelect={() => run(() => actions.toggleFavorite(props.path))}
+        >
+          <Icon name="star" size={16} />
         </MenuEntry>
       ) : null}
       {props.pluginItems && props.pluginItems.length > 0 ? (

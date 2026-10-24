@@ -602,20 +602,34 @@ button.vault-header-path:hover {
 
 /* ----------------------------------------------------- drag and drop tree */
 
-.tree-row[draggable='true'] {
+/* A row of the tree can be dragged: the cursor tells the truth about it. */
+.tree-row[draggable='true'],
+.tree-row[draggable='true'] .tree-file-button,
+.tree-row[draggable='true'] .tree-folder-button {
   cursor: grab;
 }
 
-.tree-row.dragging {
-  opacity: 0.4;
+/* While the row is dragged, the cursor is closed. */
+.tree-row[draggable='true']:active,
+.tree-row.dragging,
+.tree-row.dragging .tree-file-button,
+.tree-row.dragging .tree-folder-button {
+  cursor: grabbing;
 }
 
+/* The row that is being dragged steps aside. */
+.tree-row.dragging {
+  opacity: 0.45;
+}
+
+/* The row under the pointer during a drag: it is the target of the move. */
 .tree-row.drop-target {
   background: var(--accent-subtle);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
   color: var(--fg);
 }
 
+/* The line on the top of the target. */
 .tree-row.drop-target::after {
   content: '';
   position: absolute;
@@ -626,10 +640,58 @@ button.vault-header-path:hover {
   background: var(--accent);
 }
 
-.tree-drop-hint {
-  padding: var(--space-1) var(--space-3);
-  color: var(--accent);
+/* A target that would refuse the move says so: a refused drop never looks
+   like a success. */
+.tree-row.drop-target.drop-refused {
+  background: var(--danger-subtle);
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+.tree-row.drop-target.drop-refused::after {
+  background: var(--danger);
+}
+
+/* The menu of the row waits: the badge of the target comes first. */
+.tree-row.drop-target .tree-actions {
+  opacity: 0;
+}
+
+/* The badge of the target: it says where the node has to be dropped. */
+.tree-drop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--fg-on-accent);
   font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.tree-drop-badge.refused {
+  background: var(--danger);
+}
+
+/* The refusal of a move: the banner says why the drop did nothing. */
+.tree-drop-hint {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+/* The hint of the explorer: it tells the user that a note is moved by
+   dropping it on a folder. */
+.explorer-hint {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
 /* The placeholder of the empty tree. */
@@ -664,6 +726,8 @@ button.vault-header-path:hover {
 
 /* ---------------------------------------------------------- context menu */
 
+/* The panel of the menu: a narrow column of icons. The name of the node is
+   not shown, so the panel is only as wide as the icons it holds. */
 .context-menu {
   position: fixed;
   z-index: var(--z-overlay);
@@ -671,8 +735,9 @@ button.vault-header-path:hover {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  width: max-content;
   min-width: 0;
-  padding: var(--space-1);
+  padding: 2px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--bg-container);
@@ -1890,93 +1955,9 @@ kbd {
 }
 
 /* ------------------------------------------------- tags and the conflict --- */
-/* The strip of the tags of the note and the dialog of a conflict (phase 9). */
+/* The strip of the tags of the note lives in `tags.css`. */
 
-/*
- * The strip of the tags of the note.
- *
- * The strip is a row of its own: it keeps its place under the crumbs and does
- * not float over the editor.
- */
-.note-tags-strip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: var(--space-1) var(--space-5);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-sidebar);
-}
-
-.q9-note-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: 22px;
-}
-
-.q9-note-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 1px var(--space-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  color: var(--fg-secondary);
-  font-size: var(--text-xs);
-}
-
-.q9-note-tag-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.q9-note-tag-x {
-  display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.q9-note-tag-x:hover {
-  color: var(--fg);
-}
-
-.q9-note-tag-add {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 4px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.q9-note-tag-add:hover {
-  border-color: var(--accent);
-  color: var(--fg);
-}
-
-.q9-note-tag-input {
-  width: 12ch;
-  padding: 1px var(--space-1);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  color: var(--fg);
-  font-size: var(--text-xs);
-}
-
-.q9-note-tag-input:focus {
-  outline: none;
-}
+/* The dialog of a conflict (phase 9). */
 
 .q9-conflict-backdrop {
   position: fixed;
@@ -2060,15 +2041,4 @@ kbd {
   border-color: transparent;
   background: transparent;
   color: var(--fg-muted);
-}
-
-/* The header of the context menu: it names the node the menu acts on. */
-.context-menu-title {
-  max-width: 180px;
-  padding: var(--space-1) var(--space-2);
-  overflow: hidden;
-  color: var(--fg-muted);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

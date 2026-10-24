@@ -75,7 +75,8 @@ describe('the context menu of the tree', () => {
     );
 
     const labels = entriesOf(view.container).map((entry) => entry.getAttribute('aria-label'));
-    expect(labels).toEqual(['Rename', 'Move', 'Delete']);
+    // The favorite of a note is one of the entries of the menu of a note.
+    expect(labels).toEqual(['Rename', 'Move', 'Add to favorites', 'Delete']);
     expect(view.getByLabelText('Rename').getAttribute('title')).toBe('Rename');
     expect(view.getByLabelText('Delete').getAttribute('title')).toBe('Delete');
   });

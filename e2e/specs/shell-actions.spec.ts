@@ -78,6 +78,33 @@ test.describe('the buttons of the shell', () => {
     await expect(page.getByRole('dialog', { name: /plugin/i })).toBeVisible();
   });
 
+  test('the command palette is a modal window and not a list over the page', async ({ page }) => {
+    await gotoApp(page);
+
+    await page.getByRole('button', { name: 'Open command palette' }).click();
+    const palette = page.locator('.noto-palette');
+    await expect(palette).toBeVisible();
+
+    // The card is a window: it is narrower than the page and it is centred.
+    const card = (await palette.boundingBox())!;
+    const pageBox = page.viewportSize()!;
+    expect(card.width).toBeLessThan(pageBox.width);
+    expect(card.width).toBeGreaterThan(200);
+    expect(Math.abs(card.x + card.width / 2 - pageBox.width / 2)).toBeLessThan(4);
+
+    // The title and the description of a command are on two lines: they are
+    // not glued into one string.
+    const option = page.locator('.noto-palette-option').first();
+    await expect(option.locator('.noto-palette-option-title')).toBeVisible();
+    await expect(option.locator('.noto-palette-option-description')).toBeVisible();
+
+    // The list scrolls inside the card: the card never grows over the screen.
+    expect(card.height).toBeLessThan(pageBox.height);
+
+    await page.keyboard.press('Escape');
+    await expect(palette).toHaveCount(0);
+  });
+
   test('the rail opens the section of the history', async ({ page }) => {
     await page.getByRole('button', { name: 'History', exact: true }).click();
     await expect(page.locator('.column-section[aria-label="History"]')).toBeVisible();

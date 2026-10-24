@@ -137,6 +137,47 @@ test.describe('the tree of the notes', () => {
     await expect(page.locator('.recent-list')).toHaveCount(0);
   });
 
+  test('the right click of a folder opens the menu of the folder', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
+
+    await gotoApp(page);
+
+    const folder = `right-click-${Date.now().toString(36)}`;
+    await page.evaluate(async (name) => {
+      await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: '', name }),
+      });
+    }, folder);
+    await page.reload();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+
+    const row = folderRow(page, folder);
+    await expect(row).toBeVisible();
+
+    // The right click opens the menu of the row, and the menu of the browser
+    // never appears.
+    await row.click({ button: 'right' });
+    const menu = page.locator('.context-menu');
+    await expect(menu).toBeVisible();
+    await expect(menu).toContainText(folder);
+
+    // The folder can be created inside the folder of the menu.
+    const inner = `${folder}-inner`;
+    await menu.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'New folder' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('Name', { exact: true }).fill(inner);
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+
+    // The new folder lives inside the folder of the menu.
+    await page.getByRole('button', { name: `Expand ${folder}`, exact: true }).click();
+    await expect(treeFolder(page, inner)).toBeVisible();
+  });
+
   test('a note can be dropped on another folder', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
 

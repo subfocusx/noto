@@ -14,7 +14,7 @@ function unique(prefix: string): string {
 }
 
 test.describe('the rail of the sections', () => {
-  test('the rail shows the five sections and the actions of the application', async ({
+  test('the rail shows the seven sections and the actions of the application', async ({
     page,
   }) => {
     await gotoApp(page);
@@ -22,9 +22,28 @@ test.describe('the rail of the sections', () => {
     const rail = page.locator('.rail');
     await expect(rail).toBeVisible();
 
-    for (const name of ['Explorer', 'Search', 'Filters', 'History', 'Trash']) {
+    for (const name of [
+      'Explorer',
+      'Calendar',
+      'Search',
+      'Filters',
+      'History',
+      'Notifications',
+      'Trash',
+    ]) {
       await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
     }
+
+    // There is no letter under the icon any more: the name of the section lives
+    // in the accessible name and in the tooltip of the button.
+    await expect(page.locator('.rail-letter')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Explorer', exact: true })).toHaveAttribute(
+      'title',
+      'Explorer',
+    );
+
+    // The sections are in two groups, separated by a thin line.
+    await expect(page.locator('.rail-items .rail-separator')).toHaveCount(1);
 
     // The theme and the settings live at the bottom of the rail.
     await expect(page.getByRole('button', { name: /Switch to the .* theme/ })).toBeVisible();
@@ -109,5 +128,17 @@ test.describe('the rail of the sections', () => {
     await page.reload();
     await openSidebarIfNeeded(page);
     await expect(page.locator('.column-section[aria-label="History"]')).toBeVisible();
+  });
+
+  test('the calendar and the notifications open their column', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    await expect(page.locator('.column-section[aria-label="Calendar"]')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+    await expect(page.locator('.column-section[aria-label="Notifications"]')).toBeVisible();
+    await expect(page.locator('.column-section[aria-label="Calendar"]')).toHaveCount(0);
   });
 });

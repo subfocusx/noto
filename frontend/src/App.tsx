@@ -50,6 +50,8 @@ import { SettingsStore } from './core/settings/settingsStore';
 import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs } from './core/settings/prefs';
 import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
+import { localDateOf } from './core/store/actions';
+import { countUnread } from './core/notifications/types';
 import { extractHeadings } from './lib/outline';
 import { buildTree } from './lib/tree';
 import { Icon } from './ui/icons';
@@ -552,6 +554,34 @@ export function App() {
     }
   }, [note.status, note.path, note.revision]);
 
+  // The application tells the user what happened: a save that failed and a
+  // version that conflicts with the one of the server are told once, when
+  // they appear — not on every render.
+  const notifiedStatus = useRef(note.status);
+  const notifiedConflict = useRef(note.conflict);
+  useEffect(() => {
+    const previousStatus = notifiedStatus.current;
+    const previousConflict = notifiedConflict.current;
+    notifiedStatus.current = note.status;
+    notifiedConflict.current = note.conflict;
+    if (note.status === 'error' && previousStatus !== 'error') {
+      actions.notify({
+        kind: 'error',
+        title: 'The note could not be saved',
+        body: note.path ?? undefined,
+        path: note.path ?? undefined,
+      });
+    }
+    if (note.conflict && !previousConflict) {
+      actions.notify({
+        kind: 'warning',
+        title: 'The note was changed somewhere else',
+        body: 'Open the note to choose which version to keep.',
+        path: note.path ?? undefined,
+      });
+    }
+  }, [actions, note.status, note.conflict, note.path]);
+
   /* ----------------------------------------------------------- shortcuts */
 
   // The shortcuts come from one list (`./core/commands/shortcuts.ts`), so the
@@ -1018,6 +1048,7 @@ export function App() {
           theme={env.effectiveTheme}
           onToggleTheme={actions.toggleTheme}
           onOpenSettings={() => actions.setSettingsOpen(true)}
+          unreadCount={countUnread(ui.notifications)}
         />
         <div class="sidebar-wrap">
           <Sidebar
@@ -1067,6 +1098,13 @@ export function App() {
             onOpenSearchResult={(path) => void openNote(path)}
             onRestored={() => void actions.refreshTree()}
             hasPluginItems={pluginSidebarItems.length > 0}
+            files={tree.files}
+            calendarMonth={ui.calendarMonth}
+            calendarDay={ui.calendarDay}
+            onCalendarMonthChange={actions.setCalendarMonth}
+            onCalendarDayChange={actions.setCalendarDay}
+            onCreateDailyNote={(day) => void actions.openOrCreateDailyNote(localDateOf(day))}
+            onOpenFilters={() => actions.setRailSection('filters')}
           >
             {pluginSidebarItems.length > 0 ? <PluginSidebarSlot items={pluginSidebarItems} /> : null}
           </Sidebar>

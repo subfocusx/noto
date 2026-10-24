@@ -16,14 +16,17 @@ import { Icon } from '../ui/icons';
 import { ColumnResizer } from './ColumnResizer';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { ExplorerSection } from './sections/ExplorerSection';
+import type { CalendarSectionProps } from './sections/CalendarSection';
 import type { HistorySectionProps } from './sections/HistorySection';
 import type { SearchSectionProps } from './sections/SearchSection';
 import type { TrashSectionProps } from './sections/TrashSection';
 
 /** The sections that are loaded on demand. */
 interface LazySections {
+  CalendarSection: ComponentType<CalendarSectionProps>;
   FiltersSection: ComponentType;
   HistorySection: ComponentType<HistorySectionProps>;
+  NotificationsSection: ComponentType;
   SearchSection: ComponentType<SearchSectionProps>;
   TrashSection: ComponentType<TrashSectionProps>;
 }
@@ -118,6 +121,30 @@ export interface SidebarProps {
   onOpenSearchResult?: (path: string) => void;
   /** Called after a note was restored from the trash. */
   onRestored?: () => void;
+  /**
+   * The notes of the vault.
+   *
+   * The calendar groups them by the day they were written on, so it needs the
+   * whole tree and not only the visible part of it.
+   */
+  files?: Node[];
+  /**
+   * The month the calendar shows, as `YYYY-MM`.
+   *
+   * The empty string means "the month of today": the calendar shows it until
+   * the user walks to another month.
+   */
+  calendarMonth?: string;
+  /** The selected day of the calendar, as `YYYY-MM-DD`. */
+  calendarDay?: string | null;
+  /** Called when the user walks to another month. */
+  onCalendarMonthChange?: (month: string) => void;
+  /** Called when the user selects a day of the calendar. */
+  onCalendarDayChange?: (day: string | null) => void;
+  /** Called when the user asks for the note of a day. */
+  onCreateDailyNote?: (day: string) => void;
+  /** Called when the user wants to see the section of the filters. */
+  onOpenFilters?: () => void;
 }
 
 /** The smallest width of the sidebar, in pixels. */
@@ -143,8 +170,10 @@ export function Sidebar(props: SidebarProps) {
     void import('./LazySections').then((module) => {
       if (cancelled) return;
       setSections({
+        CalendarSection: module.CalendarSection,
         FiltersSection: module.FiltersSection,
         HistorySection: module.HistorySection,
+        NotificationsSection: module.NotificationsSection,
         SearchSection: module.SearchSection,
         TrashSection: module.TrashSection,
       });
@@ -236,8 +265,25 @@ export function Sidebar(props: SidebarProps) {
       return (
         <sections.SearchSection
           onOpenNote={(path) => (props.onOpenSearchResult ?? props.onSelect)(path)}
+          onOpenFilters={props.onOpenFilters}
         />
       );
+    }
+    if (props.section === 'calendar') {
+      return (
+        <sections.CalendarSection
+          files={props.files ?? []}
+          month={props.calendarMonth ?? ''}
+          selectedDay={props.calendarDay ?? null}
+          onMonthChange={(month) => props.onCalendarMonthChange?.(month)}
+          onDayChange={(day) => props.onCalendarDayChange?.(day)}
+          onOpenNote={(path) => props.onSelect(path)}
+          onCreateDailyNote={(day) => props.onCreateDailyNote?.(day)}
+        />
+      );
+    }
+    if (props.section === 'notifications') {
+      return <sections.NotificationsSection />;
     }
     if (props.section === 'filters') {
       return <sections.FiltersSection />;

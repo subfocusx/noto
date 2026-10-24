@@ -21,6 +21,7 @@ import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
 import type { ContextMenuState, DialogState, ViewMode } from './types';
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
+import { getQueryService } from '../query/service';
 import { getVaultService } from '../vault/vaultService';
 import { getSealedVault } from '../vault/session';
 import {
@@ -594,6 +595,73 @@ export function setTreeShowCounts(show: boolean): void {
   persistPrefs();
 }
 
+/* ----------------------------------------------------------------- query */
+
+/**
+ * Sets the query of the interface, without running it.
+ *
+ * The action is the one of the text field: the query is run separately, so
+ * the user can type a query that is not complete yet.
+ */
+export function setQuery(text: string): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, query: text } }));
+}
+
+/**
+ * Runs a query and fills the answer in the state.
+ *
+ * The action never throws: a broken query is shown as a message in the query
+ * bar. The answer of a query that is not the current one any more is dropped.
+ */
+export async function runQuery(text?: string, limit?: number): Promise<void> {
+  const current = getSnapshot().ui.query;
+  const query = (text ?? current).trim();
+  if (text !== undefined && text !== current) setQuery(text);
+  if (!query) {
+    clearQuery();
+    return;
+  }
+
+  const outcome = await getQueryService().runQuery(query, limit ?? 50);
+  // The user typed something else while the query was running.
+  if (getSnapshot().ui.query.trim() !== query) return;
+  update((prev) => ({
+    ...prev,
+    ui: {
+      ...prev.ui,
+      queryHits: outcome.hits,
+      queryTotal: outcome.total,
+      queryPartial: outcome.partial,
+      queryError: outcome.error ? outcome.error.message : null,
+    },
+  }));
+}
+
+/** Empties the query and forgets the answer. */
+export function clearQuery(): void {
+  update((prev) => ({
+    ...prev,
+    ui: {
+      ...prev.ui,
+      query: '',
+      queryHits: [],
+      queryTotal: 0,
+      queryPartial: false,
+      queryError: null,
+    },
+  }));
+}
+
+/** Reads the tags of the vault and fills them in the state. */
+export async function loadTags(): Promise<void> {
+  try {
+    const tags = await getQueryService().loadTags();
+    update((prev) => ({ ...prev, ui: { ...prev.ui, tags } }));
+  } catch (err) {
+    reportError(err);
+  }
+}
+
 /* ----------------------------------------------------------------- vault */
 
 /** Reads the state of the storage of the notes. */
@@ -798,6 +866,10 @@ export interface AppActions {
   setRightPanelWidth(width: number): void;
   setRecentCollapsed(collapsed: boolean): void;
   setTreeShowCounts(show: boolean): void;
+  setQuery(text: string): void;
+  runQuery(text?: string, limit?: number): Promise<void>;
+  clearQuery(): void;
+  loadTags(): Promise<void>;
   loadVault(): Promise<void>;
   chooseVault(path: string): Promise<void>;
   duplicateNote(path: string): Promise<void>;
@@ -855,6 +927,10 @@ export const actions: AppActions = {
   setRightPanelWidth,
   setRecentCollapsed,
   setTreeShowCounts,
+  setQuery,
+  runQuery,
+  clearQuery,
+  loadTags,
   loadVault,
   chooseVault,
   duplicateNote,

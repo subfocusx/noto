@@ -12,6 +12,9 @@ import { IconButton } from '../ui/tooltip';
 import { ColumnResizer } from './ColumnResizer';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { RecentNotesPanel } from './RecentNotesPanel';
+import { QueryBar } from './QueryBar';
+import { SavedViews } from './SavedViews';
+import { TagTree } from './TagTree';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from './TreeRow';
 
@@ -320,6 +323,15 @@ export function Sidebar(props: SidebarProps) {
             </button>
           </li>
         </ul>
+
+        <div class="sidebar-section q8-section">
+          <div class="sidebar-section-title">
+            <span>Query</span>
+          </div>
+          <QueryBar />
+          <SavedViews />
+          <TagTree />
+        </div>
 
         <div class="sidebar-section">
           <div class="sidebar-section-title">

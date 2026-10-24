@@ -34,6 +34,12 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** A tag of the vault and the number of the notes that carry it. */
+export interface TagCount {
+  tag: string;
+  count: number;
+}
+
 export interface Attachment {
   id: string;
   name: string;

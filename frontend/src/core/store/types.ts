@@ -4,7 +4,7 @@
 // to a plugin host without touching component internals.
 import type { AutosaveStatus } from '../../lib/autosave';
 import type { Draft } from '../../lib/drafts';
-import type { Node } from '../../types';
+import type { Node, SearchHit, TagCount } from '../../types';
 import type { ThemePreference } from '../settings/prefs';
 import type { ConnectionState } from '../connection/types';
 
@@ -85,6 +85,27 @@ export interface UiState {
    * and every one of these paths must show the note in the strip.
    */
   openPaths: string[];
+  /**
+   * The active query of the query language.
+   *
+   * The query lives in the store, and not in a component: the same selection
+   * must be seen by the search panel, by the tree, by the saved views and by
+   * the plugins.
+   */
+  query: string;
+  /** The notes that match the active query. */
+  queryHits: SearchHit[];
+  /** The total number of the matching notes. */
+  queryTotal: number;
+  /**
+   * True when the properties of some notes could not be recalculated, so the
+   * answer of the query may be incomplete.
+   */
+  queryPartial: boolean;
+  /** The message of the last failed query. */
+  queryError: string | null;
+  /** The tags of the vault with the number of the notes that carry them. */
+  tags: TagCount[];
   /** True when the dialog of the settings is open. */
   settingsOpen: boolean;
   /** True when the dialog of the keyboard shortcuts is open. */

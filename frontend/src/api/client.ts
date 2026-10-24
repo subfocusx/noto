@@ -8,6 +8,7 @@ export { API_BASE, ApiError, isAbortError, request } from './http';
 export { deleteNote, duplicateNote, getNote, moveNote, renameNote, saveNote } from './notes';
 export { createFile, createFolder, getTree } from './tree';
 export { reindex, search } from './search';
+export { getTags, runQuery, type QueryResult } from './query';
 export { attachmentRawUrl, deleteAttachment, listAttachments, uploadAttachment } from './attachments';
 export { exportAllUrl, exportFolderUrl, exportNoteUrl, importFiles, importZip } from './transfer';
 export { getTrash, restoreNote } from './trash';

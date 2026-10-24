@@ -8,6 +8,7 @@ import { PluginSidebarSlot } from '../components/PluginSlots';
 function renderSidebar(children?: ComponentChildren, hasPluginItems = false) {
   return render(
     <Sidebar
+      section="explorer"
       folders={[]}
       filesByParent={new Map()}
       currentPath=""
@@ -19,7 +20,6 @@ function renderSidebar(children?: ComponentChildren, hasPluginItems = false) {
       onRename={() => undefined}
       onMove={() => undefined}
       onDelete={() => undefined}
-      onOpenTrash={() => undefined}
       onOpenTransfer={() => undefined}
       onRefresh={() => undefined}
       loading={false}

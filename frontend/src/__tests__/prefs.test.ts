@@ -33,7 +33,7 @@ describe('preferences', () => {
       JSON.stringify({
         theme: 'light',
         mode: 'editor',
-        sidebarCollapsed: true,
+        railSection: 'search',
         sidebarWidth: 320,
         treeSort: 'modified',
         editorFontSize: 16,
@@ -45,7 +45,7 @@ describe('preferences', () => {
     const prefs = loadPrefs();
     expect(prefs.theme).toBe('light');
     expect(prefs.mode).toBe('editor');
-    expect(prefs.sidebarCollapsed).toBe(true);
+    expect(prefs.railSection).toBe('search');
     expect(prefs.sidebarWidth).toBe(320);
     expect(prefs.treeSort).toBe('modified');
     expect(prefs.editorFontSize).toBe(16);
@@ -79,6 +79,12 @@ describe('preferences', () => {
     expect(prefs.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_DEFAULT);
     expect(prefs.recentCollapsed).toBe(false);
     expect(prefs.treeShowCounts).toBe(true);
+    expect(prefs.railSection).toBe('explorer');
+  });
+
+  it('repairs a broken section of the rail', () => {
+    expect(normalizePrefs({ railSection: 'nonsense' }).railSection).toBe('explorer');
+    expect(normalizePrefs({ railSection: 'trash' }).railSection).toBe('trash');
   });
 
   it('clamps the width of the right column', () => {

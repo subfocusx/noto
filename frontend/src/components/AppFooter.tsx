@@ -28,10 +28,6 @@ export interface AppFooterProps {
   writable?: boolean;
   /** The path of the vault; shown in the title of the path. */
   vaultPath?: string;
-  /** Shows or hides the left column (the vault and the tree of the notes). */
-  onToggleSidebar?(): void;
-  /** True when the left column is visible. */
-  sidebarVisible?: boolean;
   /** Shows or hides the right column (the outline of the note). */
   onTogglePanel?(): void;
   /** True when the right column is visible. */
@@ -52,10 +48,13 @@ function group(value: number): string {
 /**
  * The status bar of the application.
  *
- * The bar is permanent: it holds the toggles of the columns, so a collapsed
+ * The bar is permanent: it holds the toggles of the columns, so a hidden
  * column can always be opened again, and the state of the document: the path
  * of the note, the position of the cursor, the counters and the format. The
  * actions of the vault live in the header of the explorer, not here.
+ *
+ * The left column has no toggle: the rail of the sections is always there, and
+ * the column stands next to it.
  */
 export function AppFooter(props: AppFooterProps) {
   return (
@@ -67,12 +66,6 @@ export function AppFooter(props: AppFooterProps) {
           class="menu-button"
           pressed={props.drawerOpen}
           onClick={() => props.onToggleDrawer?.()}
-        />
-        <IconButton
-          label="Toggle notes panel"
-          icon="panel-left"
-          pressed={props.sidebarVisible}
-          onClick={() => props.onToggleSidebar?.()}
         />
         <IconButton
           label="Toggle outline panel"

@@ -6,12 +6,41 @@
 // `app:` — a plugin may not use that prefix (the registry refuses duplicate
 // ids anyway).
 import type { CommandLike, CommandRegistry } from './commandRegistry';
+import type { RailSection } from '../store/types';
 
 /** The owner of the commands of the application. */
 export const APP_COMMAND_OWNER = 'app';
 
 /** The prefix of every command of the application. */
 export const APP_COMMAND_PREFIX = 'app:';
+
+/**
+ * The sections of the rail, in the order of the rail.
+ *
+ * The list is the single source of the order: the rail draws the icons in it,
+ * the palette lists the commands in it and the keyboard maps the letters of the
+ * shortcuts on it.
+ */
+export const RAIL_SECTIONS: { id: RailSection; letter: string; title: string; icon: string }[] = [
+  { id: 'explorer', letter: 'E', title: 'Explorer', icon: 'folder' },
+  { id: 'search', letter: 'S', title: 'Search', icon: 'search' },
+  { id: 'filters', letter: 'F', title: 'Filters', icon: 'tags' },
+  { id: 'history', letter: 'H', title: 'History', icon: 'clock' },
+  { id: 'trash', letter: 'T', title: 'Trash', icon: 'trash' },
+];
+
+/**
+ * The section of a shortcut of the rail.
+ *
+ * The ids of the shortcuts are `section.<name>`: the shortcut of the explorer
+ * is `section.explorer`.
+ */
+export function railSectionOfShortcut(shortcutId: string): RailSection | null {
+  if (!shortcutId.startsWith('section.')) return null;
+  const name = shortcutId.slice('section.'.length);
+  const section = RAIL_SECTIONS.find((entry) => entry.id === name);
+  return section ? section.id : null;
+}
 
 /** The parts of the application the commands act upon. */
 export interface AppCommandDeps {
@@ -41,8 +70,8 @@ export interface AppCommandDeps {
   openSettings(): void;
   /** Opens the help of the keyboard shortcuts. */
   openShortcuts(): void;
-  /** Collapses or expands the sidebar of the notes. */
-  toggleSidebar(): void;
+  /** Opens a section of the left column. */
+  openSection(section: RailSection): void;
 }
 
 /** A command of the application, before it is registered. */
@@ -121,13 +150,12 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
       shortcut: 'Ctrl+/',
       run: () => deps.openShortcuts(),
     },
-    {
-      id: `${APP_COMMAND_PREFIX}toggle-sidebar`,
-      title: 'Toggle sidebar',
-      description: 'Collapse or expand the panel of the notes',
-      shortcut: 'Ctrl+Alt+B',
-      run: () => deps.toggleSidebar(),
-    },
+    ...RAIL_SECTIONS.map((section) => ({
+      id: `${APP_COMMAND_PREFIX}section-${section.id}`,
+      title: `Open the ${section.title.toLowerCase()}`,
+      description: `Show the section ${section.title} of the left column`,
+      run: () => deps.openSection(section.id),
+    })),
   ];
 }
 

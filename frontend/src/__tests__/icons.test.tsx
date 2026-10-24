@@ -56,6 +56,7 @@ describe('the icon registry', () => {
       'plus',
       'refresh-cw',
       'search',
+      'settings',
       'sun',
       'tags',
       'trash',

@@ -27,6 +27,7 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
   const { roots, filesByParent } = buildTree(folders, []);
   return render(
     <Sidebar
+      section="explorer"
       folders={roots}
       filesByParent={filesByParent}
       currentPath=""
@@ -38,7 +39,6 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
       onRename={() => undefined}
       onMove={() => undefined}
       onDelete={() => undefined}
-      onOpenTrash={() => undefined}
       onOpenTransfer={() => undefined}
       onRefresh={() => undefined}
       loading={false}
@@ -56,10 +56,16 @@ describe('the header of the explorer', () => {
     const title = screen.getByText('Explorer').closest('.sidebar-section-title');
     expect(title).not.toBeNull();
 
-    for (const name of ['Search notes', 'Graph', 'Archive', 'Open command palette', 'Plugins']) {
+    for (const name of ['Graph', 'Archive', 'Open command palette', 'Plugins']) {
       const button = screen.getByRole('button', { name });
       expect(title?.contains(button)).toBe(true);
     }
+  });
+
+  it('holds no search of its own: the search is a section of the rail', () => {
+    renderSidebar();
+
+    expect(screen.queryByRole('button', { name: 'Search notes' })).toBeNull();
   });
 
   it('holds the indicator of the connection', () => {
@@ -99,13 +105,9 @@ describe('the header of the explorer', () => {
   });
 
   it('calls the handlers of the actions', () => {
-    const onOpenSearch = vi.fn();
     const onOpenPalette = vi.fn();
     const onOpenPlugins = vi.fn();
-    renderSidebar({ onOpenSearch, onOpenPalette, onOpenPlugins });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Search notes' }));
-    expect(onOpenSearch).toHaveBeenCalled();
+    renderSidebar({ onOpenPalette, onOpenPlugins });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open command palette' }));
     expect(onOpenPalette).toHaveBeenCalled();

@@ -14,8 +14,6 @@ export interface SettingsDialogProps {
   onClose(): void;
   /** The theme of the application. */
   theme: 'light' | 'dark' | 'system';
-  /** True when the sidebar is collapsed. */
-  sidebarCollapsed: boolean;
   /** The width of the sidebar, in pixels. */
   sidebarWidth: number;
   /** The order of the notes in the tree. */
@@ -30,8 +28,6 @@ export interface SettingsDialogProps {
   version?: string;
   /** Called when the theme changes. */
   onTheme(theme: 'light' | 'dark' | 'system'): void;
-  /** Called when the sidebar is collapsed or expanded. */
-  onSidebarCollapsed(collapsed: boolean): void;
   /** Called when the width of the sidebar changes. */
   onSidebarWidth(width: number): void;
   /** Called when the order of the tree changes. */
@@ -130,21 +126,6 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
             step={10}
             value={props.sidebarWidth}
             onInput={(event) => props.onSidebarWidth(Number((event.target as HTMLInputElement).value))}
-          />
-        </div>
-
-        <div class="settings-row">
-          <div class="settings-row-label">
-            <span>Collapse the sidebar</span>
-            <span>Shows the notes only</span>
-          </div>
-          <button
-            type="button"
-            class="switch"
-            role="switch"
-            aria-checked={props.sidebarCollapsed}
-            aria-label="Collapse the sidebar"
-            onClick={() => props.onSidebarCollapsed(!props.sidebarCollapsed)}
           />
         </div>
       </section>

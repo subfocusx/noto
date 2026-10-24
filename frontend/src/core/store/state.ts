@@ -71,7 +71,7 @@ export function createInitialState(): AppState {
       searchOpen: false,
       paletteOpen: false,
       drawerOpen: false,
-      sidebarCollapsed: prefs.sidebarCollapsed,
+      railSection: prefs.railSection,
       sidebarWidth: prefs.sidebarWidth,
       treeSort: prefs.treeSort,
       editorFontSize: prefs.editorFontSize,

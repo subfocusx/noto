@@ -24,6 +24,7 @@ import type { VaultPickerProps } from './components/VaultPicker';
 import type { SettingsDialogProps } from './components/SettingsDialog';
 import type { ShortcutHelpProps } from './components/ShortcutHelp';
 import { Sidebar } from './components/Sidebar';
+import { Rail } from './components/Rail';
 import type { TrashPanelProps } from './components/TrashPanel';
 import type { TransferPanelProps } from './components/TransferPanel';
 import { TreeContextMenu } from './components/TreeContextMenu';
@@ -37,7 +38,11 @@ import {
 } from './core/vault/session';
 import { AutoLock } from './core/vault/autoLock';
 import { syncVaultServiceWithSession } from './core/vault/vaultService';
-import { registerAppCommands, APP_COMMAND_PREFIX } from './core/commands/appCommands';
+import {
+  registerAppCommands,
+  railSectionOfShortcut,
+  APP_COMMAND_PREFIX,
+} from './core/commands/appCommands';
 import { CommandRegistry } from './core/commands/commandRegistry';
 import { matchesShortcut, SHORTCUTS } from './core/commands/shortcuts';
 import { EventBus } from './core/events/eventBus';
@@ -262,9 +267,9 @@ export function App() {
     // The commands of the application live in the same registry as the
     // commands of the plugins: the palette shows both of them.
     const unregisterAppCommands = registerAppCommands(commands, {
-      createNote: () => appStore.actions.openDialog({ kind: 'create-file', parentPath: '', value: 'note.md' }),
+      createNote: () => appStore.actions.openDialog({ kind: 'create-file', parentPath: '', value: '' }),
       createFolder: () =>
-        appStore.actions.openDialog({ kind: 'create-folder', parentPath: '', value: 'New folder' }),
+        appStore.actions.openDialog({ kind: 'create-folder', parentPath: '', value: '' }),
       dailyNote: () => appStore.actions.openOrCreateDailyNote(),
       openSearch: () => appStore.actions.setSearchOpen(true),
       toggleTheme: () => appStore.actions.toggleTheme(),
@@ -290,7 +295,7 @@ export function App() {
       },
       openSettings: () => appStore.actions.setSettingsOpen(true),
       openShortcuts: () => appStore.actions.setShortcutHelpOpen(true),
-      toggleSidebar: () => appStore.actions.toggleSidebar(),
+      openSection: (section) => appStore.actions.setRailSection(section),
       duplicateNote: () => {
         const { note } = appStore.getSnapshot();
         if (!note.path) {
@@ -587,7 +592,7 @@ export function App() {
       for (const shortcut of SHORTCUTS) {
         if (!matchesShortcut(event, shortcut.keys)) continue;
         // The shortcuts of the editor belong to CodeMirror itself.
-        if (shortcut.group === 'Редактор') return;
+        if (shortcut.group === 'Editor') return;
         switch (shortcut.id) {
           case 'palette':
           case 'palette.secondary':
@@ -608,7 +613,7 @@ export function App() {
             return;
           case 'newNote':
             event.preventDefault();
-            actions.openDialog({ kind: 'create-file', parentPath: '', value: 'note.md' });
+            actions.openDialog({ kind: 'create-file', parentPath: '', value: '' });
             return;
           case 'save':
             if (!inEditor) {
@@ -626,10 +631,18 @@ export function App() {
             void actions.duplicateNote(openNoteState.path);
             return;
           }
-          case 'toggleSidebar':
+          case 'section.explorer':
+          case 'section.search':
+          case 'section.filters':
+          case 'section.history':
+          case 'section.trash': {
             event.preventDefault();
-            actions.toggleSidebar();
+            const section = railSectionOfShortcut(shortcut.id);
+            if (!section) return;
+            actions.setRailSection(section);
+            if (narrow) actions.setDrawerOpen(true);
             return;
+          }
           case 'toggleTheme':
             event.preventDefault();
             actions.toggleTheme();
@@ -958,7 +971,7 @@ export function App() {
 
   return (
     <div
-      class={`app${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}
+      class={`app${ui.drawerOpen ? ' drawer-open' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}
       data-vault-mode={vaultSession.mode}
       data-vault-locked={vaultSession.locked ? 'true' : 'false'}
     >
@@ -993,8 +1006,22 @@ export function App() {
             aria-hidden="true"
           />
         ) : null}
+        <Rail
+          section={ui.railSection}
+          onSelect={(section) => {
+            actions.setRailSection(section);
+            // On a narrow screen the column is a drawer over the editor: the
+            // section that was chosen comes with it, otherwise the click on
+            // the rail would change nothing that is seen.
+            if (narrow) actions.setDrawerOpen(true);
+          }}
+          theme={env.effectiveTheme}
+          onToggleTheme={actions.toggleTheme}
+          onOpenSettings={() => actions.setSettingsOpen(true)}
+        />
         <div class="sidebar-wrap">
           <Sidebar
+            section={ui.railSection}
             folders={roots}
             filesByParent={filesByParent}
             filterPaths={filterPaths}
@@ -1003,16 +1030,14 @@ export function App() {
             onToggle={actions.toggleFolder}
             onSelect={(path) => void openNote(path)}
             onCreateFolder={(parentPath) =>
-              actions.openDialog({ kind: 'create-folder', parentPath, value: 'New folder' })
+              actions.openDialog({ kind: 'create-folder', parentPath, value: '' })
             }
             onCreateFile={(parentPath) =>
-              actions.openDialog({ kind: 'create-file', parentPath, value: 'note.md' })
+              actions.openDialog({ kind: 'create-file', parentPath, value: '' })
             }
             onRename={(node) => actions.openDialog({ kind: 'rename', node, value: node.name })}
             onMove={(node) => actions.openDialog({ kind: 'move', node, value: node.parentPath })}
             onDelete={(node) => actions.openDialog({ kind: 'delete', node })}
-            onOpenTrash={() => actions.openDialog({ kind: 'trash' })}
-            onOpenSearch={() => actions.setSearchOpen(true)}
             onOpenPalette={() => actions.setPaletteOpen(true)}
             onOpenPlugins={() => setPluginsOpen(true)}
             // The state of the backend is measured by the monitor, not guessed
@@ -1030,18 +1055,17 @@ export function App() {
             vaultName={vaultName}
             vaultPath={ui.vaultPath}
             vaultFixed={ui.vaultFixed}
-            noteCount={tree.files.length}
             noteTotal={tree.noteTotal}
             folderTotal={tree.folderTotal}
             showCounts={ui.treeShowCounts}
             onMoveNode={moveByDrop}
             onChooseVault={() => setVaultPickerOpen(true)}
-            collapsed={ui.sidebarCollapsed}
-            onToggleCollapse={actions.toggleSidebar}
             sidebarWidth={ui.sidebarWidth}
             onResizeWidth={actions.setSidebarWidth}
             recentCollapsed={ui.recentCollapsed}
             onToggleRecent={() => actions.setRecentCollapsed(!ui.recentCollapsed)}
+            onOpenSearchResult={(path) => void openNote(path)}
+            onRestored={() => void actions.refreshTree()}
             hasPluginItems={pluginSidebarItems.length > 0}
           >
             {pluginSidebarItems.length > 0 ? <PluginSidebarSlot items={pluginSidebarItems} /> : null}
@@ -1148,8 +1172,6 @@ export function App() {
         encoding="UTF-8"
         writable
         vaultPath={ui.vaultPath}
-        onToggleSidebar={actions.toggleSidebar}
-        sidebarVisible={!ui.sidebarCollapsed}
         onTogglePanel={() => {
           // On a narrow screen the panel is a drawer over the editor, on a
           // wide one it is a column next to the editor.
@@ -1293,12 +1315,12 @@ export function App() {
           onCreateFile={() => {
             const node = contextNode;
             actions.closeContextMenu();
-            actions.openDialog({ kind: 'create-file', parentPath: node.path, value: 'note.md' });
+            actions.openDialog({ kind: 'create-file', parentPath: node.path, value: '' });
           }}
           onCreateFolder={() => {
             const node = contextNode;
             actions.closeContextMenu();
-            actions.openDialog({ kind: 'create-folder', parentPath: node.path, value: 'New folder' });
+            actions.openDialog({ kind: 'create-folder', parentPath: node.path, value: '' });
           }}
         />
       ) : null}
@@ -1306,18 +1328,16 @@ export function App() {
       {ui.settingsOpen && SettingsDialogComponent ? (
         <SettingsDialogComponent
           open={ui.settingsOpen}
-        onClose={() => actions.setSettingsOpen(false)}
-        theme={env.theme}
-        sidebarCollapsed={ui.sidebarCollapsed}
-        sidebarWidth={ui.sidebarWidth}
-        treeSort={ui.treeSort}
-        editorFontSize={ui.editorFontSize}
-        editorWrap={ui.editorWrap}
-        online={env.online}
-        version="0.1.0"
-        onTheme={(theme) => actions.setTheme(theme)}
-        onSidebarCollapsed={(collapsed) => actions.setSidebarCollapsed(collapsed)}
-        onSidebarWidth={(width) => actions.setSidebarWidth(width)}
+          onClose={() => actions.setSettingsOpen(false)}
+          theme={env.theme}
+          sidebarWidth={ui.sidebarWidth}
+          treeSort={ui.treeSort}
+          editorFontSize={ui.editorFontSize}
+          editorWrap={ui.editorWrap}
+          online={env.online}
+          version="0.1.0"
+          onTheme={(theme) => actions.setTheme(theme)}
+          onSidebarWidth={(width) => actions.setSidebarWidth(width)}
         onTreeSort={(sort) => actions.setTreeSort(sort)}
         onEditorFontSize={(size) => actions.setEditorFontSize(size)}
         onEditorWrap={(wrap) => actions.setEditorWrap(wrap)}

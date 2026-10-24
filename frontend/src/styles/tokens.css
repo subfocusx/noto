@@ -134,13 +134,17 @@
   --stroke-width: 1.75;
 
   --row-height: 32px;
-  --header-height: 48px;
+  /* The height of the header of every column: the line under the headers is
+     one line, because every header has the same height. */
+  --header-height: 40px;
   --footer-height: 24px;
-  --tab-height: 32px;
+  /* The height of the strip of the tabs: it is the header of the workspace. */
+  --tab-height: 40px;
+  /* The width of the rail of the sections; the rail never changes its width. */
+  --rail-width: 44px;
   --sidebar-width: 240px;
-  --sidebar-width-min: 180px;
-  --sidebar-width-max: 420px;
-  --sidebar-collapsed-width: 0px;
+  --sidebar-width-min: 200px;
+  --sidebar-width-max: 480px;
   --panel-width: 280px;
   --panel-width-min: 200px;
   --panel-width-max: 480px;

@@ -7,7 +7,7 @@
 import type { AutosaveStatus } from '../../lib/autosave';
 
 /** The group a shortcut belongs to. */
-export type ShortcutGroup = 'Навигация' | 'Редактор' | 'Вид' | 'Файлы' | 'Система';
+export type ShortcutGroup = 'Navigation' | 'Editor' | 'View' | 'Files' | 'System';
 
 /** One keyboard shortcut. */
 export interface ShortcutDef {
@@ -29,85 +29,113 @@ export interface ShortcutDef {
  * The contract of the previous releases is preserved: `Ctrl+K` and `Ctrl+P`
  * open the command palette, `Ctrl+Shift+F` opens the search and `Ctrl+S`
  * saves the note.
+ *
+ * The sections of the rail have their own shortcuts: the letter of the icon
+ * is the letter of the key. The trash takes `Ctrl+Alt+D` (the deleted notes),
+ * because `Ctrl+Alt+T` has been the theme since the first release.
  */
 export const SHORTCUTS: ShortcutDef[] = [
   {
     id: 'palette',
     keys: 'Ctrl+K',
-    label: 'Открыть палитру команд',
-    group: 'Навигация',
+    label: 'Open the command palette',
+    group: 'Navigation',
   },
   {
     id: 'palette.secondary',
     keys: 'Ctrl+P',
-    label: 'Открыть палитру команд (альтернатива)',
-    group: 'Навигация',
+    label: 'Open the command palette (alternative)',
+    group: 'Navigation',
   },
   {
     id: 'search',
     keys: 'Ctrl+Shift+F',
-    label: 'Искать по заметкам',
-    group: 'Навигация',
+    label: 'Search the notes',
+    group: 'Navigation',
   },
   {
     id: 'shortcutHelp',
     keys: 'Ctrl+/',
-    label: 'Показать горячие клавиши',
-    group: 'Навигация',
+    label: 'Show the keyboard shortcuts',
+    group: 'Navigation',
   },
   {
     id: 'settings',
     keys: 'Ctrl+,',
-    label: 'Открыть настройки',
-    group: 'Система',
+    label: 'Open the settings',
+    group: 'System',
+  },
+  {
+    id: 'section.explorer',
+    keys: 'Ctrl+Alt+E',
+    label: 'Open the explorer',
+    group: 'Navigation',
+  },
+  {
+    id: 'section.search',
+    keys: 'Ctrl+Alt+S',
+    label: 'Open the search',
+    group: 'Navigation',
+  },
+  {
+    id: 'section.filters',
+    keys: 'Ctrl+Alt+F',
+    label: 'Open the filters',
+    group: 'Navigation',
+  },
+  {
+    id: 'section.history',
+    keys: 'Ctrl+Alt+H',
+    label: 'Open the history',
+    group: 'Navigation',
+  },
+  {
+    id: 'section.trash',
+    keys: 'Ctrl+Alt+D',
+    label: 'Open the trash',
+    group: 'Navigation',
   },
   {
     id: 'newNote',
     keys: 'Ctrl+Alt+N',
-    label: 'Создать заметку',
-    group: 'Файлы',
+    label: 'Create a note',
+    group: 'Files',
   },
   {
     id: 'save',
     keys: 'Ctrl+S',
-    label: 'Сохранить заметку',
-    group: 'Файлы',
+    label: 'Save the note',
+    group: 'Files',
   },
   {
     id: 'duplicateNote',
     keys: 'Ctrl+D',
-    label: 'Дублировать заметку',
-    group: 'Файлы',
-  },
-  {
-    id: 'toggleSidebar',
-    keys: 'Ctrl+Alt+B',
-    label: 'Свернуть или развернуть панель заметок',
-    group: 'Вид',
+    label: 'Duplicate the note',
+    group: 'Files',
   },
   {
     id: 'toggleTheme',
     keys: 'Ctrl+Alt+T',
-    label: 'Переключить тему',
-    group: 'Вид',
+    label: 'Switch the theme',
+    group: 'View',
   },
   {
     id: 'editor.bold',
     keys: 'Mod+B',
-    label: 'Жирный текст',
-    group: 'Редактор',
+    label: 'Bold text',
+    group: 'Editor',
   },
   {
     id: 'editor.italic',
     keys: 'Mod+I',
-    label: 'Курсив',
-    group: 'Редактор',
+    label: 'Italic',
+    group: 'Editor',
   },
   {
     id: 'editor.search',
     keys: 'Mod+F',
-    label: 'Поиск по тексту заметки',
-    group: 'Редактор',
+    label: 'Search in the text of the note',
+    group: 'Editor',
   },
 ];
 

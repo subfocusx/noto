@@ -76,6 +76,7 @@ describe('sidebar navigation', () => {
 
     const view = render(
       <Sidebar
+        section="explorer"
         folders={roots}
         filesByParent={filesByParent}
         currentPath="journal/a.md"
@@ -87,8 +88,6 @@ describe('sidebar navigation', () => {
         onRename={() => undefined}
         onMove={() => undefined}
         onDelete={() => undefined}
-        onOpenTrash={() => undefined}
-        onOpenSearch={() => undefined}
         onOpenTransfer={() => undefined}
         onRefresh={() => undefined}
         loading={false}
@@ -108,6 +107,7 @@ describe('sidebar navigation', () => {
     const { roots, filesByParent } = buildTree(folders, files);
     const view = render(
       <Sidebar
+        section="explorer"
         folders={roots}
         filesByParent={filesByParent}
         currentPath=""
@@ -119,8 +119,6 @@ describe('sidebar navigation', () => {
         onRename={() => undefined}
         onMove={() => undefined}
         onDelete={() => undefined}
-        onOpenTrash={() => undefined}
-        onOpenSearch={() => undefined}
         onOpenTransfer={() => undefined}
         onRefresh={() => undefined}
         loading={false}
@@ -162,11 +160,7 @@ describe('the rows of the tree', () => {
         depth={props.depth ?? 0}
         onToggle={() => undefined}
         onSelect={() => undefined}
-        onCreateFolder={() => undefined}
-        onCreateFile={() => undefined}
-        onRename={() => undefined}
-        onMove={() => undefined}
-        onDelete={() => undefined}
+        onContextMenu={() => undefined}
         noteCount={props.noteCount}
         noteCountsByPath={props.noteCountsByPath}
       />,
@@ -226,7 +220,7 @@ describe('the rows of the tree', () => {
     expect(byPath.container.querySelector('.tree-count')?.textContent).toBe('3');
   });
 
-  it('keeps the actions of a row icon-only, with a label and a tooltip', () => {
+  it('keeps one action per row: the menu of the row', () => {
     const view = renderTree({});
     const actions = view.container.querySelectorAll('.tree-actions .icon-button');
     expect(actions.length).toBeGreaterThan(0);
@@ -238,6 +232,23 @@ describe('the rows of the tree', () => {
     }
   });
 
+  it('shows no action of its own when the row has no menu', () => {
+    const { folder: root, filesByParent } = nestedTree();
+    const view = render(
+      <TreeFolderRow
+        folder={root}
+        filesByParent={filesByParent}
+        currentPath=""
+        expanded={new Set<string>()}
+        depth={0}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(view.container.querySelector('.tree-actions')).toBeNull();
+  });
+
   it('marks the open note as selected', () => {
     const { folder: root, filesByParent } = nestedTree();
     const view = render(
@@ -246,9 +257,6 @@ describe('the rows of the tree', () => {
         currentPath="journal/2026/march/a.md"
         depth={2}
         onSelect={() => undefined}
-        onRename={() => undefined}
-        onMove={() => undefined}
-        onDelete={() => undefined}
       />,
     );
 

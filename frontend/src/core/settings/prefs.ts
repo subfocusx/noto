@@ -10,7 +10,7 @@
 //
 // The values are validated on read: a broken or outdated value falls back to
 // the default instead of breaking the interface.
-import type { ViewMode } from '../store/types';
+import type { RailSection, ViewMode } from '../store/types';
 
 /** The key of the preferences in `localStorage`. */
 export const PREFS_KEY = 'noto-prefs-v1';
@@ -28,7 +28,13 @@ export type TreeSort = 'name' | 'modified';
 export interface Prefs {
   theme: ThemePreference;
   mode: ViewMode;
-  sidebarCollapsed: boolean;
+  /**
+   * The section of the left column that is open.
+   *
+   * The rail is an accordion, so exactly one section is shown at a time. The
+   * choice is remembered: the column opens on the section that was used last.
+   */
+  railSection: RailSection;
   sidebarWidth: number;
   treeSort: TreeSort;
   /** The font size of the editor in pixels. */
@@ -103,7 +109,7 @@ export const AUTO_LOCK_MINUTES_MAX = 120;
 export const DEFAULT_PREFS: Prefs = {
   theme: 'dark',
   mode: 'split',
-  sidebarCollapsed: false,
+  railSection: 'explorer',
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   treeSort: 'name',
   editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
@@ -132,6 +138,25 @@ export function clampRightPanelWidth(value: number): number {
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+/**
+ * Normalises the section of the left column.
+ *
+ * A value that is not one of the sections of the rail falls back to the
+ * explorer: the column must always show something.
+ */
+export function normalizeRailSection(value: unknown): RailSection {
+  if (
+    value === 'explorer' ||
+    value === 'search' ||
+    value === 'filters' ||
+    value === 'history' ||
+    value === 'trash'
+  ) {
+    return value;
+  }
+  return DEFAULT_PREFS.railSection;
 }
 
 /** Clamps the number of minutes of inactivity into its limits. */
@@ -180,7 +205,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
   return {
     theme,
     mode,
-    sidebarCollapsed: source.sidebarCollapsed === true,
+    railSection: normalizeRailSection(source.railSection),
     sidebarWidth:
       typeof source.sidebarWidth === 'number' ? clampWidth(source.sidebarWidth) : SIDEBAR_WIDTH_DEFAULT,
     treeSort,

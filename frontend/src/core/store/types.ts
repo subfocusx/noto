@@ -10,6 +10,14 @@ import type { ConnectionState } from '../connection/types';
 
 export type ViewMode = 'editor' | 'split' | 'preview';
 
+/**
+ * The section of the left column that the rail shows.
+ *
+ * The rail of the sections is an accordion: exactly one section is open at a
+ * time, and the choice survives a reload.
+ */
+export type RailSection = 'explorer' | 'search' | 'filters' | 'history' | 'trash';
+
 export type DialogKind =
   | null
   | 'create-folder'
@@ -26,6 +34,16 @@ export interface DialogState {
   node?: Node;
   parentPath?: string;
   value?: string;
+}
+
+/**
+ * True when the dialog asks for a name.
+ *
+ * A name is never optional: the dialogs of the creation and of the renaming
+ * refuse an empty name instead of creating a note without a name.
+ */
+export function asksForName(kind: DialogKind): boolean {
+  return kind === 'create-folder' || kind === 'create-file' || kind === 'rename';
 }
 
 /** The folder/file tree of the workspace. */
@@ -85,8 +103,13 @@ export interface UiState {
   /** True when the command palette is open. */
   paletteOpen: boolean;
   drawerOpen: boolean;
-  /** True when the sidebar is collapsed to its icon rail. */
-  sidebarCollapsed: boolean;
+  /**
+   * The section of the left column that is open.
+   *
+   * The column always shows one of the sections of the rail; the rail itself
+   * never disappears, so the section is the only thing that changes.
+   */
+  railSection: RailSection;
   /** The width of the sidebar in pixels. */
   sidebarWidth: number;
   /** The sort order of the tree. */

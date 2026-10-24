@@ -46,29 +46,21 @@ describe('the status bar', () => {
     renderFooter();
 
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.app-footer-actions button'));
-    expect(buttons.length).toBe(4);
+    expect(buttons.length).toBe(3);
     for (const button of buttons) {
       expect(button.getAttribute('aria-label')).toBeTruthy();
       expect(button.getAttribute('title')).toBeTruthy();
     }
   });
 
-  it('toggles the columns and the theme', () => {
-    const onToggleSidebar = vi.fn();
+  it('toggles the outline panel and the theme', () => {
     const onTogglePanel = vi.fn();
     const onToggleTheme = vi.fn();
     renderFooter({
-      onToggleSidebar,
       onTogglePanel,
       onToggleTheme,
-      sidebarVisible: true,
       panelVisible: false,
     });
-
-    const sidebar = screen.getByRole('button', { name: 'Toggle notes panel' });
-    expect(sidebar.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(sidebar);
-    expect(onToggleSidebar).toHaveBeenCalled();
 
     const panel = screen.getByRole('button', { name: 'Toggle outline panel' });
     expect(panel.getAttribute('aria-pressed')).toBe('false');
@@ -77,6 +69,14 @@ describe('the status bar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle theme' }));
     expect(onToggleTheme).toHaveBeenCalled();
+  });
+
+  it('holds no toggle of the left column', () => {
+    renderFooter();
+
+    // The left column stands next to the rail of the sections: it is never
+    // hidden, so the status bar has no toggle for it.
+    expect(screen.queryByRole('button', { name: 'Toggle notes panel' })).toBeNull();
   });
 
   it('shows the sun in the dark theme and the moon in the light one', () => {

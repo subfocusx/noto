@@ -18,7 +18,8 @@ import {
   type TreeSort,
 } from '../settings/prefs';
 import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
-import type { ContextMenuState, DialogState, ViewMode } from './types';
+import type { ContextMenuState, DialogState, RailSection, ViewMode } from './types';
+import { asksForName } from './types';
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
 import { getQueryService } from '../query/service';
@@ -75,7 +76,7 @@ function persistPrefs(): void {
   savePrefs({
     theme: state.env.theme,
     mode: state.ui.mode,
-    sidebarCollapsed: state.ui.sidebarCollapsed,
+    railSection: state.ui.railSection,
     sidebarWidth: state.ui.sidebarWidth,
     treeSort: state.ui.treeSort,
     editorFontSize: state.ui.editorFontSize,
@@ -529,6 +530,12 @@ export async function confirmDialog(): Promise<void> {
   const node = getSnapshot().dialog.node;
   const value = getSnapshot().dialog.value ?? '';
   const parentPath = getSnapshot().dialog.parentPath ?? '';
+  // A name is not optional: an empty name would create a note without a name
+  // and a folder without a name. The dialog stays open and shows the reason.
+  if (asksForName(kind) && !value.trim()) {
+    showBanner('The name must not be empty.');
+    return;
+  }
   closeDialog();
   try {
     if (kind === 'create-folder') await createFolderNode(parentPath, value);
@@ -570,6 +577,17 @@ export function closeDrawer(): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, drawerOpen: false } }));
 }
 
+/**
+ * Opens or closes the drawer of the column of the notes.
+ *
+ * On a narrow screen the column is a drawer over the editor. The rail of the
+ * sections stays where it is, so the section the user chose has to come with
+ * the drawer: otherwise the click on the rail would change nothing visible.
+ */
+export function setDrawerOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, drawerOpen: open } }));
+}
+
 /** Opens a folder in the tree (it stays open). */
 export function expandFolder(path: string): void {
   update((prev) => {
@@ -581,14 +599,16 @@ export function expandFolder(path: string): void {
   persistPrefs();
 }
 
-/** Collapses or expands the sidebar of the notes. */
-export function setSidebarCollapsed(collapsed: boolean): void {
-  update((prev) => ({ ...prev, ui: { ...prev.ui, sidebarCollapsed: collapsed } }));
+/**
+ * Opens a section of the left column.
+ *
+ * The rail is an accordion: the column shows the section that is chosen here,
+ * and the choice is remembered for the next start of the application.
+ */
+export function setRailSection(section: RailSection): void {
+  if (getSnapshot().ui.railSection === section) return;
+  update((prev) => ({ ...prev, ui: { ...prev.ui, railSection: section } }));
   persistPrefs();
-}
-
-export function toggleSidebar(): void {
-  setSidebarCollapsed(!getSnapshot().ui.sidebarCollapsed);
 }
 
 /** Changes the width of the sidebar; the value is clamped. */
@@ -943,13 +963,13 @@ export interface AppActions {
   togglePalette(): void;
   toggleDrawer(): void;
   closeDrawer(): void;
+  setDrawerOpen(open: boolean): void;
   toggleTheme(): void;
   setTheme(theme: ThemePreference): void;
   setEffectiveTheme(theme: 'light' | 'dark'): void;
   applyTheme(theme: ThemePreference): void;
   expandFolder(path: string): void;
-  setSidebarCollapsed(collapsed: boolean): void;
-  toggleSidebar(): void;
+  setRailSection(section: RailSection): void;
   setSidebarWidth(width: number): void;
   setTreeSort(sort: TreeSort): void;
   setEditorFontSize(size: number): void;
@@ -1007,13 +1027,13 @@ export const actions: AppActions = {
   togglePalette,
   toggleDrawer,
   closeDrawer,
+  setDrawerOpen,
   toggleTheme,
   setTheme,
   setEffectiveTheme,
   applyTheme,
   expandFolder,
-  setSidebarCollapsed,
-  toggleSidebar,
+  setRailSection,
   setSidebarWidth,
   setTreeSort,
   setEditorFontSize,

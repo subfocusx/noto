@@ -78,8 +78,14 @@ const PALETTE_SHORTCUTS: Record<string, string> = {
   'app:search': 'Ctrl+Shift+F',
   'app:settings': 'Ctrl+,',
   'app:shortcuts': 'Ctrl+/',
-  'app:toggle-sidebar': 'Ctrl+Alt+B',
   'app:toggle-theme': 'Ctrl+Alt+T',
+  'app:section-explorer': 'Ctrl+Alt+E',
+  'app:section-favorites': 'Ctrl+Alt+B',
+  'app:section-calendar': 'Ctrl+Alt+C',
+  'app:section-search': 'Ctrl+Alt+S',
+  'app:section-filters': 'Ctrl+Alt+F',
+  'app:section-history': 'Ctrl+Alt+H',
+  'app:section-trash': 'Ctrl+Alt+D',
 };
 
 /** Maps the state of the registry onto the states of the manager panel. */
@@ -581,6 +587,25 @@ export function App() {
       });
     }
   }, [actions, note.status, note.conflict, note.path]);
+
+  // The reminders of the user: when the moment comes, the application writes a
+  // notification and shows a system notification of the browser, so the
+  // message is seen even when the window is in the background.
+  //
+  // The watcher is a module of its own, and it is loaded on demand: the shell
+  // of the application has no use for it before the first tick.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void import('./core/reminders/watcher').then((module) => {
+      if (cancelled) return;
+      stop = module.startReminderWatcher();
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   /* ----------------------------------------------------------- shortcuts */
 

@@ -17,6 +17,7 @@ import { ColumnResizer } from './ColumnResizer';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { ExplorerSection } from './sections/ExplorerSection';
 import type { CalendarSectionProps } from './sections/CalendarSection';
+import type { FavoritesSectionProps } from './sections/FavoritesSection';
 import type { HistorySectionProps } from './sections/HistorySection';
 import type { SearchSectionProps } from './sections/SearchSection';
 import type { TrashSectionProps } from './sections/TrashSection';
@@ -24,6 +25,7 @@ import type { TrashSectionProps } from './sections/TrashSection';
 /** The sections that are loaded on demand. */
 interface LazySections {
   CalendarSection: ComponentType<CalendarSectionProps>;
+  FavoritesSection: ComponentType<FavoritesSectionProps>;
   FiltersSection: ComponentType;
   HistorySection: ComponentType<HistorySectionProps>;
   NotificationsSection: ComponentType;
@@ -171,6 +173,7 @@ export function Sidebar(props: SidebarProps) {
       if (cancelled) return;
       setSections({
         CalendarSection: module.CalendarSection,
+        FavoritesSection: module.FavoritesSection,
         FiltersSection: module.FiltersSection,
         HistorySection: module.HistorySection,
         NotificationsSection: module.NotificationsSection,
@@ -279,6 +282,14 @@ export function Sidebar(props: SidebarProps) {
           onDayChange={(day) => props.onCalendarDayChange?.(day)}
           onOpenNote={(path) => props.onSelect(path)}
           onCreateDailyNote={(day) => props.onCreateDailyNote?.(day)}
+        />
+      );
+    }
+    if (props.section === 'favorites') {
+      return (
+        <sections.FavoritesSection
+          files={props.files ?? []}
+          onOpenNote={(path) => props.onSelect(path)}
         />
       );
     }

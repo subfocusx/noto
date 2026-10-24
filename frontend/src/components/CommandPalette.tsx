@@ -185,7 +185,7 @@ export function CommandPalette(props: CommandPaletteProps) {
           void run(item);
         }}
       >
-        {item.icon ? <Icon name={item.icon} size={14} /> : null}
+        {item.icon ? <Icon name={item.icon} size={14} class="noto-palette-option-icon" /> : null}
         <span class="noto-palette-option-title">{item.title}</span>
         {item.description ? (
           <span class="noto-palette-option-description">{item.description}</span>

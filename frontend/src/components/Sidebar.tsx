@@ -7,14 +7,13 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import type { ConnectionState, Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
+import { filterTree } from '../lib/tree';
 import { Icon } from '../ui/icons';
 import { IconButton } from '../ui/tooltip';
 import { ColumnResizer } from './ColumnResizer';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { RecentNotesPanel } from './RecentNotesPanel';
-import { QueryBar } from './QueryBar';
-import { SavedViews } from './SavedViews';
-import { TagTree } from './TagTree';
+import { FilterPanel } from './FilterPanel';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from './TreeRow';
 
@@ -105,6 +104,14 @@ export interface SidebarProps {
    * empty strip would look like a broken border under the tree.
    */
   hasPluginItems?: boolean;
+  /**
+   * The paths of the notes that match the filter of the user.
+   *
+   * `null` means "no filter": the tree shows every note. A set of paths
+   * filters the tree: only the matching notes and the folders that hold them
+   * stay visible.
+   */
+  filterPaths?: Set<string> | null;
 }
 
 /** The smallest width of the sidebar, in pixels. */
@@ -117,13 +124,28 @@ function parentOf(path: string): string {
 }
 
 export function Sidebar(props: SidebarProps) {
-  const rootFiles = props.filesByParent.get('') ?? [];
-  const isEmpty = props.folders.length === 0 && rootFiles.length === 0;
   const navRef = useRef<HTMLElement | null>(null);
   const recentRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<TreeDragState>({ path: null, isFolder: false });
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [rootOver, setRootOver] = useState(false);
+
+  /**
+   * The tree of the notes, filtered by the query of the user.
+   *
+   * The filter is a view of the tree, not of the storage: the notes that do
+   * not match stay in the vault and stay reachable through the tabs.
+   */
+  const view = useMemo(() => {
+    if (!props.filterPaths) {
+      return { folders: props.folders, filesByParent: props.filesByParent };
+    }
+    return filterTree(props.folders, props.filesByParent, props.filterPaths);
+  }, [props.folders, props.filesByParent, props.filterPaths]);
+
+  const rootFiles = view.filesByParent.get('') ?? [];
+  const isEmpty = view.folders.length === 0 && rootFiles.length === 0;
+  const filtered = props.filterPaths !== null && props.filterPaths !== undefined;
 
   // Every node of the tree, indexed by its path: the menu needs the node of
   // the path it was opened on, and a drop needs the node that is dragged.
@@ -236,6 +258,17 @@ export function Sidebar(props: SidebarProps) {
     recentRef.current?.scrollIntoView({ block: 'nearest' });
   };
 
+  /**
+   * Shows the block of the recent notes.
+   *
+   * The block is folded when the user folded it, so the action unfolds it
+   * first: the click always shows the notes.
+   */
+  const showRecent = (): void => {
+    if (props.recentCollapsed) props.onToggleRecent?.();
+    scrollToRecent();
+  };
+
   return (
     <nav ref={navRef} class="sidebar" aria-label="Notes">
       <div class="vault-header">
@@ -307,14 +340,6 @@ export function Sidebar(props: SidebarProps) {
             </button>
           </li>
           <li>
-            <button type="button" class="nav-item" onClick={scrollToRecent}>
-              <span class="nav-item-icon">
-                <Icon name="refresh-cw" size={15} />
-              </span>
-              <span class="nav-item-label">Recent</span>
-            </button>
-          </li>
-          <li>
             <button type="button" class="nav-item" onClick={props.onOpenTrash}>
               <span class="nav-item-icon">
                 <Icon name="trash" size={15} />
@@ -324,20 +349,24 @@ export function Sidebar(props: SidebarProps) {
           </li>
         </ul>
 
-        <div class="sidebar-section q8-section">
-          <div class="sidebar-section-title">
-            <span>Query</span>
-          </div>
-          <QueryBar />
-          <SavedViews />
-          <TagTree />
+        <div class="sidebar-section q9-section">
+          <FilterPanel />
         </div>
 
         <div class="sidebar-section">
           <div class="sidebar-section-title">
-            <span>Explorer</span>
+            <span>
+              Explorer
+              {filtered ? <span class="q9-filtered-badge">filtered</span> : null}
+            </span>
             <div class="sidebar-section-actions" role="group" aria-label="Explorer actions">
               <IconButton label="Search notes" icon="search" onClick={() => props.onOpenSearch?.()} />
+              <IconButton
+                label="Recent notes"
+                icon="clock"
+                title="Show the recent notes"
+                onClick={showRecent}
+              />
               <IconButton
                 label="Graph"
                 icon="network"
@@ -404,11 +433,11 @@ export function Sidebar(props: SidebarProps) {
           ) : null}
 
           <ul class="tree" data-testid="file-tree">
-            {props.folders.map((folder) => (
+            {view.folders.map((folder) => (
               <TreeFolderRow
                 key={folder.node.path}
                 folder={folder}
-                filesByParent={props.filesByParent}
+                filesByParent={view.filesByParent}
                 currentPath={props.currentPath}
                 expanded={props.expanded}
                 depth={0}
@@ -470,7 +499,6 @@ export function Sidebar(props: SidebarProps) {
       ) : null}
 
       <div class="sidebar-footer">
-        <span class="muted">{noteCount} notes</span>
         <button
           type="button"
           class="icon-button"
@@ -480,26 +508,6 @@ export function Sidebar(props: SidebarProps) {
         >
           <Icon name="upload" size={15} />
         </button>
-        <button
-          type="button"
-          class="icon-button"
-          title="Trash"
-          aria-label="Trash"
-          onClick={props.onOpenTrash}
-        >
-          <Icon name="trash" size={15} />
-        </button>
-        {props.onToggleCollapse ? (
-          <button
-            type="button"
-            class="icon-button"
-            title={props.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label={props.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={props.onToggleCollapse}
-          >
-            <Icon name="panel-left" size={15} />
-          </button>
-        ) : null}
       </div>
 
       {props.onResizeWidth ? (

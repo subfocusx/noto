@@ -8,9 +8,7 @@ import {
   type QueryOutcome,
   type QueryService,
 } from '../core/query/service';
-import { QueryBar } from '../components/QueryBar';
-import { SavedViews } from '../components/SavedViews';
-import { TagTree } from '../components/TagTree';
+import { FilterPanel } from '../components/FilterPanel';
 import type { TagCount } from '../types';
 
 /** A service that answers what the test wants it to answer. */
@@ -200,14 +198,14 @@ describe('the service of the query', () => {
   });
 });
 
-describe('the bar of the query', () => {
+describe('the block of the selection', () => {
   it('shows the query of the store and the number of the matches', () => {
     setQueryService(fakeService({}));
     appStore.actions.setQuery('tag == "work"');
 
-    const view = render(<QueryBar />);
+    const view = render(<FilterPanel />);
 
-    const input = view.getByLabelText('Query') as HTMLInputElement;
+    const input = view.getByLabelText('Filter of the notes') as HTMLInputElement;
     expect(input.value).toBe('tag == "work"');
   });
 
@@ -215,8 +213,10 @@ describe('the bar of the query', () => {
     const service = fakeService({ outcome: { total: 2 } });
     setQueryService(service);
 
-    const view = render(<QueryBar />);
-    fireEvent.input(view.getByLabelText('Query'), { target: { value: 'has_task_list' } });
+    const view = render(<FilterPanel />);
+    fireEvent.input(view.getByLabelText('Filter of the notes'), {
+      target: { value: 'has_task_list' },
+    });
 
     expect(appStore.getSnapshot().ui.query).toBe('has_task_list');
     await waitFor(() => expect(service.runQuery).toHaveBeenCalled(), { timeout: 2000 });
@@ -227,8 +227,8 @@ describe('the bar of the query', () => {
     setQueryService(fakeService({}));
     appStore.actions.setQuery('has_task_list');
 
-    const view = render(<QueryBar />);
-    fireEvent.click(view.getByLabelText('Clear the query'));
+    const view = render(<FilterPanel />);
+    fireEvent.click(view.getByLabelText('Clear the filter'));
 
     expect(appStore.getSnapshot().ui.query).toBe('');
     expect(appStore.getSnapshot().ui.queryHits).toHaveLength(0);
@@ -240,22 +240,35 @@ describe('the bar of the query', () => {
     );
     appStore.actions.setQuery('tag ==');
 
-    const view = render(<QueryBar />);
+    const view = render(<FilterPanel />);
     await appStore.actions.runQuery('tag ==');
 
     await waitFor(() => expect(view.getByRole('alert').textContent).toBe('expected a value'));
   });
+
+  it('warns when the answer is incomplete', async () => {
+    setQueryService(fakeService({ outcome: { total: 1, partial: true } }));
+    appStore.actions.setQuery('has_task_list');
+
+    const view = render(<FilterPanel />);
+    await appStore.actions.runQuery('has_task_list');
+
+    await waitFor(() =>
+      expect(view.getByText('Some notes could not be checked: the answer may be incomplete.')).toBeTruthy(),
+    );
+  });
 });
 
-describe('the saved views', () => {
+describe('the saved filters', () => {
   it('saves the current query and applies it again', async () => {
     const service = fakeService({});
     setQueryService(service);
     appStore.actions.setQuery('tag == "work"');
 
-    const view = render(<SavedViews />);
-    fireEvent.input(view.getByLabelText('Name of the view'), { target: { value: 'Work' } });
-    fireEvent.click(view.getByTitle('Save the current query as a view'));
+    const view = render(<FilterPanel />);
+    fireEvent.click(view.getByLabelText('Save the current filter'));
+    fireEvent.input(view.getByLabelText('Name of the filter'), { target: { value: 'Work' } });
+    fireEvent.keyDown(view.getByLabelText('Name of the filter'), { key: 'Enter' });
 
     expect(view.getByText('Work')).toBeTruthy();
 
@@ -266,25 +279,26 @@ describe('the saved views', () => {
     expect(appStore.getSnapshot().ui.query).toBe('tag == "work"');
   });
 
-  it('deletes a view', () => {
+  it('deletes a saved filter', () => {
     setQueryService(fakeService({}));
     appStore.actions.setQuery('tag == "work"');
 
-    const view = render(<SavedViews />);
-    fireEvent.input(view.getByLabelText('Name of the view'), { target: { value: 'Work' } });
-    fireEvent.click(view.getByTitle('Save the current query as a view'));
-    fireEvent.click(view.getByLabelText('Delete the view Work'));
+    const view = render(<FilterPanel />);
+    fireEvent.click(view.getByLabelText('Save the current filter'));
+    fireEvent.input(view.getByLabelText('Name of the filter'), { target: { value: 'Work' } });
+    fireEvent.keyDown(view.getByLabelText('Name of the filter'), { key: 'Enter' });
+    fireEvent.click(view.getByLabelText('Delete the filter Work'));
 
     expect(view.queryByText('Work')).toBeNull();
   });
 });
 
-describe('the tree of the tags', () => {
+describe('the tags of the filter', () => {
   it('shows the tags with their number and runs a query when one is clicked', async () => {
     const service = fakeService({ tags: [{ tag: 'work', count: 3 }] });
     setQueryService(service);
 
-    const view = render(<TagTree />);
+    const view = render(<FilterPanel />);
     await waitFor(() => expect(view.getByText('#work')).toBeTruthy());
     expect(view.getByText('3')).toBeTruthy();
 

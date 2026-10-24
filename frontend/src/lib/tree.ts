@@ -90,6 +90,40 @@ export function allFolderPaths(folders: Node[]): string[] {
     .sort((a, b) => compareStrings(a, b));
 }
 
+/**
+ * Keeps only the notes of the filter and the folders that hold them.
+ *
+ * A folder stays when it holds a matching note, directly or in one of its
+ * subfolders: the tree of a filtered vault keeps its shape, so the user sees
+ * where the matching notes live.
+ */
+export function filterTree(
+  roots: TreeFolder[],
+  filesByParent: Map<string, Node[]>,
+  allowed: Set<string>,
+): { folders: TreeFolder[]; filesByParent: Map<string, Node[]> } {
+  const filteredFiles = new Map<string, Node[]>();
+  for (const [parent, files] of filesByParent) {
+    const kept = files.filter((file) => allowed.has(file.path));
+    if (kept.length > 0) filteredFiles.set(parent, kept);
+  }
+
+  const keep = (folder: TreeFolder): TreeFolder | null => {
+    const children = folder.children
+      .map((child) => keep(child))
+      .filter((child): child is TreeFolder => child !== null);
+    const hasFiles = (filteredFiles.get(folder.node.path) ?? []).length > 0;
+    if (children.length === 0 && !hasFiles) return null;
+    return { node: folder.node, children };
+  };
+
+  const filteredRoots = roots
+    .map((folder) => keep(folder))
+    .filter((folder): folder is TreeFolder => folder !== null);
+
+  return { folders: filteredRoots, filesByParent: filteredFiles };
+}
+
 export function nodeTypeOf(node: Node): NodeType {
   return node.type;
 }

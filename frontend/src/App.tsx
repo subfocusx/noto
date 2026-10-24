@@ -725,6 +725,18 @@ export function App() {
     [tree.folders, tree.files, ui.treeSort],
   );
 
+  /**
+   * The paths of the notes that match the filter of the user.
+   *
+   * `null` means "no filter": the tree shows every note. As soon as the query
+   * returns notes, the tree shows only them (and the folders that hold them),
+   * so the filter is visible and not only counted.
+   */
+  const filterPaths = useMemo(() => {
+    if (!ui.query.trim()) return null;
+    return new Set(ui.queryHits.map((hit) => hit.path));
+  }, [ui.query, ui.queryHits]);
+
   /** The headings of the open note: the outline of the right column. */
   const headings = useMemo(() => extractHeadings(note.content), [note.content]);
 
@@ -945,6 +957,7 @@ export function App() {
           <Sidebar
             folders={roots}
             filesByParent={filesByParent}
+            filterPaths={filterPaths}
             currentPath={note.path ?? ''}
             expanded={ui.expanded}
             onToggle={actions.toggleFolder}

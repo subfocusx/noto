@@ -126,6 +126,9 @@ test.describe('the tree of the notes', () => {
 
     await treeFile(page, 'recent-note.md').click();
 
+    // The recent notes live in the section of the history.
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+
     const toggle = page.getByRole('button', { name: 'Collapse recent notes' });
     await expect(toggle).toBeVisible();
     await toggle.click();

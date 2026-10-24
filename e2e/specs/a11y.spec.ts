@@ -36,16 +36,20 @@ test.describe('the keyboard operation', () => {
     await expect(dialog).toBeHidden();
   });
 
-  test('the tree can be operated with the keyboard', async ({ page }) => {
+  test('the rail of the sections can be operated with the keyboard', async ({ page }) => {
     await gotoApp(page);
 
-    // The toggle of the column of the notes lives in the status bar.
-    const toggle = page.getByRole('button', { name: 'Toggle notes panel' }).first();
-    if ((await toggle.count()) === 0) return;
-
-    await toggle.focus();
+    // The rail is the navigation of the application: every section must be
+    // reachable without the mouse.
+    const search = page.getByRole('button', { name: 'Search', exact: true });
+    await search.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('button', { name: 'Toggle notes panel' }).first()).toBeVisible();
+    await expect(page.locator('.column-section[aria-label="Search"]')).toBeVisible();
+
+    const filters = page.getByRole('button', { name: 'Filters', exact: true });
+    await filters.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.column-section[aria-label="Filters"]')).toBeVisible();
   });
 
   test('every interactive element has an accessible name', async ({ page }) => {

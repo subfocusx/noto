@@ -7,7 +7,7 @@
  * test so that the tests do not depend on each other.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
-import { escapeRegExp, fileRow, folderRow, hoverRow, treeFile } from './app';
+import { chooseInRowMenu, escapeRegExp, fileRow, folderRow, treeFile } from './app';
 
 /* ------------------------------------------------------------------- panel */
 
@@ -161,8 +161,7 @@ export async function resetPluginStates(
 export async function deleteNote(page: Page, note: string): Promise<void> {
   const row = fileRow(page, note);
   if ((await row.count()) === 0) return;
-  await hoverRow(page, row);
-  await page.getByRole('button', { name: `Delete ${note}` }).click();
+  await chooseInRowMenu(page, row, 'Delete');
   const dialog = page.getByRole('dialog', { name: 'Delete' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
@@ -173,8 +172,7 @@ export async function deleteNote(page: Page, note: string): Promise<void> {
 export async function deleteFolder(page: Page, folder: string): Promise<void> {
   const row = folderRow(page, folder);
   if ((await row.count()) === 0) return;
-  await hoverRow(page, row);
-  await page.getByRole('button', { name: `Delete ${folder}` }).click();
+  await chooseInRowMenu(page, row, 'Delete');
   const dialog = page.getByRole('dialog', { name: 'Delete' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();

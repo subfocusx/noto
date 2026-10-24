@@ -25,7 +25,6 @@ test.describe('the shell of the application', () => {
     await expect(header).toBeVisible();
 
     // The actions are inside the header of the section, not in the status bar.
-    await expect(header.getByRole('button', { name: 'Search notes' })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Graph' })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Archive' })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Open command palette' })).toBeVisible();
@@ -36,9 +35,17 @@ test.describe('the shell of the application', () => {
     await expect(bar.getByRole('button', { name: 'Search notes' })).toHaveCount(0);
     await expect(bar.getByRole('button', { name: 'Graph' })).toHaveCount(0);
     await expect(bar.getByRole('button', { name: 'Archive' })).toHaveCount(0);
-    await expect(bar.getByRole('button', { name: 'Toggle notes panel' })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Toggle outline panel' })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Toggle theme' })).toBeVisible();
+  });
+
+  test('the status bar holds no toggle of the left column', async ({ page }) => {
+    await gotoApp(page);
+
+    // The left column stands next to the rail of the sections: it is never
+    // hidden, so the status bar has no toggle for it.
+    const bar = page.locator('.app-footer');
+    await expect(bar.getByRole('button', { name: 'Toggle notes panel' })).toHaveCount(0);
   });
 
   test('the explorer shows no counters, the folders keep theirs', async ({ page }) => {
@@ -62,13 +69,14 @@ test.describe('the shell of the application', () => {
     await expect(archive).toHaveAttribute('title', 'Not implemented yet');
   });
 
-  test('the search is a button and not a field', async ({ page }) => {
+  test('the search is a section of the rail', async ({ page }) => {
     await gotoApp(page);
-    await openSidebarIfNeeded(page);
 
-    // The button opens the search palette.
-    await page.getByRole('button', { name: 'Search notes' }).click();
-    await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();
+    // The search is a section of the rail: the column shows the field of the
+    // search and its results.
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.locator('.column-section[aria-label="Search"]')).toBeVisible();
+    await expect(page.getByLabel('Search query').first()).toBeVisible();
   });
 
   test('the command palette opens from its own icon', async ({ page }) => {
@@ -104,24 +112,16 @@ test.describe('the shell of the application', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the left panel can be restored from the status bar after it was hidden', async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'the sidebar is a drawer on mobile');
+  test('the left column stays where it is', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the column is a drawer on mobile');
 
     await gotoApp(page);
 
-    const toggle = page.getByRole('button', { name: 'Toggle notes panel' });
-    await expect(toggle).toBeVisible();
-
-    await toggle.click();
-    await expect(page.locator('.app.sidebar-collapsed')).toHaveCount(1);
-
-    // The button lives in the permanent status bar, so the column can always
-    // be brought back.
-    await toggle.click();
-    await expect(page.locator('.app.sidebar-collapsed')).toHaveCount(0);
+    // The column of the notes cannot be collapsed: the rail of the sections
+    // stands where the column stands.
+    await expect(page.getByRole('button', { name: 'Toggle notes panel' })).toHaveCount(0);
     await expect(page.locator('.sidebar-wrap')).toBeVisible();
+    await expect(page.locator('.rail')).toBeVisible();
   });
 
   test('both columns can be resized', async ({ page }, testInfo) => {

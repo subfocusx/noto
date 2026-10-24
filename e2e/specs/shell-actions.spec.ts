@@ -68,11 +68,6 @@ test.describe('the buttons of the shell', () => {
   });
 
   test('the actions of the explorer open their panels', async ({ page }) => {
-    // The search panel.
-    await page.getByRole('button', { name: 'Search notes' }).click();
-    await expect(page.getByRole('dialog', { name: /search/i })).toBeVisible();
-    await page.keyboard.press('Escape');
-
     // The command palette.
     await page.getByRole('button', { name: 'Open command palette' }).click();
     await expect(page.getByRole('dialog', { name: /command|palette/i })).toBeVisible();
@@ -83,18 +78,19 @@ test.describe('the buttons of the shell', () => {
     await expect(page.getByRole('dialog', { name: /plugin/i })).toBeVisible();
   });
 
-  test('the clock shows the recent notes', async ({ page }) => {
-    const clock = page.getByRole('button', { name: 'Recent notes' });
-    await expect(clock).toBeVisible();
-    await clock.click();
+  test('the rail opens the section of the history', async ({ page }) => {
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await expect(page.locator('.column-section[aria-label="History"]')).toBeVisible();
+
     // The action must not break the tree.
+    await page.getByRole('button', { name: 'Explorer', exact: true }).click();
     await expect(page.getByTestId('file-tree')).toBeVisible();
   });
 
-  test('the trash opens the panel of the trash', async ({ page }) => {
+  test('the rail opens the section of the trash', async ({ page }) => {
     await page.getByRole('button', { name: 'Trash', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: /trash/i })).toBeVisible();
-    await page.keyboard.press('Escape');
+    await expect(page.locator('.column-section[aria-label="Trash"]')).toBeVisible();
+    await expect(page.getByTestId('trash-list')).toBeAttached();
   });
 
   test('the footer of the sidebar holds only the import and export', async ({ page }) => {
@@ -108,16 +104,13 @@ test.describe('the buttons of the shell', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('the toggles of the status bar switch the columns and the theme', async ({ page }) => {
-    const notesPanel = page.getByRole('button', { name: 'Toggle notes panel' });
+  test('the toggles of the status bar switch the outline and the theme', async ({ page }) => {
     const outlinePanel = page.getByRole('button', { name: 'Toggle outline panel' });
     const theme = page.getByRole('button', { name: 'Toggle theme' });
 
-    await expect(notesPanel).toHaveAttribute('aria-pressed', 'true');
-    await notesPanel.click();
-    await expect(notesPanel).toHaveAttribute('aria-pressed', 'false');
-    await notesPanel.click();
-    await expect(notesPanel).toHaveAttribute('aria-pressed', 'true');
+    // The left column has no toggle: it stands next to the rail of the
+    // sections and it never disappears.
+    await expect(page.getByRole('button', { name: 'Toggle notes panel' })).toHaveCount(0);
 
     await expect(outlinePanel).toHaveAttribute('aria-pressed', 'true');
     await outlinePanel.click();
@@ -155,9 +148,15 @@ test.describe('the buttons of the shell', () => {
       await waitForSaved(page);
     }
 
-    // The filter of the tree: only the tagged note stays.
+    // The filter of the tree: only the tagged note stays. The constructor of
+    // the selection lives in the section of the filters, the tree lives in the
+    // section of the explorer: the rail switches between them.
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     const field = page.getByLabel('Filter of the notes');
     await field.fill(`tag == '${tagged}'`);
+    await expect(page.getByText('1 note matches')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: 'Explorer', exact: true }).click();
     await expect(treeFile(page, `${tagged}.md`)).toBeVisible({ timeout: 10_000 });
     await expect(treeFile(page, `${plain}.md`)).toHaveCount(0);
 
@@ -165,7 +164,9 @@ test.describe('the buttons of the shell', () => {
     await expect(page.getByText('filtered')).toBeVisible();
 
     // The clear of the filter brings the whole tree back.
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await page.getByRole('button', { name: 'Clear the filter' }).click();
+    await page.getByRole('button', { name: 'Explorer', exact: true }).click();
     await expect(treeFile(page, `${plain}.md`)).toBeVisible();
   });
 
@@ -181,6 +182,8 @@ test.describe('the buttons of the shell', () => {
     await page.keyboard.insertText(`#${note}\n`);
     await waitForSaved(page);
 
+    // The chips of the tags of the vault live in the section of the filters.
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     const chip = page.locator('.q9-chip-tag').filter({ hasText: `#${note}` });
     await expect(chip).toBeVisible();
     await chip.click();

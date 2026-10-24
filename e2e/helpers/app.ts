@@ -91,10 +91,27 @@ export function activeTabName(page: Page): Locator {
   return page.locator('[data-testid="editor-tab"].active .tab-name');
 }
 
+/**
+ * Opens the menu of a row of the tree.
+ *
+ * A row carries one button: the menu of the row. Every action of the row lives
+ * in that menu, so the tests open the menu before they choose an action.
+ */
+export async function openRowMenu(page: Page, row: Locator): Promise<void> {
+  await hoverRow(page, row);
+  await row.getByRole('button', { name: /^Menu / }).click();
+  await expect(page.locator('.context-menu')).toBeVisible();
+}
+
+/** Chooses an action of the menu of a row. */
+export async function chooseInRowMenu(page: Page, row: Locator, action: string): Promise<void> {
+  await openRowMenu(page, row);
+  await page.getByRole('menuitem', { name: action, exact: true }).click();
+}
+
 /** Creates a note inside `folder` and waits until it is opened in the editor. */
 export async function createNote(page: Page, folder: string, name: string): Promise<void> {
-  await hoverRow(page, folderRow(page, folder));
-  await page.getByRole('button', { name: `New note in ${folder}`, exact: true }).click();
+  await chooseInRowMenu(page, folderRow(page, folder), 'New note');
   const dialog = page.getByRole('dialog', { name: 'New note' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Name', { exact: true }).fill(name);
@@ -104,14 +121,12 @@ export async function createNote(page: Page, folder: string, name: string): Prom
 
 /** Clicks the "Rename" action of a tree row. */
 export async function clickRename(page: Page, row: Locator, name: string): Promise<void> {
-  await hoverRow(page, row);
-  await page.getByRole('button', { name: `Rename ${name}`, exact: true }).click();
+  await chooseInRowMenu(page, row, 'Rename');
 }
 
 /** Clicks the "Move" action of a tree row. */
 export async function clickMove(page: Page, row: Locator, name: string): Promise<void> {
-  await hoverRow(page, row);
-  await page.getByRole('button', { name: `Move ${name}`, exact: true }).click();
+  await chooseInRowMenu(page, row, 'Move');
 }
 
 /** Expands a folder in the sidebar so that its children become visible. */

@@ -37,6 +37,8 @@ test.describe('the viewport matrix', () => {
       expect(editor!.height).toBeGreaterThan(80);
 
       // The header of the column is not covered and the title is readable.
+      // Below 820 px the column is a drawer: it has to be opened first.
+      await openSidebarIfNeeded(page);
       await expect(page.getByTestId('file-tree')).toBeVisible();
 
       // Every button of the permanent status bar fits into the screen.

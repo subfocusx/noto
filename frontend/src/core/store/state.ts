@@ -62,6 +62,7 @@ export function createInitialState(): AppState {
       status: 'idle',
       dirty: false,
       saveError: null,
+      conflict: null,
     },
     dialog: { kind: null },
     ui: {

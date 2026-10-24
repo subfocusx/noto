@@ -40,6 +40,24 @@ export interface TreeState {
 }
 
 /** The note that is currently open. */
+/**
+ * A conflict of a note: the note on the server is not the note in the editor.
+ *
+ * The conflict appears when the note was changed outside of the application
+ * (another editor, another tab, a script). The user decides what happens: take
+ * the version of the server, keep the version of the editor or copy it.
+ */
+export interface NoteConflict {
+  /** The path of the note. */
+  path: string;
+  /** The content of the note on the server. */
+  serverContent: string;
+  /** The revision of the note on the server. */
+  serverRevision: number;
+  /** The moment of the last change on the server (ISO 8601). */
+  serverUpdatedAt: string;
+}
+
 export interface NoteState {
   /** Path of the open note (`null` when nothing is open). */
   path: string | null;
@@ -55,6 +73,8 @@ export interface NoteState {
   dirty: boolean;
   /** Message of the last failed save. */
   saveError: string | null;
+  /** The conflict of the note (`null` when there is none). */
+  conflict: NoteConflict | null;
 }
 
 /** Purely visual state. */

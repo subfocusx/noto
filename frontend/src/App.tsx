@@ -8,6 +8,8 @@ import { Dialog } from './components/Dialog';
 import { EditorTabs } from './components/EditorTabs';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
+import { NoteConflictDialog } from './components/NoteConflictDialog';
+import { NoteTags } from './components/NoteTags';
 import { OutlinePanel } from './components/OutlinePanel';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
@@ -459,6 +461,44 @@ export function App() {
     if (snapshot.note.path !== path || snapshot.note.status === 'error') return;
     host.emit('note.updated', { path, revision: snapshot.note.revision });
     host.emit('workspace.opened', { path });
+  };
+
+  /**
+   * Adds a tag to the open note.
+   *
+   * The tag is written into the text at the position of the cursor: the text
+   * is the only place where a tag lives, so the strip, the server and the
+   * search index all see the same thing.
+   */
+  const addTag = (tag: string): void => {
+    const handle = editorRef.current;
+    if (!handle) return;
+    handle.insert(`#${tag} `);
+    handle.focus();
+  };
+
+  /**
+   * Removes a tag from the open note.
+   *
+   * Every token `#tag` is cut out of the text, so the rest of the note stays
+   * untouched. The tag is a derived property: it is gone from the text, so it
+   * is gone from the strip and from the index of the server too.
+   */
+  const removeTag = (tag: string): void => {
+    const handle = editorRef.current;
+    if (!handle) return;
+    const text = handle.getText();
+    const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`#${escaped}(?![\\p{L}\\p{N}_\\-/])`, 'gu');
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length === 0) return;
+    // The tokens are cut from the end, so the offsets of the earlier ones stay
+    // valid.
+    for (const match of matches.reverse()) {
+      const from = match.index ?? 0;
+      handle.insertAt('', from, from + match[0].length);
+    }
+    handle.focus();
   };
 
   /**
@@ -1024,6 +1064,16 @@ export function App() {
             <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />
           </div>
 
+          {note.path ? (
+            <div class="note-tags-strip">
+              <NoteTags
+                content={note.content}
+                onAddTag={addTag}
+                onRemoveTag={removeTag}
+              />
+            </div>
+          ) : null}
+
           <div class="workspace-panes">
           <div class="pane pane-editor">
             <PluginToolbarSlot items={pluginToolbarItems} />
@@ -1198,6 +1248,18 @@ export function App() {
         onChangeValue={actions.setDialogValue}
         onRestoreDraft={actions.restoreDraft}
         onDiscardDraft={actions.discardDraft}
+      />
+
+      <NoteConflictDialog
+        conflict={note.conflict}
+        localContent={note.content}
+        onReload={() => actions.takeServerVersion()}
+        onKeepMine={() => void actions.keepLocalVersion()}
+        onCopyMine={() => {
+          void navigator.clipboard?.writeText(note.content).catch(() => undefined);
+          actions.dismissConflict();
+        }}
+        onDismiss={() => actions.dismissConflict()}
       />
 
       {ui.contextMenu && contextNode ? (

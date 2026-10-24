@@ -109,11 +109,30 @@ async function saveNow(path: string, text: string, rev: number): Promise<void | 
     if (refs.content === text) {
       await dropDraft(path).catch(() => undefined);
     }
+    // The tags of the vault follow the text of the notes.
+    scheduleTagsRefresh();
     // The new revision is handed back so the next save uses it.
     return res.revision;
   } catch (err) {
     if (refs.currentPath !== path) return;
     const message = err instanceof ApiError ? err.message : errorMessage(err);
+    // A conflict is not a failure of the save: the note on the server is not
+    // the note of the editor. The user decides what happens next, so the
+    // conflict goes to the dialog instead of the status bar.
+    if (err instanceof ApiError && err.code === 'revision_conflict' && err.current) {
+      patchNote({
+        status: 'error',
+        saveError: null,
+        conflict: {
+          path,
+          serverContent: err.current.content,
+          serverRevision: err.current.revision,
+          serverUpdatedAt: err.current.updatedAt,
+        },
+      });
+      await storeDraft({ path, content: text, revision: rev, updatedAt: Date.now() }).catch(() => undefined);
+      return;
+    }
     patchNote({ saveError: message });
     // Keep the draft locally so that nothing is lost.
     await storeDraft({ path, content: text, revision: rev, updatedAt: Date.now() }).catch(() => undefined);
@@ -205,6 +224,7 @@ export async function openNote(path: string): Promise<void> {
     status: 'idle',
     saveError: null,
     dirty: false,
+    conflict: null,
   });
   update((prev) => ({
     ...prev,
@@ -282,6 +302,63 @@ export function editContent(text: string): void {
 export function explicitSave(): void {
   if (!refs.currentPath) return;
   void autosave.flush();
+}
+
+/**
+ * Takes the version of the server of the open note.
+ *
+ * The text of the editor becomes the text of the server and the revision of
+ * the server is adopted, so the next save continues from there.
+ */
+export function takeServerVersion(): void {
+  const conflict = getSnapshot().note.conflict;
+  if (!conflict) return;
+  refs.revision = conflict.serverRevision;
+  refs.content = conflict.serverContent;
+  patchNote({
+    content: conflict.serverContent,
+    revision: conflict.serverRevision,
+    dirty: false,
+    status: 'idle',
+    saveError: null,
+    conflict: null,
+  });
+  autosave.markClean();
+}
+
+/**
+ * Writes the version of the editor over the version of the server.
+ *
+ * The write is forced (the revision `0`): the user has just decided that
+ * their version wins, so the server must not refuse it.
+ */
+export async function keepLocalVersion(): Promise<void> {
+  const conflict = getSnapshot().note.conflict;
+  const path = refs.currentPath;
+  if (!conflict || !path) return;
+  const content = refs.content;
+  try {
+    const res = await getVaultService().saveNote(path, content, 0);
+    refs.revision = res.revision;
+    patchNote({
+      revision: res.revision,
+      dirty: false,
+      status: 'saved',
+      saveError: null,
+      conflict: null,
+    });
+    await dropDraft(path).catch(() => undefined);
+  } catch (err) {
+    patchNote({
+      status: 'error',
+      saveError: err instanceof ApiError ? err.message : errorMessage(err),
+    });
+  }
+}
+
+/** Closes the conflict without changing the note. */
+export function dismissConflict(): void {
+  patchNote({ conflict: null, status: 'idle' });
 }
 
 function setDraftOffer(draft: Draft | null): void {
@@ -662,6 +739,24 @@ export async function loadTags(): Promise<void> {
   }
 }
 
+/**
+ * Refreshes the tags of the vault after a save.
+ *
+ * The tags are a cache of the text of the notes: a note that got a new tag
+ * changes the list of the tags of the vault, so the chips of the block of the
+ * selection must follow. The refresh is delayed, so a burst of saves does not
+ * become a burst of requests.
+ */
+let tagsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleTagsRefresh(): void {
+  if (tagsRefreshTimer !== null) clearTimeout(tagsRefreshTimer);
+  tagsRefreshTimer = setTimeout(() => {
+    tagsRefreshTimer = null;
+    void loadTags();
+  }, 1500);
+}
+
 /* ----------------------------------------------------------------- vault */
 
 /** Reads the state of the storage of the notes. */
@@ -825,6 +920,9 @@ export interface AppActions {
   closeTab(path: string): void;
   editContent(text: string): void;
   explicitSave(): void;
+  takeServerVersion(): void;
+  keepLocalVersion(): Promise<void>;
+  dismissConflict(): void;
   toggleFolder(path: string): void;
   openDialog(dialog: DialogState): void;
   setDialogValue(value: string): void;
@@ -886,6 +984,9 @@ export const actions: AppActions = {
   closeTab,
   editContent,
   explicitSave,
+  takeServerVersion,
+  keepLocalVersion,
+  dismissConflict,
   toggleFolder,
   openDialog,
   setDialogValue,

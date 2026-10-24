@@ -80,7 +80,7 @@ describe('PluginManagerPanel', () => {
 
     expect(
       screen.getByText(
-        'Встроенные плагины выполняются как доверенный код в приложении. Изоляции/песочницы нет.',
+        'The built-in plugins run as trusted code inside the application. There is no sandbox.',
       ),
     ).toBeTruthy();
   });

@@ -18,6 +18,7 @@ export const PLUGIN_PERMISSIONS: readonly PluginPermission[] = [
   'notes.write',
   'tree.read',
   'search.read',
+  'query.read',
   'editor.read',
   'editor.write',
   'ui.contribute',

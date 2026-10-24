@@ -38,7 +38,7 @@ export function PluginManagerPanel(props: PluginManagerPanelProps) {
   return (
     <section class="noto-plugin-manager" aria-label="Plugins">
       <p class="noto-plugin-trust-warning" role="note">
-        Встроенные плагины выполняются как доверенный код в приложении. Изоляции/песочницы нет.
+        The built-in plugins run as trusted code inside the application. There is no sandbox.
       </p>
 
       {props.plugins.length === 0 ? (
@@ -87,7 +87,7 @@ export function PluginManagerPanel(props: PluginManagerPanelProps) {
                         props.onEnable(plugin.id);
                       }}
                     >
-                      Отключить и перезагрузить
+                      Disable and reload
                     </button>
                   ) : null}
 
@@ -121,7 +121,7 @@ export function PluginManagerPanel(props: PluginManagerPanelProps) {
                         aria-label={`Open the settings of the plugin ${manifest.name}`}
                         onClick={() => props.onOpenSettings(plugin.id)}
                       >
-                        Открыть настройки
+                        Open settings
                       </button>
                       <button
                         type="button"
@@ -129,7 +129,7 @@ export function PluginManagerPanel(props: PluginManagerPanelProps) {
                         aria-label={`Reset the settings of the plugin ${manifest.name}`}
                         onClick={() => props.onResetSettings(plugin.id)}
                       >
-                        Сбросить настройки
+                        Reset settings
                       </button>
                     </>
                   ) : null}

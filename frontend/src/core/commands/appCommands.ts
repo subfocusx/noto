@@ -15,18 +15,36 @@ export const APP_COMMAND_OWNER = 'app';
 export const APP_COMMAND_PREFIX = 'app:';
 
 /**
+ * The group of a section of the rail.
+ *
+ * The groups are the two halves of the rail: the notes themselves and the life
+ * of the storage. The rail draws a separator between them, like the ribbon of
+ * Obsidian.
+ */
+export type RailGroup = 'notes' | 'storage';
+
+/**
  * The sections of the rail, in the order of the rail.
  *
  * The list is the single source of the order: the rail draws the icons in it,
  * the palette lists the commands in it and the keyboard maps the letters of the
  * shortcuts on it.
+ *
+ * The order follows the work of the user: first the notes themselves (the
+ * explorer, the calendar, the search and the selection), then the life of the
+ * storage (the history, the notifications and the trash).
+ *
+ * There is no letter under the icon: the name of the section lives in the
+ * accessible name of the button and in its tooltip, like in Obsidian.
  */
-export const RAIL_SECTIONS: { id: RailSection; letter: string; title: string; icon: string }[] = [
-  { id: 'explorer', letter: 'E', title: 'Explorer', icon: 'folder' },
-  { id: 'search', letter: 'S', title: 'Search', icon: 'search' },
-  { id: 'filters', letter: 'F', title: 'Filters', icon: 'tags' },
-  { id: 'history', letter: 'H', title: 'History', icon: 'clock' },
-  { id: 'trash', letter: 'T', title: 'Trash', icon: 'trash' },
+export const RAIL_SECTIONS: { id: RailSection; title: string; icon: string; group: RailGroup }[] = [
+  { id: 'explorer', title: 'Explorer', icon: 'folder', group: 'notes' },
+  { id: 'calendar', title: 'Calendar', icon: 'calendar', group: 'notes' },
+  { id: 'search', title: 'Search', icon: 'search', group: 'notes' },
+  { id: 'filters', title: 'Filters', icon: 'filter', group: 'notes' },
+  { id: 'history', title: 'History', icon: 'clock', group: 'storage' },
+  { id: 'notifications', title: 'Notifications', icon: 'bell', group: 'storage' },
+  { id: 'trash', title: 'Trash', icon: 'trash', group: 'storage' },
 ];
 
 /**

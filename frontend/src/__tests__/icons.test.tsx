@@ -28,7 +28,9 @@ describe('the icon registry', () => {
   it('knows exactly the expected names', () => {
     expect(ICON_NAMES).toEqual([
       'archive',
+      'bell',
       'bookmark',
+      'calendar',
       'chevron-down',
       'chevron-right',
       'chevron-up',
@@ -39,6 +41,7 @@ describe('the icon registry', () => {
       'dots-vertical',
       'file-plus',
       'file-text',
+      'filter',
       'folder',
       'folder-open',
       'folder-plus',

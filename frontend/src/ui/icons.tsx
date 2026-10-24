@@ -11,7 +11,9 @@
 // plugin may refer to an icon by its name.
 import {
   Archive,
+  Bell,
   Bookmark,
+  Calendar,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -24,6 +26,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Funnel,
   Hash,
   Image,
   Link,
@@ -58,7 +61,9 @@ import type { ComponentType } from 'preact';
  */
 export const ICONS = {
   archive: Archive,
+  bell: Bell,
   bookmark: Bookmark,
+  calendar: Calendar,
   circle: Circle,
   clock: Clock,
   command: Command,
@@ -69,6 +74,7 @@ export const ICONS = {
   'dots-vertical': MoreVertical,
   'file-plus': FilePlus,
   'file-text': FileText,
+  filter: Funnel,
   folder: Folder,
   'folder-open': FolderOpen,
   'folder-plus': FolderPlus,

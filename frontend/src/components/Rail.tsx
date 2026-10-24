@@ -7,6 +7,12 @@
 // The rail is an accordion: exactly one section is open at a time, and the
 // rail itself never disappears. The user therefore always sees where the
 // sections are, and always knows which one is open.
+//
+// The rail has the shape of the ribbon of Obsidian: a narrow column of icons
+// without letters. The name of a section lives in the accessible name of its
+// button and in its tooltip. The sections are grouped in two — the notes and
+// the life of the storage — and a thin line separates the groups.
+import { Fragment } from 'preact';
 import type { RailSection } from '../core/store/types';
 import { RAIL_SECTIONS } from '../core/commands/appCommands';
 import { Icon } from '../ui/icons';
@@ -22,33 +28,9 @@ export interface RailProps {
   onToggleTheme(): void;
   /** Called when the user asks for the settings of the application. */
   onOpenSettings(): void;
+  /** The notifications that were not read; zero shows no badge. */
+  unreadCount?: number;
 }
-
-/** A section of the rail: its letter, its icon and its name. */
-interface RailEntry {
-  /** The identifier of the section. */
-  id: RailSection;
-  /** The letter shown under the icon; it names the section in one character. */
-  letter: string;
-  /** The name of the icon of the registry. */
-  icon: string;
-  /** The name of the section; it is the accessible name of the button. */
-  label: string;
-}
-
-/**
- * The sections of the rail, in the order they are shown.
- *
- * The order is the order of the work of the user: the notes, the search, the
- * selection, the history, the trash. The list itself lives in the core, so the
- * rail and the command palette always agree.
- */
-const SECTIONS: RailEntry[] = RAIL_SECTIONS.map((entry) => ({
-  id: entry.id,
-  letter: entry.letter,
-  icon: entry.icon,
-  label: entry.title,
-}));
 
 /**
  * The rail of the sections.
@@ -59,30 +41,46 @@ const SECTIONS: RailEntry[] = RAIL_SECTIONS.map((entry) => ({
 export function Rail(props: RailProps) {
   const themeLabel =
     props.theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme';
+  const unread = props.unreadCount ?? 0;
 
   return (
     <nav class="rail" aria-label="Sections">
       <ul class="rail-items">
-        {SECTIONS.map((entry) => {
+        {RAIL_SECTIONS.map((entry, index) => {
+          const previous = RAIL_SECTIONS[index - 1];
+          // The line between the groups stands in front of the first section of
+          // the second group.
+          const startsGroup = previous !== undefined && previous.group !== entry.group;
           const active = props.section === entry.id;
+          const showBadge = entry.id === 'notifications' && unread > 0;
+
           return (
-            <li key={entry.id}>
-              <button
-                type="button"
-                class="rail-item"
-                aria-current={active ? 'page' : undefined}
-                aria-label={entry.label}
-                title={`${entry.label} (${entry.letter})`}
-                data-section={entry.id}
-                data-testid={`rail-${entry.id}`}
-                onClick={() => props.onSelect(entry.id)}
-              >
-                <Icon name={entry.icon} size={17} />
-                <span class="rail-letter" aria-hidden="true">
-                  {entry.letter}
-                </span>
-              </button>
-            </li>
+            <Fragment key={entry.id}>
+              {startsGroup ? (
+                <li class="rail-separator-slot">
+                  <span class="rail-separator" aria-hidden="true" />
+                </li>
+              ) : null}
+              <li>
+                <button
+                  type="button"
+                  class="rail-item"
+                  aria-current={active ? 'page' : undefined}
+                  aria-label={entry.title}
+                  title={entry.title}
+                  data-section={entry.id}
+                  data-testid={`rail-${entry.id}`}
+                  onClick={() => props.onSelect(entry.id)}
+                >
+                  <Icon name={entry.icon} size={17} />
+                  {showBadge ? (
+                    <span class="rail-badge" aria-hidden="true">
+                      {unread}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            </Fragment>
           );
         })}
       </ul>

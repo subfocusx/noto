@@ -1,0 +1,116 @@
+/* ==========================================================================
+   The favorites of the user.
+
+   The section lists the notes the user marked for quick access: the name of
+   the note, its path, and the star that stands next to the name of a note in
+   the tree.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`): the section never carries a colour of its own.
+   ========================================================================== */
+
+/* The list of the favorites. */
+.favorites-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-1);
+}
+
+/* One favorite: the note that opens, and the button that removes it. */
+.favorite-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.favorite-item:hover {
+  background: var(--bg-container);
+}
+
+/* The button that opens the note. */
+.favorite-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.favorite-open:hover {
+  color: var(--fg);
+}
+
+.favorite-open:focus-visible,
+.favorite-remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The name of the note: it is cut when it does not fit. */
+.favorite-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  line-height: var(--leading-tight);
+  color: inherit;
+}
+
+/* The path of the note: it says where the note lives. */
+.favorite-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  color: var(--fg-muted);
+}
+
+/* A note that was deleted: the mark of the user stays, the note does not. */
+.favorite-item.is-missing .favorite-name {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+/* The button that removes the favorite. */
+.favorite-remove {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  flex: none;
+}
+
+/* ------------------------------------------------------------- the tree */
+
+/* The name of a note and the star that stands next to it. */
+.tree-file-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The name keeps the room it needs: the star never takes it. */
+.tree-file-label .tree-name {
+  flex: 0 1 auto;
+}
+
+/* The star of a note that is a favorite. */
+.tree-favorite {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}

@@ -383,6 +383,65 @@ trash is `Ctrl+Alt+D` and not `Ctrl+Alt+T`: the theme has held `Ctrl+Alt+T` sinc
 the first release and the contract of the shortcuts is not broken for the sake of
 a letter.
 
+## Phase 11 status (the seven points of the user)
+
+The complaint of the user came with seven points and two screenshots of other
+applications (Obsidian and Mem). Every point was checked against the code
+before anything was changed, and the check changed the plan twice:
+
+1. the «каракули» were **not** a defect of the editor: the cropped screenshot is
+   40×266 px, and enlarged eight times without smoothing it shows the rail with
+   the letters `E`, `S`, `F`, `H`, `T` under the icons. The point 1 of the
+   complaint and the point 3 are the same defect;
+2. the folders inside the folders already worked on the server
+   (`POST /api/folders` with `parentPath` creates `journal/sub`, checked with a
+   real request), and the menu of a row already had the entry «New folder» — but
+   the native right click of a row was not intercepted, so the menu of the
+   browser appeared and the way in was invisible;
+3. the command palette had **no CSS rules at all**: they were in the stylesheet
+   of the phase 4 and were lost when the stylesheets were reorganised. Without
+   them the palette was a flat list over the whole page, with the title and the
+   description of a command glued into one line;
+4. the counter «1 note matches» was rendered in the section `Search`, where no
+   filter lives, and the button «×» cut the text of the chip;
+5. the order and the icons of the sections were taken from nowhere: the letters
+   stood for the shortcuts and the icons of the old sections.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P11-1 | **The rail has no letters.** The letters under the icons are gone: the name of a section lives in the accessible name of its button and in its tooltip, as in the ribbon of Obsidian. The item is a compact square of 28×28 px with an icon of 17 px | done | `frontend/src/components/Rail.tsx`, `frontend/src/styles/rail.css` |
+| P11-2 | **The sections are grouped and their icons are semantic.** The order is the order of the work: the notes (`Explorer` → `Calendar` → `Search` → `Filters`), then the life of the storage (`History` → `Notifications` → `Trash`); a thin line separates the groups. The icons are `folder`, `calendar`, `search`, `filter`, `clock`, `bell`, `trash`. The list of the sections is still the single source of the order, the palette and the keyboard | done | `frontend/src/core/commands/appCommands.ts`, `frontend/src/core/store/types.ts`, `frontend/src/ui/icons.tsx` |
+| P11-3 | **The command palette is a modal window.** The rules of the palette, lost in the reorganisation of the stylesheets, are back in `frontend/src/styles/palette.css`: a dimmed screen, a card of `min(620px, 100%)` in the upper third, a list that scrolls inside the card. The title and the description of a command stand on two lines, the shortcut on the right | done | `frontend/src/styles/palette.css`, `frontend/src/components/CommandPalette.tsx` |
+| P11-4 | **The counter of the filter lives where the filter lives.** The section `Search` shows the search and points at the section `Filters` («Open the filters»); the number of the matching notes and the button that clears the filter are in `Filters`, in one row that cannot cut the text | done | `frontend/src/components/sections/SearchSection.tsx`, `frontend/src/components/FilterPanel.tsx` |
+| P11-5 | **A folder inside a folder is one right click away.** The native right click of a row of the tree opens the menu of that row (the menu of the browser never appears), and the menu names the node it acts on. The entry «New folder» of a folder creates the folder inside it | done | `frontend/src/components/TreeRow.tsx`, `frontend/src/components/TreeContextMenu.tsx` |
+| P11-6 | **The calendar of the vault.** A new section of the rail: a month of six rows of seven days, starting on Monday, the days of the neighbouring months dimmed, the days that carry notes marked with a dot; the notes of the picked day are listed under the grid, and the button «Open the note of the day» creates `YYYY-MM-DD.md`. The data comes from the tree (`createdAt` and `updatedAt`), so the API, the contract and the schema of SQLite do not change | done | `frontend/src/core/calendar/**`, `frontend/src/components/sections/CalendarSection.tsx`, `frontend/src/styles/calendar.css` |
+| P11-7 | **The model of the notifications.** A typed record (kind, title, body, time, read, path) in the store, a section of the rail that shows the list, and a badge on the icon of the rail with the number of the entries that were not read. The sources are real: a save that failed and a version that conflicts with the one of the server. The list is capped at 50 entries | done | `frontend/src/core/notifications/**`, `frontend/src/components/sections/NotificationsSection.tsx`, `frontend/src/styles/notifications.css` |
+| P11-8 | **The tests of the phase.** The unit tests of the rail (the letters are gone, the separator, the badge), of the palette, of the counter of the filter, of the right click of the tree, of the core of the calendar and of the model of the notifications; the E2E of the rail (seven sections), of the palette as a modal window, of the calendar, of the notifications and of the folder inside the folder | done | `frontend/src/__tests__/**`, `e2e/specs/{rail,shell-actions,tree-interaction,calendar,notifications}.spec.ts` |
+| P11-9 | **The documentation.** The design system knows the new layers of the styles, the new icons, the rules of the rail without letters and the rules of the palette, the calendar and the notifications | done | `docs/DESIGN_SYSTEM.md`, `PHASE11_PLAN.md` |
+
+### The measured effect of the phase 11
+
+| What | Phase 10 | Phase 11 |
+|---|---|---|
+| Entry chunk of the bundle | 43,68 kB gzip | **45,04 kB gzip** (the budget is 46 kB; the calendar and the notifications are loaded on demand) |
+| Frontend unit tests | 626 passed (53 files) | **688 passed (57 files)** |
+| End-to-end tests | 128 passed, 42 skipped | **140 passed, 44 skipped, 0 failed** |
+| The letters under the icons | 5 | **0** |
+| The sections of the rail | 5 | **7** (the calendar and the notifications) |
+| The rules of the palette | 0 | **12** (the palette was a flat list) |
+
+### What was left out of the phase 11
+
+The notifications live in the memory of the session: a reload empties the list.
+The saving of the list in `localStorage` is not done, because the list describes
+what happened during the session and the stale entries would only confuse. The
+history of the versions of the notes is still not done (the API has no endpoint
+for it). The calendar shows the days of the notes of the tree; it does not write
+a daily note by itself — the button «Open the note of the day» opens the note of
+the picked day, as the command «Daily note» does for today.
+
+---
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the

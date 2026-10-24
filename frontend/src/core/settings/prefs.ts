@@ -149,6 +149,7 @@ function stringList(value: unknown): string[] {
 export function normalizeRailSection(value: unknown): RailSection {
   if (
     value === 'explorer' ||
+    value === 'favorites' ||
     value === 'calendar' ||
     value === 'search' ||
     value === 'filters' ||

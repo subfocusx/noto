@@ -5,6 +5,8 @@
 // it, the facade (`./appStore.ts`) exposes both to the outside world.
 import type { AppState, NoteState } from './types';
 import { loadPrefs, type ThemePreference } from '../settings/prefs';
+import { loadFavorites } from '../favorites/types';
+import { loadReminders } from '../reminders/types';
 
 /**
  * Mutable mirrors of the state that asynchronous callbacks need.
@@ -75,6 +77,8 @@ export function createInitialState(): AppState {
       calendarMonth: '',
       calendarDay: null,
       notifications: [],
+      favorites: loadFavorites(),
+      reminders: loadReminders(),
       sidebarWidth: prefs.sidebarWidth,
       treeSort: prefs.treeSort,
       editorFontSize: prefs.editorFontSize,

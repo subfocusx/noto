@@ -29,6 +29,16 @@ import {
   pushNotification as pushToList,
   type NotificationInput,
 } from '../notifications/types';
+import {
+  saveFavorites,
+  toggleFavorite as toggleInFavorites,
+} from '../favorites/types';
+import {
+  addReminder as addToReminders,
+  removeReminder as removeFromReminders,
+  saveReminders,
+  type Reminder,
+} from '../reminders/types';
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
 import { getQueryService } from '../query/service';
@@ -701,6 +711,37 @@ export function clearNotifications(): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, notifications: clearNotificationList() } }));
 }
 
+/**
+ * Marks a note as a favorite, or removes the mark.
+ *
+ * The list is written to `localStorage` at once: a favorite must survive a
+ * reload of the page.
+ */
+export function toggleFavorite(path: string): void {
+  const favorites = toggleInFavorites(getSnapshot().ui.favorites, path);
+  saveFavorites(favorites);
+  update((prev) => ({ ...prev, ui: { ...prev.ui, favorites } }));
+}
+
+/**
+ * Adds a reminder.
+ *
+ * The list is written to `localStorage` at once: a reminder must survive a
+ * reload of the page.
+ */
+export function addReminder(reminder: Reminder): void {
+  const reminders = addToReminders(getSnapshot().ui.reminders, reminder);
+  saveReminders(reminders);
+  update((prev) => ({ ...prev, ui: { ...prev.ui, reminders } }));
+}
+
+/** Removes a reminder. */
+export function removeReminder(id: string): void {
+  const reminders = removeFromReminders(getSnapshot().ui.reminders, id);
+  saveReminders(reminders);
+  update((prev) => ({ ...prev, ui: { ...prev.ui, reminders } }));
+}
+
 /** Changes the width of the sidebar; the value is clamped. */
 export function setSidebarWidth(width: number): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, sidebarWidth: width } }));
@@ -1067,6 +1108,9 @@ export interface AppActions {
   markAllNotificationsRead(): void;
   dismissNotification(id: string): void;
   clearNotifications(): void;
+  toggleFavorite(path: string): void;
+  addReminder(reminder: Reminder): void;
+  removeReminder(id: string): void;
   setSidebarWidth(width: number): void;
   setTreeSort(sort: TreeSort): void;
   setEditorFontSize(size: number): void;
@@ -1138,6 +1182,9 @@ export const actions: AppActions = {
   markAllNotificationsRead,
   dismissNotification,
   clearNotifications,
+  toggleFavorite,
+  addReminder,
+  removeReminder,
   setSidebarWidth,
   setTreeSort,
   setEditorFontSize,

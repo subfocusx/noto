@@ -72,6 +72,12 @@ export const SHORTCUTS: ShortcutDef[] = [
     group: 'Navigation',
   },
   {
+    id: 'section.favorites',
+    keys: 'Ctrl+Alt+B',
+    label: 'Open the favorites',
+    group: 'Navigation',
+  },
+  {
     id: 'section.calendar',
     keys: 'Ctrl+Alt+C',
     label: 'Open the calendar',
@@ -93,12 +99,6 @@ export const SHORTCUTS: ShortcutDef[] = [
     id: 'section.history',
     keys: 'Ctrl+Alt+H',
     label: 'Open the history',
-    group: 'Navigation',
-  },
-  {
-    id: 'section.notifications',
-    keys: 'Ctrl+Alt+B',
-    label: 'Open the notifications',
     group: 'Navigation',
   },
   {

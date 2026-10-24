@@ -8,6 +8,7 @@ import type { Node, SearchHit, TagCount } from '../../types';
 import type { ThemePreference } from '../settings/prefs';
 import type { ConnectionState } from '../connection/types';
 import type { Notification } from '../notifications/types';
+import type { Reminder } from '../reminders/types';
 
 export type ViewMode = 'editor' | 'split' | 'preview';
 
@@ -19,6 +20,7 @@ export type ViewMode = 'editor' | 'split' | 'preview';
  */
 export type RailSection =
   | 'explorer'
+  | 'favorites'
   | 'calendar'
   | 'search'
   | 'filters'
@@ -138,6 +140,20 @@ export interface UiState {
    * and the plugins always see the same list.
    */
   notifications: Notification[];
+  /**
+   * The paths of the notes the user marked as favorites.
+   *
+   * The list lives in the store and in `localStorage`: a favorite is a mark of
+   * the interface, and it must survive a reload of the page.
+   */
+  favorites: string[];
+  /**
+   * The reminders of the user, the newest first.
+   *
+   * A reminder is a moment the user asked to be told about; when it comes the
+   * application writes a notification and shows a system notification.
+   */
+  reminders: Reminder[];
   /** The width of the sidebar in pixels. */
   sidebarWidth: number;
   /** The sort order of the tree. */

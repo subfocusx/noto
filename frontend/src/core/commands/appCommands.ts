@@ -39,6 +39,7 @@ export type RailGroup = 'notes' | 'storage';
  */
 export const RAIL_SECTIONS: { id: RailSection; title: string; icon: string; group: RailGroup }[] = [
   { id: 'explorer', title: 'Explorer', icon: 'folder', group: 'notes' },
+  { id: 'favorites', title: 'Favorites', icon: 'star', group: 'notes' },
   { id: 'calendar', title: 'Calendar', icon: 'calendar', group: 'notes' },
   { id: 'search', title: 'Search', icon: 'search', group: 'notes' },
   { id: 'filters', title: 'Filters', icon: 'filter', group: 'notes' },

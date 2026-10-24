@@ -442,6 +442,82 @@ the picked day, as the command «Daily note» does for today.
 
 ---
 
+## Phase 12 status (the comfort of the interface)
+
+The user came back with eight points and four screenshots. Four of them are about
+the comfort of the interface, three are about functions that were promised or
+never existed, and one is about an icon that says the wrong thing.
+
+Two of the points were not what they looked like at first:
+
+1. the drag & drop **was** implemented (the tree rows are `draggable`, a folder
+   accepts a drop, the refusal of a folder that would land in itself is a
+   banner, and an end-to-end test moves a note from one folder to another) —
+   what was missing was that **the user could not see it**: there was no hint
+   and the answer of the target was too quiet;
+2. the window of the menu of a row became too wide in the phase 11: the header
+   with the name of the node (up to 180 px) stretched a panel that holds a
+   column of 30 px icons. The name of the node was useful for the screen
+   reader, but it must not be painted on the panel.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P12-1 | **The calendar reads itself.** The selected day is a heading on its own line, the button that opens the note of the day is a line under it and never breaks; the buttons of the month got a frame and a state of their own | done | `frontend/src/components/sections/CalendarSection.tsx`, `frontend/src/styles/calendar.css` |
+| P12-2 | **Two signs in the calendar.** The dot under the number is *today*; a day that carries records gets a tinted background and its number in the accent colour | done | `frontend/src/components/sections/CalendarSection.tsx`, `frontend/src/styles/calendar.css` |
+| P12-3 | **The strip of the tags is a designed group.** It names itself, the tags are pills, the button that adds a tag is a pill, and the field is a field (18 ch, a placeholder, the accent ring of the focus). The height of the row never changes | done | `frontend/src/components/NoteTags.tsx`, `frontend/src/styles/tags.css` |
+| P12-4 | **The open notes are pills.** A gap of 4 px, rounded corners, the active tab raised, the name cut with an ellipsis. The component has no inline style any more | done | `frontend/src/components/EditorTabs.tsx`, `frontend/src/styles/tabs.css` |
+| P12-5 | **The menu of a row is narrow again.** The name of the node is gone from the panel; the accessible name "Actions of &lt;name&gt;" stays (it is invisible) | done | `frontend/src/components/TreeContextMenu.tsx`, `frontend/src/styles/components.css` |
+| P12-6 | **The drag & drop is visible.** A hint in the explorer, a strong answer of the target folder, the cursor that tells the truth, and the end-to-end check of a folder that lands in another folder | done | `frontend/src/components/TreeRow.tsx`, `frontend/src/components/sections/ExplorerSection.tsx`, `e2e/specs/tree-interaction.spec.ts` |
+| P12-7 | **The favorites.** A section of the rail with the icon `star`, the entry "Add to favorites" in the menu of a row, a star in the tree, and a list that survives a reload. The button of the plugins took the icon `puzzle`: the bookmark icon now means the bookmark | done | `frontend/src/core/favorites/types.ts`, `frontend/src/components/sections/FavoritesSection.tsx`, `frontend/src/core/store/*` |
+| P12-8 | **The reminders of the calendar.** A model of a moment (day, time, text), a form in the panel of the selected day, and a timer that writes a notification and shows a system notification of the browser when the moment comes. The permission of the browser is asked only by a gesture of the user | done | `frontend/src/core/reminders/**`, `frontend/src/components/sections/CalendarSection.tsx`, `frontend/src/App.tsx` |
+
+### The measured effect of the phase 12
+
+| What | Phase 11 | Phase 12 |
+|---|---|---|
+| Entry chunk of the bundle | 45,04 kB gzip | **43,51 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 688 passed (57 files) | **752 passed (60 files)** |
+| End-to-end tests | 140 passed, 44 skipped | **146 passed, 46 skipped, 0 failed** |
+| The sections of the rail | 7 | **8** (the favorites) |
+| The panel of the menu of a row | ~180 px, with the name of the node | **36 px**, one column of icons |
+| The marks of a day of the calendar | one (a dot) | **two** (the dot of today, the tint of a day with records) |
+
+### The budget of the entry chunk (wave 5 of the phase 12)
+
+The first build of the phase grew the entry chunk to **47,35 kB gzip** — 1,35 kB
+over the budget of 46 kB. The size was measured per module (the sourcemap of
+the build attributes every byte of the chunk to its source), and the growth was
+in the new modules of the core and in the eagerly loaded components.
+
+The fix was not to cut the features, but to take out of the entry the code that
+is not needed at the start:
+
+* **The engine of the query language left the entry chunk.** The store loads
+  `core/query/service` on demand (inside the actions that were asynchronous
+  anyway), and the API of the plugins loads `core/api/pluginQuery` at the first
+  question of a plugin. The parser of the query language, the predicates and
+  the scanner of the derived properties (~11,5 kB raw) are now in a chunk that
+  is fetched only when somebody asks a question.
+* **The watcher of the reminders became a module of its own**
+  (`core/reminders/watcher.ts`), which the shell loads on demand: the shell has
+  no use for it before the first tick.
+
+The result is **43,51 kB gzip** — under the budget, and under the size of the
+phase 11. The rows of the tree also stopped listening to the whole state of the
+store: a row listens to its own star (`useAppSelector`), so the tree is not
+redrawn on every keystroke of the editor.
+
+### What was left out of the phase 12
+
+The notifications of the phase 11 and the reminders of the phase 12 live in the
+memory and in `localStorage` of the browser: they are the data of the user, not
+a part of the vault on the disk. A reminder that comes while the tab is closed
+is shown when the tab is opened again (the moment has passed, the reminder is
+due) — the application does not send anything to the server, because the server
+knows nothing about the reminders of the user.
+
+---
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the

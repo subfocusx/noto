@@ -1189,6 +1189,7 @@ noto/
 ├── AGENTS.md                 the working agreement of the repository
 ├── CONTEXT.md                the vocabulary of the project
 ├── PHASE8_PLAN.md            the plan of the phase 8 (the query language)
+├── PHASE10_PLAN.md           the plan of the phase 10 (the shell of the application)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

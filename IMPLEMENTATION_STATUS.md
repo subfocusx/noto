@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Noto (Markdown Notes PWA)
 
-Last updated: 2026-10-24 (phase 9). Status legend: **done** (implemented and
+Last updated: 2026-10-24 (phase 10). Status legend: **done** (implemented and
 verified here) · **partial** (implemented, some part unverified) · **planned**.
 
 ## Architecture
@@ -326,6 +326,62 @@ that were not taken (the highlighting of the matches in the editor, the
 completion of the tags, the focus mode, the undo of a deletion, the card of the
 note, the synchronisation of the filter with the URL) are still open in
 `PHASE8_PLAN.md`.
+
+## Phase 10 status (the shell of the application)
+
+The complaint of the user was about the shell itself: *the sidebars and the lines
+do not meet, everything overlaps*, and the panes of the application were asked to
+move to a narrow rail on the left. Behind the complaint were three real defects
+and four bugs that the screenshots showed:
+
+1. the columns did not start at the same height (the header of the vault was
+   40 px, the strip of the tabs 32 px, the header of the outline 36 px) and the
+   headers had three different backgrounds, so the vertical borders began and
+   ended at different heights;
+2. the left column could be collapsed, which left the application without a
+   navigation when it was hidden;
+3. the row of the tree carried five buttons **and** a menu with the same five
+   actions, and the menu covered the buttons;
+4. the dialog of the creation was prefilled with a real name (`New folder`,
+   `note.md`), so a folder that nobody renamed was called «New folder» forever;
+5. the native widget of the file input did not fit the field of the dialog of
+   the import;
+6. the strip of the tags of the note had no background and no border, so it
+   floated over the editor.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P10-1 | **The rail of the sections.** A narrow strip (44 px) on the left holds the icons of the sections `E` explorer, `S` search, `F` filters, `H` history, `T` trash, and the theme with the settings at the bottom. The rail is an accordion: the pressed icon decides what the column next to it shows, and exactly one section is open at a time. The list of the sections lives in the core (`RAIL_SECTIONS`), so the rail, the palette and the keyboard never disagree | done | `frontend/src/components/Rail.tsx`, `frontend/src/core/commands/appCommands.ts` |
+| P10-2 | **The column of the sections.** The left column is the container of the sections: the explorer (the vault and the tree), the search (the field, the results and the saved filters), the filters (the whole constructor), the history (the recent notes) and the trash. The four sections that are not the explorer are loaded on demand, so they stay out of the entry chunk. The choice of the section is remembered | done | `frontend/src/components/Sidebar.tsx`, `frontend/src/components/sections/**`, `frontend/src/components/LazySections.tsx`, `frontend/src/core/store/{types,state,actions}.ts`, `frontend/src/core/settings/prefs.ts` |
+| P10-3 | **The left column stays where it is.** There is no collapse any more: the button «Toggle notes panel», the switch «Collapse the sidebar», the command `toggleSidebar` (`Ctrl+Alt+B`) and the field `sidebarCollapsed` are gone. The column is resized by the pointer (200…480 px). The right column keeps its toggle | done | `frontend/src/components/AppFooter.tsx`, `frontend/src/components/SettingsDialog.tsx`, `frontend/src/core/commands/{appCommands,shortcuts}.ts`, `frontend/src/core/settings/prefs.ts` |
+| P10-4 | **One line of the frame.** Every header is `--header-height` (40 px), has the background `--bg-sidebar` and one bottom border; the vertical borders of the rail, of the column, of the workspace and of the outline are continuous, and the bottom line of the application is one line. Measured: the four headers stand at `y=0` with a height of 40 px | done | `frontend/src/styles/{tokens,layout,rail}.css`, `frontend/src/styles/components.css` |
+| P10-5 | **The name of a new object is written by the user.** The dialog of the creation opens with an empty field and a placeholder («Folder name», «Note name»); an empty name keeps the dialog open and says why. The renaming still shows the real name | done | `frontend/src/components/NoteDialogs.tsx`, `frontend/src/core/store/actions.ts`, `frontend/src/App.tsx` |
+| P10-6 | **The choice of a file looks like the rest of the interface.** The native input is hidden behind the elements of the application («Choose files», «Choose archive») and shows the names of the chosen files; the general rule of the fields no longer applies to `input[type='file']` | done | `frontend/src/components/TransferPanel.tsx`, `frontend/src/styles/components.css` |
+| P10-7 | **The strip of the tags is a row of its own.** It keeps its place under the crumbs, has a background, a border and a height, and does not float over the editor | done | `frontend/src/styles/components.css` |
+| P10-8 | **One button in a row of the tree.** The five inline buttons are gone; the row carries only the menu («three dots»), and the menu holds Rename, Move, New note, New folder, Duplicate and Delete | done | `frontend/src/components/TreeRow.tsx`, `frontend/src/components/TreeContextMenu.tsx` |
+| P10-9 | **The tests of the new shell.** The unit tests of the rail, of the dialog of the creation and of the window of the import; the E2E of the rail (five checks) and the rewritten specs that no longer collapse the column | done | `frontend/src/__tests__/{rail,createDialog,transferPanel}.test.tsx`, `e2e/specs/rail.spec.ts`, `e2e/specs/{a11y,shell,shell-actions,responsive}.spec.ts` |
+
+### The measured effect of the phase 10
+
+| What | Phase 9 | Phase 10 |
+|---|---|---|
+| Entry chunk of the bundle | 45,39 kB gzip | **43,68 kB gzip** (the budget is 46 kB; the sections left the entry chunk) |
+| Frontend unit tests | 604 passed (50 files) | **626 passed (53 files)** |
+| End-to-end tests | 116 passed, 42 skipped | **128 passed, 42 skipped, 0 failed** |
+| The height of the headers | 40 / 32 / 36 px | **40 px у всех** |
+| The background of the headers | три тона | **один тон** (`--bg-sidebar`) |
+| The left column | сворачивалась | **всегда видна**, 200…480 px |
+| The buttons of a row of the tree | 6 | **1** (меню) |
+
+### What was left out of the phase 10
+
+The history of the versions of the notes is **not** done: the API has no endpoint
+for it (`docs/CONTRACT.md` knows only the `revision` of `PUT /api/notes`), so the
+section `H` shows the recent notes and says plainly that there is no version yet.
+The right column (the outline) was not redesigned. The keyboard shortcut of the
+trash is `Ctrl+Alt+D` and not `Ctrl+Alt+T`: the theme has held `Ctrl+Alt+T` since
+the first release and the contract of the shortcuts is not broken for the sake of
+a letter.
 
 ## Closed phases
 

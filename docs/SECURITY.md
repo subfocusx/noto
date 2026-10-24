@@ -55,12 +55,44 @@ ignores entirely.
 * **Physical access** to the machine or the disk image.
 * **Multi-user operation.** The data model has no user dimension; two people
   sharing one server share one notebook.
-* **Encryption at rest.** Notes, attachments and the SQLite database are
-  stored unencrypted. Use full-disk encryption (BitLocker, LUKS, FileVault)
-  if that matters.
+* **Encryption at rest in the default (open) mode.** Notes, attachments and the
+  SQLite database are stored unencrypted. Use full-disk encryption (BitLocker,
+  LUKS, FileVault) if that matters. The opt-in sealed mode changes this for the
+  vault itself — see the section below.
 * **Audit logging.** There is no record of who changed what.
 * **A malicious built-in plugin.** Plugins run as trusted code inside the
   application; see the section below.
+
+## Sealed vaults (client-side encryption)
+
+A vault can optionally run in **sealed** mode: the browser encrypts every object
+before it is written, so the files on disk — and therefore the files a cloud
+provider keeps in OneDrive, Google Drive or Dropbox — contain ciphertext only.
+The key never reaches the Go backend, and in sealed mode the backend does not
+create its SQLite database at all, so no plaintext index exists. The full
+description — architecture, cryptographic choices, key lifecycle, storage format,
+migration, cloud-sync compatibility, plugin rules and the format roadmap — is in
+[`docs/ENCRYPTION.md`](ENCRYPTION.md).
+
+What this mode actually guarantees:
+
+* The storage provider and the server operator cannot read the notes: they hold
+  no key.
+* Tampering is detected: AES-256-GCM authenticates every container, and the
+  container header is bound as additional data.
+* The master password is never stored, and the data encryption key is never
+  stored in the clear.
+
+And what it honestly does **not** guarantee:
+
+* A local administrator or malware with access to the machine can read the
+  plaintext while the vault is unlocked; a modified client can steal the key.
+* The transport to the local backend is plain HTTP over loopback (the payloads
+  are ciphertext, but the channel itself is not TLS-protected).
+* Without the master password or the recovery key the vault cannot be
+  recovered. There is no back door and no developer-held key.
+* Deleting a file does not erase the copies that live in the version history of
+  a cloud provider, in its snapshots or in its backups.
 
 ## Plugins
 
@@ -99,6 +131,12 @@ trusted code, not a sandboxed extension.** The full model is in
 * **Private API responses are never cached.** Because `/api/*` is
   `network-only`, data a plugin fetched through the API does not survive
   offline in a cache.
+* **Plugins never see the key material.** The master password, the key
+  encryption key and the data encryption key live in `src/core/crypto/**` and
+  are reachable only from `src/core/crypto/**` and `src/core/vault/**`; the
+  boundary checker (`frontend/scripts/check-boundaries.mjs`, rules R11 and R12)
+  fails the build on any other import. A plugin that needs to know the state of
+  the vault uses the optional `ctx.vault` capability instead.
 * **The built-in plugins stay inside the contract.** The third plugin
   `backlinks` (phase 3) is implemented through the public contract only: it
   imports nothing but `plugins/contract.ts` and declares the rights

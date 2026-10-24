@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Noto (Markdown Notes PWA)
 
-Last updated: 2026-10-23 (phase 3). Status legend: **done** (implemented and
+Last updated: 2026-10-24 (phase 7). Status legend: **done** (implemented and
 verified here) · **partial** (implemented, some part unverified) · **planned**.
 
 ## Architecture
@@ -24,19 +24,26 @@ noto/
 │     │                + reconcile.go: Reconcile / ReconcileWithOptions (file system vs. database)
 │     ├─ api           HTTP handlers, router, security middleware
 │     │                + handlers_maintenance.go (only with NOTO_MAINTENANCE=1)
+│     │                + handlers_sealed.go, handlers_sealed_purge.go (the sealed mode)
+│     ├─ sealed        the blind object store of the sealed vault (bytes, no key)
 │     ├─ web           SPA / static serving (embedded dist or NOTO_STATIC_DIR)
 │     └─ testutil      in-memory store + test helpers
 ├─ frontend/           Preact + TypeScript(strict) + Vite + CodeMirror 6
 │  ├─ src/core/        app-agnostic modules: store, api facade, events, commands,
 │  │                   settings store, diagnostics logger
+│  │  ├─ crypto/      the crypto core: KDF, the hierarchy of the keys, the container
+│  │  ├─ vault/       the sealed vault: manifest, objects, index, session,
+│  │  │               migration, the single entry point VaultService
+│  │  └─ connection/  the monitor of the backend (connected/connecting/unreachable)
 │  ├─ src/plugins/     plugin platform: contract, manifest, registry, host, loader,
 │  │                   builtin/word-count, builtin/insert-template, builtin/backlinks
 │  ├─ src/components/  shell, editor, preview, plugin slots, plugin manager,
-│  │                   command palette
+│  │                   command palette, the screens of the encrypted storage
 │  └─ public/          sw.js (service worker) + sw-policy.js (pure policy functions)
 ├─ e2e/                Playwright end-to-end suite
 ├─ docs/               CONTRACT.md (authoritative), API.md, SECURITY.md, PERFORMANCE.md,
-│                      ARCHITECTURE.md, PLUGIN_API.md, PLUGIN_SECURITY.md,
+│                      ARCHITECTURE.md, ENCRYPTION.md, VAULT.md, UI_AUDIT.md,
+│                      DESIGN_SYSTEM.md, PLUGIN_API.md, PLUGIN_SECURITY.md,
 │                      PLUGIN_DEVELOPMENT.md
 └─ scripts/            dev / build / test / verify / backup / smoke / measure-perf helpers
 ```
@@ -58,6 +65,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 8 | Phase 2: modularisation, PWA privacy, plugin platform | partial | see "Phase 2 status" below |
 | 9 | Phase 3: performance, backups, reconciliation, command palette | done | see "Phase 3 status" below |
 | 10 | Phase 4: premium UI redesign, design system, accessibility, UX | done | see "Phase 4 status" below |
+| 11 | Phase 7: the redesign of the shell and the encrypted storage | partial | see "Phase 7 status" below — everything is done except the end-to-end scenario that scans the disk for the plaintext |
 
 ## Phase 2 status (plugin platform)
 
@@ -228,6 +236,41 @@ and does not weigh on the entry.
 | `Vinzent03/obsidian-git` | MIT | the rule of the icon instead of the duplicated text, the `aria-label` and the tooltip of every icon-only control |
 | `laurent22/joplin` | AGPL-3.0 | only the ideas were read: the uniform step of the indent. **No code was copied** |
 | `siyuan-note/siyuan` | AGPL-3.0 | only the ideas were read: the compact status bar. **No code was copied** |
+
+## Phase 7 status (the redesign of the shell and the encrypted storage)
+
+Two changes: the interface was rebuilt around the rule *the action lives with
+the object it acts on, the state lives where the state belongs*, and the
+storage of the notes was encrypted in the browser. The state of every card was
+read from the code, not from the plan.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P7-1 | The redesign of the shell: the header of the column is gone (the brand moved to the header of the storage, the name of the open note to the tabs of the editor), the global actions moved to the header of the EXPLORER section (the search, Graph, Archive, the command palette, the plugins), the counters of the section are gone while the counters of the folders stay, the block of the plugins at the bottom of the column is rendered only when it holds something, the panels of the plugins moved to the right column, the entries of the context menu of the plugins returned to the menu of the tree, and the red banner "Noto is offline" was replaced by the indicator of the connection (green / amber / red) | done | `frontend/src/components/{Sidebar,AppFooter,ConnectionIndicator,TreeContextMenu}.tsx`, `frontend/src/App.tsx`, `frontend/src/styles/{layout,components,plugin,vault}.css`, `docs/UI_AUDIT.md` |
+| P7-2 | The crypto core: Argon2id as the KDF, AES-256-GCM as the cipher, the hierarchy of the keys (KEK → DEK), the epochs and the key wrapping, the recovery key, the container `NOTOSEAL` with the header as the AAD | done | `frontend/src/core/crypto/{kdf,keys,sealed,format,errors}.ts`, unit tests in `frontend/src/core/crypto/__tests__/` (4 files) |
+| P7-3 | The sealed vault on the client (the manifest and its generations, the objects, the in-memory index, the conflicts) and the blind object store of the server with its endpoints; the server refuses the open endpoints with `409 vault_sealed` | done | `frontend/src/core/vault/{sealedVault,sealedIndex,conflicts,sealedClient}.ts`, `backend/internal/sealed/`, `backend/internal/api/{api.go,handlers_sealed.go,handlers_sealed_purge.go}`, unit tests in `frontend/src/core/vault/__tests__/` (4 files) and `backend/internal/sealed/` (2 files) |
+| P7-4 | The screens of the encrypted storage: the wizard, the unlocking, the lock, the settings of the security; the unlocking screen shows nothing but the name of the storage and the password field | done | `frontend/src/components/{VaultSetupDialog,VaultUnlockScreen,VaultSecuritySection}.tsx`, `frontend/src/core/vault/{session,autoLock}.ts`, `frontend/src/styles/vault.css` |
+| P7-5 | The migration with its journal and the verification: the notes are sealed first, the copy is verified object by object, the server is switched only after the verification, and the plaintext is removed only after an explicit confirmation. The journal lives inside the sealed manifest, so an interrupted migration continues instead of starting over | done | `frontend/src/core/vault/migration.ts`, `frontend/src/components/VaultMigrationDialog.tsx` |
+| P7-6 | The single path of the store: the store always talks to a `VaultService` — the adapter over the API of the notes in the open mode, the adapter over the sealed vault in the sealed mode. The two are never used at the same time | done | `frontend/src/core/vault/vaultService.ts`, `frontend/src/core/store/**` |
+| P7-7 | The plugin API 1.1.0 with the optional capability `ctx.vault` (`mode`, `encrypted`, `locked`, `formatVersion`); the change is additive, the plugins with `minApiVersion: "1.0.0"` keep working, and a plugin never sees the key material | done | `frontend/src/plugins/contract.ts`, `frontend/src/core/api/pluginApi.ts`, `docs/PLUGIN_API.md` |
+| P7-8 | The rules R9–R12 of the boundary checker: the core does not import the interface, the crypto core does not import the vault, a plugin never imports the crypto core, and only the core uses the key material | done | `frontend/scripts/check-boundaries.mjs`, `npm run check:boundaries` |
+| P7-9 | The end-to-end test that scans the real files of the disk for the plaintext: a real vault in a temporary directory, two notes with unique markers, the migration through the user interface, and then a byte-by-byte scan of every file of the vault. The scenario passes: the vault holds nothing but ciphertext, the plaintext notes and the database of the open pipeline are gone, the storage is locked after a reload, and the right password opens the notes again | done | `e2e/specs/encryption.spec.ts`, `e2e/helpers/vault-scan.ts` |
+| P7-10 | The documentation: the modules and the rules in `docs/ARCHITECTURE.md`, the storage in `docs/VAULT.md`, the API 1.1.0 in `docs/PLUGIN_API.md` and `docs/PLUGIN_DEVELOPMENT.md`, the boundary of the key material in `docs/PLUGIN_SECURITY.md`, the defects of the redesign in `docs/UI_AUDIT.md`, the placement rules in `docs/DESIGN_SYSTEM.md`, `README.md` | done | `docs/`, `README.md` |
+
+### The measured effect of the phase 7
+
+| What | Phase 6 | Phase 7 |
+|---|---|---|
+| Entry chunk of the bundle | 37,19 kB gzip | 41,88 kB gzip (the crypto core is a lazy chunk of 4,57 kB gzip) |
+| Frontend unit tests | 463 passed (41 files) | **473 passed (43 files)** |
+| End-to-end tests | 101 passed, 32 skipped | **106 passed, 32 skipped, 0 failed** |
+| Files of the frontend | 144 | 144 (the boundaries hold: R1–R12) |
+| Plaintext of the notes on the disk | every note in the clear | only ciphertext (the scenario of P7-9 scans the real files of a real vault) |
+
+The number of the unit tests of the frontend grew by the tests of the crypto
+core, of the sealed vault, of the migration, of the connection and of the
+dialogs of the encrypted storage. The end-to-end suite grew by the scenario of
+the encrypted storage (5 checks) and by the three checks of the connection.
 
 ## Definition of Done
 

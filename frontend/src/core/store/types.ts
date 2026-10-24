@@ -6,6 +6,7 @@ import type { AutosaveStatus } from '../../lib/autosave';
 import type { Draft } from '../../lib/drafts';
 import type { Node } from '../../types';
 import type { ThemePreference } from '../settings/prefs';
+import type { ConnectionState } from '../connection/types';
 
 export type ViewMode = 'editor' | 'split' | 'preview';
 
@@ -76,6 +77,14 @@ export interface UiState {
   editorWrap: boolean;
   /** The paths of the recently opened notes, the newest first. */
   recentPaths: string[];
+  /**
+   * The paths of the notes that are open in the tab strip of the editor.
+   *
+   * The strip lives in the store and not in a component: a note can be opened
+   * by the tree, by the search, by a plugin or by the dialog of a new note,
+   * and every one of these paths must show the note in the strip.
+   */
+  openPaths: string[];
   /** True when the dialog of the settings is open. */
   settingsOpen: boolean;
   /** True when the dialog of the keyboard shortcuts is open. */
@@ -117,6 +126,14 @@ export interface ContextMenuState {
 /** Browser environment. */
 export interface EnvState {
   online: boolean;
+  /**
+   * The state of the connection with the Noto backend.
+   *
+   * `online` tells whether the browser itself has a network; `connection`
+   * tells whether the backend answers. A browser can be online while the
+   * backend is down, and the user must be able to tell the two apart.
+   */
+  connection: ConnectionState;
   /** The theme the user chose; `system` follows the operating system. */
   theme: ThemePreference;
   /** The theme that is really active. */

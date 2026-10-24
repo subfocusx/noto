@@ -238,9 +238,11 @@
   color: var(--accent);
 }
 
+/* The name of the vault keeps the room it needs: the path is the part that
+   may be truncated, because the full path stays in the tooltip. */
 .vault-header-name {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: 48px;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   color: var(--fg);
@@ -250,8 +252,9 @@
 }
 
 .vault-header-path {
-  flex: none;
-  max-width: 130px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 50%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -688,6 +691,43 @@ button.sidebar-section-title {
 
 .sidebar-section-toggle:hover {
   color: var(--fg);
+}
+
+/* ------------------------------------------------------ connection dot */
+
+/* The dot of the connection with the backend: it is the only coloured
+   element of the header of the explorer, so it stays small and quiet. */
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin: 0 6px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.conn-dot.connected {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success-subtle);
+}
+
+.conn-dot.connecting {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning-subtle);
+}
+
+.conn-dot.unreachable {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger-subtle);
+}
+
+.conn-dot[aria-disabled='true'] {
+  cursor: default;
 }
 
 .recent-list {
@@ -1214,7 +1254,13 @@ kbd {
 .outline-panel {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /*
+   * The panel of the outline takes the room it needs, not the whole column:
+   * the panels of the plugins follow it directly, instead of being pushed to
+   * the bottom of the column by an empty gap.
+   */
+  flex: 0 1 auto;
+  max-height: 60%;
   min-height: 0;
 }
 

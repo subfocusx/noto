@@ -21,6 +21,9 @@ type vaultStatus struct {
 	// Fixed reports whether the storage was fixed by the environment. Such a
 	// storage cannot be changed at runtime.
 	Fixed bool `json:"fixed"`
+	// Mode is the mode of the vault: "sealed" when the client encrypts
+	// everything, "open" otherwise.
+	Mode string `json:"mode"`
 }
 
 // vaultRequest is the body of the vault selection endpoint.
@@ -44,6 +47,7 @@ func (s *Server) handleGetVault(w http.ResponseWriter, r *http.Request) {
 		Path:       path,
 		NotesDir:   notesDir,
 		Fixed:      s.vaultIsFixed(),
+		Mode:       s.Mode(),
 	})
 }
 

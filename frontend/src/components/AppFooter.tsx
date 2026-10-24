@@ -40,12 +40,6 @@ export interface AppFooterProps {
   onToggleTheme?(): void;
   /** The theme that is really active. */
   theme?: 'light' | 'dark';
-  /** Opens the search palette. */
-  onOpenSearch?(): void;
-  /** Opens the graph of the vault. */
-  onOpenGraph?(): void;
-  /** Opens the archive of the vault. */
-  onOpenArchive?(): void;
 }
 
 /** Groups the digits of a number with a thin space: `1 248`. */
@@ -58,14 +52,12 @@ function group(value: number): string {
 /**
  * The status bar of the application.
  *
- * The bar is permanent: it holds the global actions of the application, so a
- * collapsed column can always be opened again, and the state of the document:
- * the path of the note, the position of the cursor, the counters and the
- * format.
+ * The bar is permanent: it holds the toggles of the columns, so a collapsed
+ * column can always be opened again, and the state of the document: the path
+ * of the note, the position of the cursor, the counters and the format. The
+ * actions of the vault live in the header of the explorer, not here.
  */
 export function AppFooter(props: AppFooterProps) {
-  const graphReady = props.onOpenGraph !== undefined;
-  const archiveReady = props.onOpenArchive !== undefined;
   return (
     <footer class="app-footer">
       <div class="app-footer-actions" role="group" aria-label="Global actions">
@@ -92,21 +84,6 @@ export function AppFooter(props: AppFooterProps) {
           label="Toggle theme"
           icon={props.theme === 'dark' ? 'sun' : 'moon'}
           onClick={() => props.onToggleTheme?.()}
-        />
-        <IconButton label="Search notes" icon="search" onClick={() => props.onOpenSearch?.()} />
-        <IconButton
-          label="Graph"
-          icon="network"
-          ariaDisabled={!graphReady}
-          title={graphReady ? 'Graph' : 'Not implemented yet'}
-          onClick={() => props.onOpenGraph?.()}
-        />
-        <IconButton
-          label="Archive"
-          icon="archive"
-          ariaDisabled={!archiveReady}
-          title={archiveReady ? 'Archive' : 'Not implemented yet'}
-          onClick={() => props.onOpenArchive?.()}
         />
       </div>
       {props.saveError ? (

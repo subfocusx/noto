@@ -15,9 +15,11 @@ import {
   applyTheme,
   refreshTree,
   resetAutosave,
+  setConnection,
   setOnline,
   type AppActions,
 } from './actions';
+import { connectionMonitor } from '../connection/monitor';
 import { getSnapshot, notify, resetState, subscribe } from './state';
 
 /* -------------------------------------------------------------- lifecycle */
@@ -35,6 +37,11 @@ export function start(): void {
   const goOffline = () => setOnline(false);
   window.addEventListener('online', goOnline);
   window.addEventListener('offline', goOffline);
+
+  // The state of the backend is measured, not guessed: the monitor polls the
+  // health endpoint and publishes what it learns.
+  connectionMonitor.setOnChange(setConnection);
+  connectionMonitor.start();
 
   // Keep the layout height in sync with the mobile keyboard viewport.
   const viewport = typeof window !== 'undefined' ? window.visualViewport : undefined;
@@ -55,6 +62,7 @@ export function start(): void {
   cleanupEnvironment = () => {
     window.removeEventListener('online', goOnline);
     window.removeEventListener('offline', goOffline);
+    connectionMonitor.stop();
     removeViewport?.();
   };
 

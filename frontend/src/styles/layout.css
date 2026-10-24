@@ -18,93 +18,9 @@
 
 /* ------------------------------------------------------------- top bar */
 
-/* The header is not a bar of its own any more: the brand and the name of the
-   open note live at the top of the left column. */
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-  min-height: 36px;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-sidebar);
-}
-
-/* The compact header of the left column. */
-.app-header-compact .app-brand {
-  flex: none;
-}
-
-.app-header-compact .app-brand-mark {
-  width: 24px;
-  height: 24px;
-}
-
-.app-header-compact .app-title {
-  flex: 1 1 auto;
-  padding-left: var(--space-1);
-  border-left: 0;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-}
-
-.app-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  background: var(--accent-subtle);
-  color: var(--accent);
-}
-
-.app-brand-name {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-  letter-spacing: -0.01em;
-  color: var(--fg);
-}
-
-.app-brand-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-container);
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-.app-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
-}
-
-/* The name of the open note, shown next to the brand. */
-.app-title {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 220px;
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--border);
-  font-size: var(--text-base);
-  color: var(--fg-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* The header of the application is gone: the brand and the name of the open
+   note lived there, and neither of them was worth a row of its own. The name
+   of the open note is shown in the tabs of the editor. */
 
 /* The burger is only needed on a narrow screen. */
 .app .icon-button.menu-button {
@@ -408,30 +324,6 @@
   color: var(--fg-muted);
 }
 
-/* The contributions of the plugins live in the footer of the left column:
-   they must never push the tree out of the column. */
-.noto-plugin-sidebar-area {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  max-height: 96px;
-  padding: var(--space-1) var(--space-2);
-  border-top: 1px solid var(--border);
-  background: var(--bg-sidebar);
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.noto-plugin-sidebar-area .noto-plugin-sidebar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 /* ------------------------------------------------------------- status bar */
 
 .app-footer {
@@ -467,11 +359,14 @@
   flex: none;
 }
 
-/* The counters of the header of a section. */
-.sidebar-section-counts {
-  display: inline-flex;
+/* The actions of the header of the explorer: they sit at the right of the
+   title, so the title keeps the place of the section. */
+.sidebar-section-actions {
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
 }
 
 /* ---------------------------------------------------------------- drawer */
@@ -482,19 +377,7 @@
 
 /* ------------------------------------------------------------ responsive */
 
-/* The header gives up its parts one by one when the screen gets narrow: the
-   brand and the actions stay, because they are the only way back. */
-@media (max-width: 1280px) {
-  .app-title {
-    max-width: 140px;
-  }
-}
-
 @media (max-width: 1400px) {
-  .app .noto-plugin-panels {
-    width: min(260px, 22vw);
-  }
-
   /* The right column gives up its width before the editor does. */
   .panel-wrap {
     width: min(var(--panel-width), 240px);
@@ -511,19 +394,9 @@
   .app .icon-button.menu-button {
     display: inline-flex;
   }
-
-  /* The state of the vault is in the status bar as well. */
-  .app .app-brand-meta {
-    display: none;
-  }
 }
 
 @media (max-width: 480px) {
-  .app-title {
-    max-width: 72px;
-    padding-left: var(--space-1);
-  }
-
   .drawer-backdrop {
     display: block;
     position: fixed;
@@ -582,10 +455,9 @@
     flex-direction: column;
   }
 
-  /* The panel of the plugins takes the whole width on a narrow screen: a
-     third of the screen would leave it unreadable. */
+  /* The panels of the plugins live in the right column, so they follow its
+     width: they only give up their height. */
   .noto-plugin-panels {
-    width: 100%;
     max-height: 45dvh;
     border-left: 0;
     border-top: 1px solid var(--border);

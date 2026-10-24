@@ -21,8 +21,14 @@ import type { Node, NoteContent, SaveNoteResponse, SearchHit } from '../types';
  */
 export { PluginPermissionError } from '../core/api/pluginApi';
 
-/** Version of the plugin API implemented by this build. */
-export const PLUGIN_API_VERSION = '1.0.0';
+/**
+ * Version of the plugin API implemented by this build.
+ *
+ * `1.1.0` added the optional `ctx.vault` state (see {@link PluginVaultState}).
+ * The bump is additive: a plugin that requires `1.0.0` keeps working
+ * unchanged, because the new member is optional.
+ */
+export const PLUGIN_API_VERSION = '1.1.0';
 
 /** Capabilities a plugin may request in its manifest. */
 export type PluginPermission =
@@ -213,6 +219,29 @@ export interface PluginSettings {
 }
 
 /**
+ * The state of the storage of the notes, as a plugin may see it.
+ *
+ * The state carries STATUS ONLY: the mode of the storage, whether it is
+ * encrypted, whether it is locked and the version of the encrypted format.
+ * It never carries key material — not the master password, not the wrapping
+ * key, not the data key — so a plugin can tell the user that the notes are
+ * encrypted without ever being able to reach a key.
+ *
+ * The application decides when the state is published; a plugin that receives
+ * no state simply sees `ctx.vault === undefined` (the state is unknown).
+ */
+export interface PluginVaultState {
+  /** 'open' — the notes are stored as plain markdown; 'sealed' — the storage is encrypted. */
+  readonly mode: 'open' | 'sealed';
+  /** True when the storage is encrypted. */
+  readonly encrypted: boolean;
+  /** True when the storage is locked and the plugin cannot read anything. */
+  readonly locked: boolean;
+  /** The version of the format of the encrypted storage; 0 when the storage is not encrypted. */
+  readonly formatVersion: number;
+}
+
+/**
  * Everything a plugin is allowed to touch.
  *
  * The context is the security boundary of the platform: it carries no
@@ -253,6 +282,20 @@ export interface PluginContext {
    */
   readonly editor: PluginEditor | null;
   readonly settings: PluginSettings;
+  /**
+   * The state of the encrypted storage, when the application published it.
+   *
+   * The member is absent while the application publishes nothing, so a
+   * plugin can always write `ctx.vault?.encrypted`. The value is a frozen
+   * copy: a plugin can read the state but never change it.
+   *
+   * The state is status information only — it never exposes the master
+   * password, the wrapping key or the data key (see {@link PluginVaultState}).
+   *
+   * The member is optional so that contexts built by hand (in the tests of
+   * the components) stay valid.
+   */
+  readonly vault?: PluginVaultState;
   registerCommand(cmd: PluginCommand): () => void;
   registerPanel(p: PluginPanel): () => void;
   registerSidebarItem(i: PluginSidebarItem): () => void;

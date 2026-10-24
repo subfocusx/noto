@@ -21,6 +21,13 @@ export interface VaultInfo {
    * container); the picker then only shows the storage, it never changes it.
    */
   fixed: boolean;
+  /**
+   * The mode of the storage: `open` (plain markdown) or `sealed` (encrypted).
+   *
+   * The field appeared with the encrypted storage; an older server does not
+   * send it, and an open storage is the safe default.
+   */
+  mode?: 'open' | 'sealed';
 }
 
 /** One directory of the disk. */

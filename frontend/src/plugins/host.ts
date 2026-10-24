@@ -41,9 +41,11 @@ import type { SettingsStore } from '../core/settings/settingsStore';
 import { createLogger } from '../core/diagnostics/logger';
 import {
   PluginPermissionError,
+  freezeVaultState,
   requirePermission,
   restrictPluginApi,
   type PluginPermissionName,
+  type PluginVaultStateLike,
 } from '../core/api/pluginApi';
 
 /** Dependencies of the {@link PluginHost}. */
@@ -63,6 +65,16 @@ export interface PluginHostDeps {
    * change of the note.
    */
   subscribeEditor?: (cb: (editor: PluginEditor | null) => void) => () => void;
+  /**
+   * Optional source of the state of the encrypted storage.
+   *
+   * The application may publish the state through this function; the host
+   * hands a frozen copy to the plugins. When the function is missing (or
+   * returns nothing), the plugins see no state at all.
+   *
+   * The state carries status information only — never key material.
+   */
+  getVaultState?: () => PluginVaultStateLike | undefined;
   logger?: PluginLogger;
 }
 
@@ -152,6 +164,12 @@ export class PluginHost {
   private editorKnown = false;
   /** Cancels the subscription to the editor source. */
   private editorUnsubscribe: (() => void) | null = null;
+  /**
+   * The state of the encrypted storage published by the application.
+   *
+   * `undefined` means "unknown": the plugins see no state at all.
+   */
+  private publishedVault: PluginVaultStateLike | undefined;
 
   constructor(deps: PluginHostDeps) {
     this.deps = deps;
@@ -163,6 +181,35 @@ export class PluginHost {
         this.notifyEditorChange(editor);
       });
     }
+  }
+
+  /**
+   * Publishes the state of the encrypted storage to the plugins.
+   *
+   * The application calls this when the storage is sealed, unlocked or
+   * locked; the host keeps a frozen copy and hands it to every plugin as
+   * `ctx.vault`. Passing `undefined` withdraws the state again.
+   *
+   * Only status information is published — the master password, the wrapping
+   * key and the data key never leave the core.
+   */
+  publishVaultState(state: PluginVaultStateLike | undefined): void {
+    this.publishedVault = state ? freezeVaultState(state) : undefined;
+  }
+
+  /**
+   * The current state of the encrypted storage, as the plugins see it.
+   *
+   * The source is the application: the optional `getVaultState` dependency
+   * first, then the state published with {@link PluginHost.publishVaultState}.
+   * When nothing is published, the state is `undefined` (unknown).
+   *
+   * The returned value is always a frozen copy, so a plugin can never change
+   * what the application published.
+   */
+  currentVaultState(): PluginVaultStateLike | undefined {
+    const state = this.deps.getVaultState?.() ?? this.publishedVault;
+    return state ? freezeVaultState(state) : undefined;
   }
 
   /**
@@ -583,6 +630,14 @@ export class PluginHost {
         return restrictedEditor(host.currentEditor());
       },
       settings,
+      // The state of the encrypted storage is live: it is read from the
+      // application on every access, so a plugin always sees the current
+      // state. A frozen copy, so the plugin can never change it.
+      get vault(): PluginVaultStateLike | undefined {
+        // The API may already carry the published state (the application
+        // creates it with `createPluginApi({ ... }, { vaultState })`).
+        return host.currentVaultState() ?? api.vault;
+      },
       registerCommand: (cmd: PluginCommand): (() => void) => {
         requirePermission(id, permissions, 'ui.contribute');
         const unregister = this.deps.commands.register(id, cmd);

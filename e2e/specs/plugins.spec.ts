@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test';
 import {
+  activeTabName,
   createFolder,
   createNote,
   editorText,
@@ -167,7 +168,7 @@ test.describe('plugin platform', () => {
     await expect(page.getByTestId('empty-state')).toBeVisible();
     await expandFolder(page, folder);
     await treeFile(page, note).click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
     await expect(page.locator('.cm-content')).toContainText('# Новая заметка');
     await expect(page.getByTestId('save-status')).toHaveText('Saved');
 
@@ -219,7 +220,7 @@ test.describe('plugin platform', () => {
     const hit = page.getByTestId('search-results').locator('button.search-result').filter({ hasText: note });
     await expect(hit).toBeVisible({ timeout: 15_000 });
     await hit.click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
     await expect(page.locator('.cm-content')).toContainText(marker);
 
     // A reload does not lose the content.

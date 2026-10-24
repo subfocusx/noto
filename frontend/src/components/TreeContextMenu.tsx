@@ -6,7 +6,9 @@
 // sidebar when a row asks for it, and it closes as soon as the user leaves it.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import type { PluginContextMenuItem } from '../plugins/contract';
 import { Icon } from '../ui/icons';
+import { PluginContextMenuSlot } from './PluginSlots';
 
 /** The position of the context menu, in viewport coordinates. */
 export interface TreeContextMenuPayload {
@@ -39,6 +41,14 @@ export interface TreeContextMenuProps {
   onCreateFolder(): void;
   /** Called when the user asks to duplicate the node (notes only). */
   onDuplicate?(): void;
+  /**
+   * The entries the plugins added for the node.
+   *
+   * The entries of a plugin belong to the menu of the node they apply to, not
+   * to the footer of the column: the menu is where the user looks for the
+   * actions of a note.
+   */
+  pluginItems?: PluginContextMenuItem[];
 }
 
 /** The distance kept between the menu and the edge of the viewport. */
@@ -159,6 +169,9 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
         <MenuEntry label="Duplicate" onSelect={() => run(props.onDuplicate as () => void)}>
           <Icon name="copy" size={16} />
         </MenuEntry>
+      ) : null}
+      {props.pluginItems && props.pluginItems.length > 0 ? (
+        <PluginContextMenuSlot items={props.pluginItems} path={props.path} />
       ) : null}
       <div class="context-menu-separator" />
       <MenuEntry label="Delete" danger onSelect={() => run(props.onDelete)}>

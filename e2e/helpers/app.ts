@@ -48,7 +48,6 @@ export async function hoverRow(page: Page, row: Locator): Promise<void> {
 /** Opens the application and waits for the tree to be rendered. */
 export async function gotoApp(page: Page): Promise<void> {
   await page.goto('/');
-  await expect(page.locator('.app-title')).toBeVisible();
   await expect(page.getByTestId('file-tree')).toBeVisible();
   await expect(page.getByTestId('empty-state')).toBeVisible();
 }
@@ -87,6 +86,11 @@ export async function createFolder(page: Page, name: string): Promise<void> {
   await expect(treeFolder(page, name)).toBeVisible();
 }
 
+/** The name of the note in the active tab of the editor. */
+export function activeTabName(page: Page): Locator {
+  return page.locator('[data-testid="editor-tab"].active .tab-name');
+}
+
 /** Creates a note inside `folder` and waits until it is opened in the editor. */
 export async function createNote(page: Page, folder: string, name: string): Promise<void> {
   await hoverRow(page, folderRow(page, folder));
@@ -95,7 +99,7 @@ export async function createNote(page: Page, folder: string, name: string): Prom
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Name', { exact: true }).fill(name);
   await dialog.getByRole('button', { name: 'OK', exact: true }).click();
-  await expect(page.locator('.app-title')).toHaveText(name);
+  await expect(activeTabName(page)).toHaveText(name);
 }
 
 /** Clicks the "Rename" action of a tree row. */

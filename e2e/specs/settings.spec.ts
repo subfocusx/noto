@@ -14,7 +14,7 @@ test.describe('the settings', () => {
     expect(['light', 'dark']).toContain(theme);
 
     await page.reload();
-    await expect(page.locator('.app-title')).toBeVisible();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
     const afterReload = await page.evaluate(() => document.documentElement.dataset.theme);
     expect(afterReload).toBe(theme);
   });
@@ -35,7 +35,7 @@ test.describe('the settings', () => {
 
     // The choice survives a reload.
     await page.reload();
-    await expect(page.locator('.app-title')).toBeVisible();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
     await expect
       .poll(async () => page.evaluate(() => document.documentElement.dataset.theme))
       .toBe('light');
@@ -70,7 +70,7 @@ test.describe('the settings', () => {
         .toBeLessThan(5);
 
       await page.reload();
-      await expect(page.locator('.app-title')).toBeVisible();
+      await expect(page.getByTestId('file-tree')).toBeVisible();
       await expect
         .poll(async () => (await page.locator('.sidebar-wrap').boundingBox())?.width ?? 1)
         .toBeLessThan(5);

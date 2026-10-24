@@ -30,12 +30,60 @@ import { getNote as apiGetNote, saveNote as apiSaveNote } from '../../api/notes'
 import { getTree as apiGetTree } from '../../api/tree';
 import { search as apiSearch } from '../../api/search';
 
+/**
+ * The state of the encrypted storage, as a plugin may see it.
+ *
+ * This is the structural mirror of `PluginVaultState` of the plugin contract:
+ * the contract cannot be imported here (rule R1), so the two shapes have to
+ * be kept in sync. They are plain objects with the same fields, so they are
+ * assignable to each other.
+ *
+ * The state is STATUS ONLY. It never carries key material (the master
+ * password, the wrapping key, the data key): the plugin platform publishes
+ * this copy precisely so that a plugin can report the state of the storage
+ * without being able to reach a key.
+ */
+export interface PluginVaultStateLike {
+  /** 'open' — the notes are stored as plain markdown; 'sealed' — the storage is encrypted. */
+  readonly mode: 'open' | 'sealed';
+  /** True when the storage is encrypted. */
+  readonly encrypted: boolean;
+  /** True when the storage is locked and the plugin cannot read anything. */
+  readonly locked: boolean;
+  /** The version of the format of the encrypted storage; 0 when the storage is not encrypted. */
+  readonly formatVersion: number;
+}
+
+/**
+ * Makes an immutable copy of a published vault state.
+ *
+ * The copy is frozen, so a plugin cannot change what the application
+ * published, and it does not keep a reference to the object of the
+ * application: the plugin can never mutate the state of the storage.
+ */
+export function freezeVaultState(state: PluginVaultStateLike): PluginVaultStateLike {
+  return Object.freeze({
+    mode: state.mode,
+    encrypted: state.encrypted,
+    locked: state.locked,
+    formatVersion: state.formatVersion,
+  });
+}
+
 /** Structural shape of the plugin API (compatible with `PluginApi`). */
 export interface PluginApiLike {
   getNote(path: string): Promise<NoteContent>;
   getTree(): Promise<TreeResponse>;
   search(query: string, limit?: number): Promise<SearchHit[]>;
   saveNote(path: string, content: string, revision: number): Promise<SaveNoteResponse>;
+  /**
+   * The state of the encrypted storage, when the application published it.
+   *
+   * Absent while nothing was published: a plugin can then not know anything
+   * about the storage. The value is a frozen copy (see
+   * {@link freezeVaultState}) and never contains key material.
+   */
+  readonly vault?: PluginVaultStateLike;
 }
 
 /**
@@ -101,13 +149,18 @@ export function requirePermission(
   throw new PluginPermissionError(pluginId, permission);
 }
 
-/** The permission every operation of the data API requires. */
+/**
+ * The permission every operation of the data API requires.
+ *
+ * `vault` is not an operation: it is a published state that needs no
+ * permission (a plugin may always learn whether the storage is encrypted).
+ */
 export const PLUGIN_API_PERMISSIONS = {
   getNote: 'notes.read',
   saveNote: 'notes.write',
   getTree: 'tree.read',
   search: 'search.read',
-} as const satisfies Record<keyof PluginApiLike, PluginPermissionName>;
+} as const satisfies Record<Exclude<keyof PluginApiLike, 'vault'>, PluginPermissionName>;
 
 /** The restrictions applied to an API instance. */
 export interface PluginApiRestrictions {
@@ -132,7 +185,7 @@ export function restrictPluginApi(
   pluginId: string,
   permissions: readonly string[],
 ): PluginApiLike {
-  return {
+  const restricted: PluginApiLike = {
     async getNote(path: string): Promise<NoteContent> {
       requirePermission(pluginId, permissions, PLUGIN_API_PERMISSIONS.getNote);
       return api.getNote(path);
@@ -154,6 +207,31 @@ export function restrictPluginApi(
       return api.saveNote(path, content, revision);
     },
   };
+  // The state of the storage travels with the API: it is published by the
+  // application, and the plugin only ever gets a frozen copy of it.
+  //
+  // The member is NOT enumerable: the shape of the API object stays exactly
+  // as it was in API 1.0.0, so an existing plugin that inspects the keys of
+  // `ctx.api` keeps working unchanged.
+  Object.defineProperty(restricted, 'vault', {
+    enumerable: false,
+    get: (): PluginVaultStateLike | undefined =>
+      api.vault ? freezeVaultState(api.vault) : undefined,
+  });
+  return restricted;
+}
+
+/**
+ * The options of {@link createPluginApi}.
+ *
+ * `pluginId` and `permissions` turn the API into a restricted one; the
+ * `vaultState` is the state of the encrypted storage that the application
+ * publishes. It is optional: while nothing is published, the API carries no
+ * state at all and a plugin knows nothing about the storage.
+ */
+export interface PluginApiOptions extends Partial<PluginApiRestrictions> {
+  /** The state of the encrypted storage to publish to the plugins. */
+  vaultState?: PluginVaultStateLike;
 }
 
 /**
@@ -162,7 +240,8 @@ export function restrictPluginApi(
  * @param deps optional overrides, used by tests and by hosts that want to
  * intercept the calls.
  * @param options when `pluginId` and `permissions` are given, the returned
- * API is restricted to those permissions; otherwise it is unrestricted.
+ * API is restricted to those permissions; otherwise it is unrestricted. The
+ * optional `vaultState` publishes the state of the encrypted storage.
  */
 export function createPluginApi(
   deps: {
@@ -171,7 +250,7 @@ export function createPluginApi(
     getTree?: () => Promise<TreeResponse>;
     search?: (query: string, limit?: number) => Promise<SearchHit[]>;
   } = {},
-  options: Partial<PluginApiRestrictions> = {},
+  options: PluginApiOptions = {},
 ): PluginApiLike {
   const getNote = deps.getNote ?? apiGetNote;
   const saveNote = deps.saveNote ?? apiSaveNote;
@@ -197,6 +276,16 @@ export function createPluginApi(
       return saveNote(path, content, revision);
     },
   };
+  // The published state of the storage, as a frozen copy. The plugin can read
+  // it, never change it.
+  //
+  // The member is NOT enumerable: the shape of the API object stays exactly
+  // as it was in API 1.0.0.
+  Object.defineProperty(api, 'vault', {
+    enumerable: false,
+    get: (): PluginVaultStateLike | undefined =>
+      options.vaultState ? freezeVaultState(options.vaultState) : undefined,
+  });
 
   if (options.permissions === undefined) return api;
   if (options.pluginId === undefined) {

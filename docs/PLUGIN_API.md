@@ -1,4 +1,4 @@
-# Noto — Plugin API (v1.0.0)
+# Noto — Plugin API (v1.1.0)
 
 Справочник публичного контракта плагинов. Источник истины — код:
 
@@ -17,8 +17,12 @@
 
 ```ts
 // frontend/src/plugins/contract.ts
-export const PLUGIN_API_VERSION = '1.0.0';
+export const PLUGIN_API_VERSION = '1.1.0';
 ```
+
+Версия `1.1.0` добавила **одно** необязательное поле — состояние
+запечатанного хранилища `ctx.vault` (§4.1). Изменение аддитивное: плагин,
+объявивший `minApiVersion: '1.0.0'`, продолжает работать без единой правки.
 
 Плагин объявляет в манифесте минимальную версию API, с которой он совместим:
 
@@ -179,6 +183,7 @@ stopped by a permission error»).
 | `logger` | `readonly PluginLogger` | Логгер с префиксом `[noto:<id>]` (`core/diagnostics/logger.ts`). |
 | `permissions` | `readonly PluginPermission[]` | Заявленные права (см. оговорку выше). |
 | `api` | `readonly PluginApi` | Доступ к данным (см. §5). |
+| `vault` | `readonly PluginVaultState \| undefined` | Состояние запечатанного хранилища (см. §4.1). Необязательное поле, добавленное в API 1.1.0. |
 | `editor` | `readonly PluginEditor \| null` | Ручка редактора (с проверкой прав) или `null`, если заметка не открыта. Это **геттер**: значение вычисляется при каждом обращении, поэтому плагин, активированный до открытия заметки, получит редактор позже. |
 | `settings` | `readonly PluginSettings` | Собственные настройки плагина (см. §8). |
 | `registerCommand(cmd)` | `() => void` | Регистрирует команду палитры. Требует `ui.contribute`. |
@@ -211,6 +216,79 @@ off(); // команда снята
 
 `onDeactivate(cb)` — единственный метод, возвращающий `void`: он не
 отменяется, а добавляет колбэк в очередь деактивации.
+
+### 4.1. Состояние хранилища (`ctx.vault`, API 1.1.0)
+
+`ctx.vault` — необязательный член контекста. Он появляется в версии `1.1.0` и
+сообщает плагину **состояние** хранилища, ничего больше:
+
+```ts
+// frontend/src/plugins/contract.ts
+export interface PluginVaultState {
+  readonly mode: 'open' | 'sealed';
+  readonly encrypted: boolean;
+  readonly locked: boolean;
+  readonly formatVersion: number;
+}
+```
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `mode` | `'open' \| 'sealed'` | `sealed` — содержимое шифруется браузером; `open` — обычный Markdown на диске |
+| `encrypted` | `boolean` | То же самое, что `mode === 'sealed'`, но в виде булева флага — так его удобнее проверять |
+| `locked` | `boolean` | Хранилище заблокировано: плагин не может прочитать ничего |
+| `formatVersion` | `number` | Версия формата запечатанного хранилища; `0`, когда хранилище не зашифровано |
+
+Правила:
+
+* Поле **необязательное**. Пока приложение ничего не опубликовало, плагин
+  видит `ctx.vault === undefined` — то есть «состояние неизвестно», а не
+  «хранилище открыто». Поэтому код плагина обязан писать `ctx.vault?.encrypted`,
+  а не `ctx.vault.encrypted`.
+* Значение — **замороженная копия** (`Object.freeze` в
+  `frontend/src/core/api/pluginApi.ts`). Плагин может прочитать состояние, но
+  не может его изменить и не может изменить состояние приложения.
+* Поле **не перечисляемое** (`enumerable: false`): набор ключей `ctx.api`
+  остаётся ровно тем же, что в API 1.0.0, поэтому плагин, который
+  перечисляет ключи, не ломается.
+* Публикация состояния **не требует права**: это не операция над данными, а
+  факт о хранилище. Права нужны только для чтения и записи заметок.
+* Состояние публикует приложение (`frontend/src/App.tsx`, `getVaultState`),
+  а фасад API — `createPluginApi({ vaultState })`.
+* То же состояние доступно и как `ctx.api.vault`
+  (`frontend/src/core/api/pluginApi.ts`): там оно тоже замороженная копия и тоже
+  не перечисляемое. Два имени — одно значение, чтобы плагин мог читать его
+  там, где у него уже есть `ctx.api`.
+
+**Плагин никогда не видит материал ключей.** В состоянии нет и не может быть
+мастер-пароля, KEK или DEK. Проверка границ (`frontend/scripts/check-boundaries.mjs`,
+правила **R11** и **R12**) запрещает плагину импортировать крипто-ядро, так
+что это не обещание, а запрет компилятора. Подробнее —
+[PLUGIN_SECURITY.md](PLUGIN_SECURITY.md).
+
+Пример:
+
+```ts
+export function activate(ctx: PluginContext): void {
+  ctx.registerCommand({
+    id: 'my-plugin.state',
+    title: 'Show the state of the storage',
+    run: () => {
+      const vault = ctx.vault;
+      if (!vault) {
+        ctx.logger.info('the state of the storage is unknown');
+        return;
+      }
+      ctx.logger.info(
+        vault.encrypted
+          ? `the storage is encrypted (format ${vault.formatVersion})` +
+            (vault.locked ? ' and locked' : '')
+          : 'the storage is plain',
+      );
+    },
+  });
+}
+```
 
 ---
 
@@ -788,6 +866,7 @@ const all = await ctx.settings.all();
 | Подписываться на события `note.*`, `folder.*`, `editor.*`, `workspace.opened` | Получить содержимое заметки из payload события — там только пути и метаданные |
 | Выполнить операцию, на которую объявил право | Выполнить операцию без нужного права: будет `PluginPermissionError` (кроме сетевых вызовов мимо API — их enforcement не покрывает) |
 | Импортировать `src/plugins/contract.ts` и свои собственные файлы | Импортировать `src/api/client.ts`, `src/core/**` или модули другого плагина (правила R3, R8 проверяются скриптом) |
+| Узнать состояние хранилища через `ctx.vault` / `ctx.api.vault` (API 1.1.0) | Получить мастер-пароль, KEK или DEK: в состоянии их нет, а импорт крипто-ядра запрещён правилами R11 и R12 |
 | Выполняться как встроенный код приложения | Загружать удалённый JS: `import()`, `import.meta.glob`, `eval` и `new Function` в плагинах не используются и не поддерживаются |
 
 ---

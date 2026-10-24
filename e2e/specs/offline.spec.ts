@@ -17,7 +17,7 @@ test.describe('offline behaviour', () => {
     // Reload once while online so that every asset is routed through the service
     // worker and ends up in the asset cache.
     await page.reload();
-    await expect(page.locator('.app-title')).toBeVisible();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
     await expect(page.getByTestId('empty-state')).toBeVisible();
 
     /* -------------------------------------------------------------- offline */
@@ -29,7 +29,7 @@ test.describe('offline behaviour', () => {
 
     // The app shell is still served from the service worker cache.
     await page.reload();
-    await expect(page.locator('.app-title')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('file-tree')).toBeVisible();
     await expect(page.getByTestId('empty-state')).toBeVisible();
     await expect(page.getByTestId('offline-banner')).toBeVisible();
@@ -55,7 +55,7 @@ test.describe('private API responses are never cached', () => {
     // Reload so that the very first request of the page is routed through the
     // service worker as well.
     await page.reload();
-    await expect(page.locator('.app-title')).toBeVisible();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
 
     /* --------------------------------------------------- an online mutation */
     const folder = 'E2E Offline Folder';

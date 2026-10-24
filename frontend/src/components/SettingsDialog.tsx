@@ -5,6 +5,7 @@
 // shows a path or a note: it only shows the settings of the interface and of
 // the editor.
 import { Dialog } from './Dialog';
+import { VaultSecuritySection } from './VaultSecuritySection';
 
 export interface SettingsDialogProps {
   /** True when the dialog is shown. */
@@ -256,6 +257,8 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
           </button>
         </div>
       </section>
+
+      <VaultSecuritySection />
 
       <section class="settings-group">
         <h3>About</h3>

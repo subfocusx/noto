@@ -12,7 +12,9 @@
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-1);
 }
 
@@ -103,23 +105,36 @@
   background: var(--bg-surface);
 }
 
+/* The contributions of the plugins live in the footer of the left column:
+   they are a row of icons, and they must never push the tree out of the
+   column. This rule is the only one of the area: it used to be defined twice,
+   and the last definition won. */
 .noto-plugin-sidebar-area {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-top: 1px solid var(--divider);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  flex: none;
+  max-height: 96px;
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow: auto;
 }
 
-/* The panel of the plugins is the third column of the workspace. */
+/* The panels of the plugins live at the bottom of the right column, under the
+   outline of the note. */
 .noto-plugin-panels {
   display: flex;
   flex-direction: column;
   flex: none;
-  width: min(320px, 34vw);
+  width: auto;
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--border);
+  max-height: 45%;
+  border-left: 0;
+  border-top: 1px solid var(--border);
   background: var(--bg-surface);
   overflow: hidden;
 }

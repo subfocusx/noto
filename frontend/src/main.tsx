@@ -7,6 +7,7 @@ import './styles/layout.css';
 import './styles/components.css';
 import './styles/markdown.css';
 import './styles/plugin.css';
+import './styles/vault.css';
 
 const root = document.getElementById('app');
 if (root) render(<App />, root);

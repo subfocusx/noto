@@ -49,6 +49,15 @@ export interface Prefs {
   recentCollapsed: boolean;
   /** True when the tree shows the number of the notes of a folder. */
   treeShowCounts: boolean;
+  /**
+   * The number of minutes of inactivity after which the encrypted storage
+   * locks itself.
+   *
+   * The field is optional on purpose: the store of the application writes the
+   * whole set of the preferences, but it does not know about the vault, so the
+   * value must survive a write that does not carry it.
+   */
+  autoLockMinutes?: number;
 }
 
 /** The smallest font size of the editor. */
@@ -81,6 +90,15 @@ export const RIGHT_PANEL_WIDTH_DEFAULT = 280;
 /** The number of the notes in the list of the recent notes. */
 export const RECENT_LIMIT = 20;
 
+/** The default number of minutes of inactivity before the vault locks itself. */
+export const AUTO_LOCK_MINUTES_DEFAULT = 15;
+
+/** The smallest number of minutes of inactivity before the vault locks itself. */
+export const AUTO_LOCK_MINUTES_MIN = 1;
+
+/** The biggest number of minutes of inactivity before the vault locks itself. */
+export const AUTO_LOCK_MINUTES_MAX = 120;
+
 /** The defaults of the preferences. */
 export const DEFAULT_PREFS: Prefs = {
   theme: 'dark',
@@ -97,6 +115,7 @@ export const DEFAULT_PREFS: Prefs = {
   rightPanelWidth: RIGHT_PANEL_WIDTH_DEFAULT,
   recentCollapsed: false,
   treeShowCounts: true,
+  autoLockMinutes: AUTO_LOCK_MINUTES_DEFAULT,
 };
 
 function clampWidth(value: number): number {
@@ -113,6 +132,12 @@ export function clampRightPanelWidth(value: number): number {
 function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string');
+}
+
+/** Clamps the number of minutes of inactivity into its limits. */
+export function clampAutoLockMinutes(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return AUTO_LOCK_MINUTES_DEFAULT;
+  return Math.min(AUTO_LOCK_MINUTES_MAX, Math.max(AUTO_LOCK_MINUTES_MIN, Math.round(value)));
 }
 
 /** Reads the theme of the old storage format. */
@@ -171,6 +196,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
         : RIGHT_PANEL_WIDTH_DEFAULT,
     recentCollapsed: source.recentCollapsed === true,
     treeShowCounts: source.treeShowCounts !== false,
+    autoLockMinutes: clampAutoLockMinutes(source.autoLockMinutes),
   };
 }
 
@@ -191,11 +217,18 @@ export function loadPrefs(): Prefs {
   }
 }
 
-/** Writes the preferences into the storage. */
+/**
+ * Writes the preferences into the storage.
+ *
+ * The set that is written is merged with the set that is already stored: a
+ * caller that does not know a field (the store of the application does not know
+ * the preferences of the vault) must not erase it.
+ */
 export function savePrefs(prefs: Prefs): void {
   try {
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(PREFS_KEY, JSON.stringify(normalizePrefs(prefs)));
+    const merged = { ...loadPrefs(), ...prefs };
+    localStorage.setItem(PREFS_KEY, JSON.stringify(normalizePrefs(merged)));
   } catch {
     /* the storage is not available or full */
   }

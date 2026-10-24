@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  activeTabName,
   createFolder,
   createNote,
   editorText,
@@ -49,7 +50,7 @@ test.describe('editor', () => {
     // Re-open the note: the saved content is restored from the server.
     await expandFolder(page, folder);
     await treeFile(page, note).click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
     await expect(page.locator('.cm-content')).toContainText('E2E Заголовок');
     expect(await editorText(page)).toContain('Это тестовая заметка с кириллицей');
     expect(await editorText(page)).toContain('narwhal');
@@ -96,7 +97,7 @@ test.describe('editor', () => {
     await expect(page.getByTestId('empty-state')).toBeVisible();
     await expandFolder(page, folder);
     await treeFile(page, note).click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
 
     // Give the (spurious) autosave time to fire.
     await page.waitForTimeout(2000);

@@ -1,22 +1,10 @@
 // The actions of the application store.
 //
 // Every user intent of the app ends up here: the actions mutate the state
-// (see `./state.ts`) and talk to the API (see `../../api/client.ts`).
-import {
-  ApiError,
-  createFile,
-  createFolder,
-  deleteNote,
-  duplicateNote as duplicateNoteApi,
-  getNote,
-  getTree,
-  getVault,
-  moveNote,
-  renameNote,
-  restoreNote,
-  saveNote,
-  setVault,
-} from '../../api/client';
+// (see `./state.ts`) and talk to the storage of the notes. The storage is
+// reached through the service of the current mode (see `../vault/vaultService.ts`):
+// the store does not know whether the notes are plain files or encrypted.
+import { ApiError, getVault, setVault } from '../../api/client';
 import { createAutosave, type AutosaveController, type AutosaveStatus } from '../../lib/autosave';
 import { deleteDraft, getDraft, isDraftNewer, putDraft, type Draft } from '../../lib/drafts';
 import { errorMessage } from '../../lib/errors';
@@ -31,6 +19,47 @@ import {
 } from '../settings/prefs';
 import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
 import type { ContextMenuState, DialogState, ViewMode } from './types';
+import type { ConnectionState } from '../connection/types';
+import { connectionMonitor } from '../connection/monitor';
+import { getVaultService } from '../vault/vaultService';
+import { getSealedVault } from '../vault/session';
+import {
+  deleteSealedDraft,
+  getSealedDraft,
+  putSealedDraft,
+} from '../vault/sealedDrafts';
+
+/**
+ * Writes a local draft.
+ *
+ * The draft of an encrypted storage is sealed: the database of the browser
+ * must not hold the text of a note in the clear.
+ */
+async function storeDraft(draft: Draft): Promise<void> {
+  const vault = getVaultService().mode === 'sealed' ? getSealedVault() : null;
+  if (vault) {
+    await putSealedDraft(vault, draft);
+    return;
+  }
+  await putDraft(draft);
+}
+
+/** Reads a local draft. */
+async function readDraft(path: string): Promise<Draft | undefined> {
+  const vault = getVaultService().mode === 'sealed' ? getSealedVault() : null;
+  if (vault) return getSealedDraft(vault, path);
+  return getDraft(path);
+}
+
+/** Removes a local draft. */
+async function dropDraft(path: string): Promise<void> {
+  const vault = getVaultService().mode === 'sealed' ? getSealedVault() : null;
+  if (vault) {
+    await deleteSealedDraft(path);
+    return;
+  }
+  await deleteDraft(path);
+}
 
 const AUTOSAVE_DELAY = 800;
 
@@ -70,14 +99,14 @@ function applyStatus(next: AutosaveStatus, error?: string): void {
 
 async function saveNow(path: string, text: string, rev: number): Promise<void | number> {
   try {
-    const res = await saveNote(path, text, rev);
+    const res = await getVaultService().saveNote(path, text, rev);
     // Guard: never apply the response of an old note to the current one.
     if (refs.currentPath !== path) return;
     refs.revision = res.revision;
     patchNote({ revision: res.revision });
     // Only drop the local draft when it still matches what was saved.
     if (refs.content === text) {
-      await deleteDraft(path).catch(() => undefined);
+      await dropDraft(path).catch(() => undefined);
     }
     // The new revision is handed back so the next save uses it.
     return res.revision;
@@ -86,7 +115,7 @@ async function saveNow(path: string, text: string, rev: number): Promise<void | 
     const message = err instanceof ApiError ? err.message : errorMessage(err);
     patchNote({ saveError: message });
     // Keep the draft locally so that nothing is lost.
-    await putDraft({ path, content: text, revision: rev, updatedAt: Date.now() }).catch(() => undefined);
+    await storeDraft({ path, content: text, revision: rev, updatedAt: Date.now() }).catch(() => undefined);
     throw err;
   }
 }
@@ -112,7 +141,7 @@ export function resetAutosave(): void {
 export async function refreshTree(): Promise<void> {
   update((prev) => ({ ...prev, tree: { ...prev.tree, loading: true } }));
   try {
-    const res = await getTree();
+    const res = await getVaultService().listTree();
     update((prev) => ({
       ...prev,
       tree: {
@@ -124,7 +153,7 @@ export async function refreshTree(): Promise<void> {
       },
     }));
   } catch (err) {
-    showBanner(errorMessage(err));
+    reportError(err);
   } finally {
     update((prev) => ({ ...prev, tree: { ...prev.tree, loading: false } }));
   }
@@ -176,13 +205,24 @@ export async function openNote(path: string): Promise<void> {
     saveError: null,
     dirty: false,
   });
-  update((prev) => ({ ...prev, ui: { ...prev.ui, drawerOpen: false }, draftOffer: null }));
+  update((prev) => ({
+    ...prev,
+    ui: {
+      ...prev.ui,
+      drawerOpen: false,
+      // The note joins the tab strip of the editor, whatever opened it.
+      openPaths: prev.ui.openPaths.includes(path)
+        ? prev.ui.openPaths
+        : [...prev.ui.openPaths, path],
+    },
+    draftOffer: null,
+  }));
 
   try {
-    const note: NoteContent = await getNote(path);
+    const note: NoteContent = await getVaultService().readNote(path);
     if (refs.currentPath !== path) return;
     refs.loadingPath = null;
-    const draft = await getDraft(path).catch(() => undefined);
+    const draft = await readDraft(path).catch(() => undefined);
     refs.revision = note.revision;
     refs.content = note.content;
     patchNote({ revision: note.revision, content: note.content, contentPath: path });
@@ -193,7 +233,7 @@ export async function openNote(path: string): Promise<void> {
       return;
     }
     if (draft && draft.content === note.content) {
-      await deleteDraft(path).catch(() => undefined);
+      await dropDraft(path).catch(() => undefined);
     }
     expandTo(path);
     // The note joins the list of the recently opened notes.
@@ -206,6 +246,19 @@ export async function openNote(path: string): Promise<void> {
     refs.loadingPath = null;
     patchNote({ status: 'error', saveError: errorMessage(err) });
   }
+}
+
+/**
+ * Closes a tab of the editor.
+ *
+ * The note itself is not deleted: the tab is only closed, and the note stays
+ * in the vault.
+ */
+export function closeTab(path: string): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, openPaths: prev.ui.openPaths.filter((item) => item !== path) },
+  }));
 }
 
 export function editContent(text: string): void {
@@ -221,7 +274,7 @@ export function editContent(text: string): void {
     revision: refs.revision,
     updatedAt: Date.now(),
   };
-  void putDraft(draft).catch(() => undefined);
+  void storeDraft(draft).catch(() => undefined);
   autosave.markDirty(path, text, refs.revision);
 }
 
@@ -248,18 +301,18 @@ export function discardDraft(): void {
   const draft = getSnapshot().draftOffer;
   setDraftOffer(null);
   if (!draft) return;
-  void deleteDraft(draft.path).catch(() => undefined);
+  void dropDraft(draft.path).catch(() => undefined);
 }
 
 /* -------------------------------------------------------- tree operations */
 
 async function createFolderNode(parentPath: string, name: string): Promise<void> {
-  await createFolder(parentPath, name);
+  await getVaultService().createFolder(parentPath, name);
   await refreshTree();
 }
 
 async function createFileNode(parentPath: string, name: string): Promise<void> {
-  const node = await createFile(parentPath, name);
+  const node = await getVaultService().createFile(parentPath, name);
   await refreshTree();
   if (node?.path) await openNote(node.path);
 }
@@ -272,16 +325,16 @@ async function createFileNode(parentPath: string, name: string): Promise<void> {
  */
 export async function duplicateNote(path: string): Promise<void> {
   try {
-    const copy = await duplicateNoteApi(path);
+    const copy = await getVaultService().duplicateNote(path);
     await refreshTree();
     if (copy?.path) await openNote(copy.path);
   } catch (err) {
-    showBanner(errorMessage(err));
+    reportError(err);
   }
 }
 
 export async function renameNode(node: Node, newName: string): Promise<void> {
-  const renamed = await renameNote(node.path, newName);
+  const renamed = await getVaultService().renameNote(node.path, newName);
   await refreshTree();
   if (refs.currentPath === node.path && renamed?.path) {
     refs.currentPath = renamed.path;
@@ -291,7 +344,7 @@ export async function renameNode(node: Node, newName: string): Promise<void> {
 }
 
 export async function moveNode(node: Node, newParentPath: string): Promise<void> {
-  const moved = await moveNote(node.path, newParentPath);
+  const moved = await getVaultService().moveNote(node.path, newParentPath);
   await refreshTree();
   if (refs.currentPath === node.path && moved?.path) {
     refs.currentPath = moved.path;
@@ -301,7 +354,7 @@ export async function moveNode(node: Node, newParentPath: string): Promise<void>
 }
 
 export async function deleteNode(node: Node): Promise<void> {
-  await deleteNote(node.path);
+  await getVaultService().deleteNote(node.path);
   await refreshTree();
   if (refs.currentPath === node.path) {
     refs.currentPath = null;
@@ -320,7 +373,7 @@ export async function deleteNode(node: Node): Promise<void> {
 
 /** Restores a note from the trash and returns the restored node. */
 export async function restoreFromTrash(path: string): Promise<Node> {
-  return restoreNote(path);
+  return getVaultService().restoreNote(path);
 }
 
 /* ----------------------------------------------------------- daily note */
@@ -375,7 +428,7 @@ export async function openOrCreateDailyNote(date: Date = new Date()): Promise<vo
       await openNote(existing.path);
       return;
     }
-    showBanner(errorMessage(err));
+    reportError(err);
   }
 }
 
@@ -406,7 +459,7 @@ export async function confirmDialog(): Promise<void> {
     else if (kind === 'move' && node) await moveNode(node, value);
     else if (kind === 'delete' && node) await deleteNode(node);
   } catch (err) {
-    showBanner(errorMessage(err));
+    reportError(err);
   }
 }
 
@@ -557,7 +610,7 @@ export async function loadVault(): Promise<void> {
       },
     }));
   } catch (err) {
-    showBanner(errorMessage(err));
+    reportError(err);
   }
 }
 
@@ -589,7 +642,7 @@ export async function chooseVault(path: string): Promise<void> {
       showBanner('The storage is fixed by the environment (NOTO_VAULT_FIXED).');
       return;
     }
-    showBanner(errorMessage(err));
+    reportError(err);
     throw err;
   }
 }
@@ -617,6 +670,20 @@ export function removeRecent(path: string): void {
 /** Reflects the connectivity of the browser. */
 export function setOnline(online: boolean): void {
   update((prev) => (prev.env.online === online ? prev : { ...prev, env: { ...prev.env, online } }));
+}
+
+/**
+ * Publishes the state of the connection with the backend.
+ *
+ * The state is separate from the connectivity of the browser: a browser can
+ * be online while the backend does not answer.
+ */
+export function setConnection(connection: ConnectionState): void {
+  update((prev) =>
+    prev.env.connection === connection
+      ? prev
+      : { ...prev, env: { ...prev.env, connection } },
+  );
 }
 
 /**
@@ -661,6 +728,22 @@ export function showBanner(message: string): void {
   update((prev) => ({ ...prev, banner: message }));
 }
 
+/**
+ * Reports a failed operation to the user.
+ *
+ * A lost connection is not a failure of the application: the backend simply
+ * does not answer. Such an error changes the state of the connection, which
+ * the indicator shows, and it must not fill the screen with a red banner
+ * every time a background request fails.
+ */
+export function reportError(err: unknown): void {
+  if (err instanceof ApiError && err.code === 'network_error') {
+    connectionMonitor.reportFailure();
+    return;
+  }
+  showBanner(errorMessage(err));
+}
+
 export function dismissBanner(): void {
   update((prev) => ({ ...prev, banner: null }));
 }
@@ -671,6 +754,7 @@ export function dismissBanner(): void {
 export interface AppActions {
   refreshTree(): Promise<void>;
   openNote(path: string): Promise<void>;
+  closeTab(path: string): void;
   editContent(text: string): void;
   explicitSave(): void;
   toggleFolder(path: string): void;
@@ -721,11 +805,13 @@ export interface AppActions {
   removeRecent(path: string): void;
   showBanner(message: string): void;
   dismissBanner(): void;
+  setConnection(connection: ConnectionState): void;
 }
 
 export const actions: AppActions = {
   refreshTree,
   openNote,
+  closeTab,
   editContent,
   explicitSave,
   toggleFolder,
@@ -776,4 +862,5 @@ export const actions: AppActions = {
   removeRecent,
   showBanner,
   dismissBanner,
+  setConnection,
 };

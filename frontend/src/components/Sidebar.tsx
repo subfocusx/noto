@@ -5,11 +5,12 @@
 // footer with the secondary actions.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import type { Node } from '../types';
+import type { ConnectionState, Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import { Icon } from '../ui/icons';
+import { IconButton } from '../ui/tooltip';
 import { ColumnResizer } from './ColumnResizer';
-import { AppHeader } from './AppHeader';
+import { ConnectionIndicator } from './ConnectionIndicator';
 import { RecentNotesPanel } from './RecentNotesPanel';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from './TreeRow';
@@ -27,7 +28,20 @@ export interface SidebarProps {
   onMove(node: Node): void;
   onDelete(node: Node): void;
   onOpenTrash(): void;
-  onOpenSearch(): void;
+  /** Opens the search of the notes. */
+  onOpenSearch?(): void;
+  /** Opens the graph of the vault; the feature is not implemented yet. */
+  onOpenGraph?(): void;
+  /** Opens the archive of the vault; the feature is not implemented yet. */
+  onOpenArchive?(): void;
+  /** Opens the command palette of the application. */
+  onOpenPalette?(): void;
+  /** Opens the manager of the plugins. */
+  onOpenPlugins?(): void;
+  /** The state of the connection with the backend. */
+  connection?: ConnectionState;
+  /** Called when the user asks the application to check the backend again. */
+  onRetryConnection?(): void;
   onOpenTransfer(): void;
   onRefresh(): void;
   loading: boolean;
@@ -81,10 +95,13 @@ export interface SidebarProps {
   onToggleRecent?: () => void;
   /** The contributions of the plugins, shown above the footer. */
   children?: ComponentChildren;
-  /** The name of the open note, shown in the header of the column. */
-  noteTitle?: string;
-  /** False when the application works offline. */
-  online?: boolean;
+  /**
+   * True when at least one plugin contributes to the footer of the column.
+   *
+   * The area of the plugins is only rendered when it holds something: an
+   * empty strip would look like a broken border under the tree.
+   */
+  hasPluginItems?: boolean;
 }
 
 /** The smallest width of the sidebar, in pixels. */
@@ -154,6 +171,17 @@ export function Sidebar(props: SidebarProps) {
     return count;
   }, [props.noteCount, props.filesByParent]);
 
+  /**
+   * True when the graph of the vault can be opened.
+   *
+   * The feature is not implemented yet: the button stays visible, but it is
+   * marked as unavailable, so the user knows that it exists.
+   */
+  const graphReady = props.onOpenGraph !== undefined;
+
+  /** True when the archive of the vault can be opened. */
+  const archiveReady = props.onOpenArchive !== undefined;
+
   // The width of the sidebar is a property of the wrapper: the sidebar only
   // tells it which width it wants.
   useEffect(() => {
@@ -207,12 +235,6 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <nav ref={navRef} class="sidebar" aria-label="Notes">
-      <AppHeader
-        title={props.noteTitle ?? 'Noto'}
-        vaultName={props.vaultName}
-        online={props.online}
-      />
-
       <div class="vault-header">
         <span class="vault-header-icon">
           <Icon name="folder" size={15} />
@@ -302,18 +324,34 @@ export function Sidebar(props: SidebarProps) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">
             <span>Explorer</span>
-            <span class="sidebar-section-counts">
-              {props.folderTotal !== undefined && props.folderTotal > 0 ? (
-                <span class="tree-count" title="Folders">
-                  {props.folderTotal}
-                </span>
-              ) : null}
-              {props.noteTotal !== undefined && props.noteTotal > 0 ? (
-                <span class="tree-count" title="Notes">
-                  {props.noteTotal}
-                </span>
-              ) : null}
-            </span>
+            <div class="sidebar-section-actions" role="group" aria-label="Explorer actions">
+              <IconButton label="Search notes" icon="search" onClick={() => props.onOpenSearch?.()} />
+              <IconButton
+                label="Graph"
+                icon="network"
+                ariaDisabled={!graphReady}
+                title={graphReady ? 'Graph' : 'Not implemented yet'}
+                onClick={() => props.onOpenGraph?.()}
+              />
+              <IconButton
+                label="Archive"
+                icon="archive"
+                ariaDisabled={!archiveReady}
+                title={archiveReady ? 'Archive' : 'Not implemented yet'}
+                onClick={() => props.onOpenArchive?.()}
+              />
+              <IconButton
+                label="Open command palette"
+                icon="command"
+                title="Command palette"
+                onClick={() => props.onOpenPalette?.()}
+              />
+              <IconButton label="Plugins" icon="bookmark" onClick={() => props.onOpenPlugins?.()} />
+              <ConnectionIndicator
+                connection={props.connection ?? 'connecting'}
+                onRetry={props.onRetryConnection}
+              />
+            </div>
           </div>
 
           {drag.path ? (
@@ -415,7 +453,9 @@ export function Sidebar(props: SidebarProps) {
         ) : null}
       </div>
 
-      {props.children ? <div class="noto-plugin-sidebar-area">{props.children}</div> : null}
+      {props.hasPluginItems && props.children ? (
+        <div class="noto-plugin-sidebar-area">{props.children}</div>
+      ) : null}
 
       <div class="sidebar-footer">
         <span class="muted">{noteCount} notes</span>

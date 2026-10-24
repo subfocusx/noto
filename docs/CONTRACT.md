@@ -334,7 +334,7 @@ Policy of the command:
   `Host` must be `localhost`, `127.0.0.1`, `::1`, or an explicitly allowed host.
 * Response headers on every response: `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
-  `Content-Security-Policy: default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'`,
+  `Content-Security-Policy: default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'`,
   `Cross-Origin-Opener-Policy: same-origin`.
 * Body size limits: `http.MaxBytesReader` with `cfg.MaxUploadBytes` for
   uploads and a smaller limit for JSON bodies.

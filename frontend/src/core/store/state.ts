@@ -76,6 +76,7 @@ export function createInitialState(): AppState {
       editorFontSize: prefs.editorFontSize,
       editorWrap: prefs.editorWrap,
       recentPaths: [...prefs.recentPaths],
+      openPaths: [],
       settingsOpen: false,
       shortcutHelpOpen: false,
       contextMenu: null,
@@ -89,7 +90,12 @@ export function createInitialState(): AppState {
       vaultFixed: false,
       vaultBusy: false,
     },
-    env: { online: initialOnline(), theme: initialTheme(), effectiveTheme: resolveTheme(initialTheme()) },
+    env: {
+      online: initialOnline(),
+      connection: 'connecting',
+      theme: initialTheme(),
+      effectiveTheme: resolveTheme(initialTheme()),
+    },
     draftOffer: null,
     banner: null,
   };

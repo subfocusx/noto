@@ -2,27 +2,56 @@ import { expect, test } from '@playwright/test';
 import { gotoApp, openSidebarIfNeeded } from '../helpers/app';
 
 /**
- * The shell of the application: the header bar was dismantled, so its actions
- * live in the permanent status bar at the bottom of the window and in the
- * footer of the left column.
+ * The shell of the application: the header bar was dismantled for good. The
+ * global actions live in the header of the EXPLORER section of the left
+ * column, the state of the document lives in the status bar at the bottom of
+ * the window.
  */
 test.describe('the shell of the application', () => {
-  test('the status bar carries the global actions', async ({ page }) => {
+  test('the header of the column is gone', async ({ page }) => {
     await gotoApp(page);
 
-    // The brand is in the left column.
-    await expect(page.locator('.app-brand-name')).toHaveText('Noto');
+    // Neither the old bar nor the compact brand row exists any more.
+    await expect(page.locator('.app-header')).toHaveCount(0);
+    await expect(page.locator('.app-brand-name')).toHaveCount(0);
+    await expect(page.locator('.app-title')).toHaveCount(0);
+  });
 
-    // The global actions are in the status bar, which is never hidden.
+  test('the global actions live in the header of the explorer', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    const header = page.locator('.sidebar-section-title').filter({ hasText: 'Explorer' });
+    await expect(header).toBeVisible();
+
+    // The actions are inside the header of the section, not in the status bar.
+    await expect(header.getByRole('button', { name: 'Search notes' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Graph' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Archive' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Open command palette' })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Plugins' })).toBeVisible();
+
+    // The status bar keeps the state of the document and the view.
     const bar = page.locator('.app-footer');
+    await expect(bar.getByRole('button', { name: 'Search notes' })).toHaveCount(0);
+    await expect(bar.getByRole('button', { name: 'Graph' })).toHaveCount(0);
+    await expect(bar.getByRole('button', { name: 'Archive' })).toHaveCount(0);
     await expect(bar.getByRole('button', { name: 'Toggle notes panel' })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Toggle outline panel' })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Toggle theme' })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Search notes' })).toBeVisible();
   });
 
-  test('the stubs of the prototype are icons in the status bar', async ({ page }) => {
+  test('the explorer shows no counters, the folders keep theirs', async ({ page }) => {
     await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    // The counters of the section were noise: the totals are not shown.
+    await expect(page.locator('.sidebar-section-counts')).toHaveCount(0);
+  });
+
+  test('the stubs of the prototype are disabled icons', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
 
     const graph = page.getByRole('button', { name: 'Graph' });
     const archive = page.getByRole('button', { name: 'Archive' });
@@ -35,13 +64,22 @@ test.describe('the shell of the application', () => {
 
   test('the search is a button and not a field', async ({ page }) => {
     await gotoApp(page);
-
-    // There is no search field in the header any more.
-    await expect(page.locator('.app-header input')).toHaveCount(0);
+    await openSidebarIfNeeded(page);
 
     // The button opens the search palette.
     await page.getByRole('button', { name: 'Search notes' }).click();
     await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();
+  });
+
+  test('the command palette opens from its own icon', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    // The three dots are gone: they read as "more options", not as a palette.
+    await expect(page.locator('[data-testid="plugin-area"]')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Open command palette' }).click();
+    await expect(page.getByRole('dialog', { name: /command/i })).toBeVisible();
   });
 
   test('the right panel is hidden and shown again from the status bar', async ({
@@ -131,15 +169,6 @@ test.describe('the shell of the application', () => {
     await expect(trash).toBeVisible();
     // The button carries no text: only the icon.
     await expect(trash).toHaveText('');
-
-    // The plugins and the commands are icons of the footer of the column.
-    const plugins = page.getByRole('button', { name: 'Plugins', exact: true });
-    await expect(plugins).toBeVisible();
-    await expect(plugins).toHaveText('');
-
-    const commands = page.getByRole('button', { name: 'Open command palette' });
-    await expect(commands).toBeVisible();
-    await expect(commands).toHaveText('');
   });
 
   test('the tabs are flat: the active one is marked with an underline', async ({

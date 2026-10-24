@@ -58,6 +58,7 @@ Stable error codes:
 | `payload_too_large` | body exceeds `NOTO_MAX_UPLOAD_MB` / `NOTO_MAX_ARCHIVE_MB` |
 | `unsupported_media_type` | unsupported upload or archive content |
 | `forbidden` | rejected by the origin/host checks (CSRF guard) |
+| `vault_sealed` | the vault is sealed: the request needs the open pipeline of the notes, which the server does not use in this mode (HTTP `409`) |
 | `internal` | unexpected server error; details are logged, never returned |
 
 ## Data types
@@ -146,6 +147,11 @@ the number of the notes below every folder (counted recursively).
 
 `noteCount` of a folder counts the notes of the folder and of its subfolders;
 `folderCount` counts the direct subfolders. An empty folder reports `0`.
+
+`noteTotal` and `folderTotal` are still returned, but the interface does not
+show them any more: the counters of the section were removed in the redesign of
+the phase 7, the counters of the folders stayed. The fields are kept so that an
+older client keeps working against a newer server.
 
 ### `POST /api/folders`
 
@@ -269,13 +275,16 @@ Response `200` with the restored `Node`.
 Returns the state of the storage of the notes.
 
 ```json
-{ "configured": true, "path": "D:\\Notes", "notesDir": "D:\\Notes", "fixed": false }
+{ "configured": true, "path": "D:\\Notes", "notesDir": "D:\\Notes", "fixed": false, "mode": "open" }
 ```
 
 `path` is empty when the default layout is used and the storage was not fixed
 by the environment. `fixed` reports that the storage cannot be changed at
-runtime (the variable `NOTO_VAULT_FIXED` is set). See
-[`docs/VAULT.md`](VAULT.md) for the whole model.
+runtime (the variable `NOTO_VAULT_FIXED` is set). `mode` is the mode of the
+storage: `open` — the notes are plain Markdown files, `sealed` — the client
+encrypts everything and the server stores only ciphertext. See
+[`docs/VAULT.md`](VAULT.md) for the whole model and
+[`docs/ENCRYPTION.md`](ENCRYPTION.md) for the cryptography.
 
 ### `POST /api/vault`
 
@@ -324,6 +333,154 @@ folder.
 Only the directories are returned, the hidden ones are not. An empty `path`
 means the root of the volume. A path that does not exist fails with
 `400 bad_request`.
+
+## Sealed mode (encrypted storage)
+
+In the sealed mode the client encrypts everything in the browser before the
+bytes reach the server. The server becomes a blind object store: it keeps the
+bytes under an identifier, it does not know the key and it does not parse the
+container. The cryptography is described in
+[`docs/ENCRYPTION.md`](ENCRYPTION.md); the model of the storage — in
+[`docs/VAULT.md`](VAULT.md).
+
+Two rules define the mode:
+
+* **Only one path is used at a time.** In the open mode the application works
+  through the ordinary endpoints of the notes (`/api/tree`, `/api/notes`, …);
+  in the sealed mode it works only through the endpoints below. The two are
+  never mixed.
+* **The open endpoints are refused.** As soon as the vault is sealed, every
+  endpoint of the open pipeline answers `409` with the code `vault_sealed` and
+  the message `the vault is sealed: the notes are encrypted by the client and
+  the server stores only ciphertext`. The server therefore never writes a
+  plaintext file, not even by accident.
+
+The endpoints below are registered in all modes, but they only carry data in
+the sealed mode.
+
+### `GET /api/vault/sealed/status`
+
+The state of a sealed vault.
+
+```json
+{ "mode": "sealed", "format": 1, "objectCount": 42, "generations": [7, 6, 5] }
+```
+
+- `mode` — the mode of the storage (`sealed`);
+- `format` — the version of the layout of the sealed vault (currently `1`);
+- `objectCount` — the number of the stored objects;
+- `generations` — the generations of the stored manifests, newest first.
+
+When the vault is not sealed the endpoint answers `404 not_found` with the
+message `the vault is not sealed`.
+
+### `GET /api/vault/sealed/keystore`
+
+The keystore of the client: the parameters of the KDF, the epochs with their
+wrapped data keys and the optional block of the recovery key. The answer is
+`200` with `Content-Type: application/json` and the keystore as it is stored.
+
+The keystore holds **no key in the clear**: only the wrapped copies of the data
+key. A missing keystore answers `404 not_found`.
+
+### `PUT /api/vault/sealed/keystore`
+
+Writes the keystore. The body is the keystore JSON, unchanged. Response `204`.
+
+Limits: the body must not exceed 1 MiB, otherwise `413 payload_too_large`.
+
+### `GET /api/vault/sealed/objects`
+
+The identifiers of the stored objects.
+
+```json
+{ "ids": ["3f2c1ab7…", "9d41e0c5…"] }
+```
+
+An identifier is 32 lowercase hexadecimal characters (16 random bytes) and
+never depends on the content.
+
+### `GET /api/vault/sealed/objects/{id}`
+
+The bytes of the object. Response `200` with
+`Content-Type: application/octet-stream` and the raw ciphertext (the container
+of the client, header included).
+
+Errors: `400 bad_request` (the identifier must be 32 lowercase hexadecimal
+characters), `404 not_found` (there is no such object).
+
+### `PUT /api/vault/sealed/objects/{id}`
+
+Writes the bytes of the object. The body is the raw ciphertext, unchanged.
+Response `204`.
+
+Errors: `400 bad_request` (the identifier must be 32 lowercase hexadecimal
+characters), `413 payload_too_large` (the body is bigger than 64 MiB).
+
+### `DELETE /api/vault/sealed/objects/{id}`
+
+Removes the object. Response `204`.
+
+### `GET /api/vault/sealed/manifests`
+
+The generations of the stored manifests.
+
+```json
+{ "generations": [7, 6, 5] }
+```
+
+### `GET /api/vault/sealed/manifests/{gen}`
+
+The bytes of the manifest of the generation. Response `200` with
+`Content-Type: application/octet-stream`.
+
+The manifest is sealed like everything else: it carries the tree, and the tree
+is the only place where the names of the notes live.
+
+Errors: `400 bad_request` (the generation must be a positive integer),
+`404 not_found`.
+
+### `PUT /api/vault/sealed/manifests/{gen}`
+
+Writes the bytes of the manifest of the generation. The body is the raw
+ciphertext. Response `204`.
+
+The order of the write is the order of the client: first the objects, then the
+manifest. A crash may leave an orphan object, but never a manifest that refers
+to an object that does not exist.
+
+### `DELETE /api/vault/sealed/manifests/{gen}`
+
+Removes the manifest of the generation. Response `204`.
+
+### `POST /api/vault/sealed/enable`
+
+Switches the server into the sealed mode: the mode of the vault is written to
+the configuration file of the store and the server starts to refuse the open
+endpoints with `409 vault_sealed`. Response `204`.
+
+The endpoint does **not** delete or move any plaintext file: the migration of
+the plaintext is the business of the client, which removes it only after it has
+verified its own copy.
+
+### `POST /api/vault/sealed/purge-plaintext`
+
+Removes the plaintext files of the vault. Response `200`:
+
+```json
+{ "deleted": 128, "bytes": 48312 }
+```
+
+The server deletes every regular file under the notes directory, except the
+files of the internal directory of the vault (the sealed objects, the manifests
+and the keystore live there), and removes the folders that became empty: a
+folder name is a part of the metadata of the storage and must not stay in the
+clear.
+
+The call cannot be undone, so it happens only after the client verified its
+copy and the user confirmed it. When the vault is not sealed the endpoint
+answers `400 bad_request` with the message `the vault is not sealed: there is
+nothing to purge`.
 
 ## Search
 

@@ -26,6 +26,13 @@ export interface VaultPickerProps {
   fixed?: boolean;
   /** True while the storage is being read or changed. */
   busy?: boolean;
+  /**
+   * Called when the user asks for the wizard of an encrypted storage.
+   *
+   * The wizard is the way into the encrypted storage: the folder is chosen
+   * first, and the encryption is set up in it.
+   */
+  onCreateEncrypted?(): void;
 }
 
 /** The message that explains that the storage cannot be changed. */
@@ -173,6 +180,18 @@ export function VaultPicker(props: VaultPickerProps) {
           >
             {props.busy === true ? 'Working…' : 'Use this folder'}
           </button>
+          {props.onCreateEncrypted ? (
+            <button
+              type="button"
+              class="button"
+              data-testid="vault-picker-encrypt"
+              onClick={() => {
+                props.onCreateEncrypted?.();
+              }}
+            >
+              Set up an encrypted storage
+            </button>
+          ) : null}
         </footer>
       </div>
     </div>

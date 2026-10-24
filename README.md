@@ -82,6 +82,40 @@ network.
   system. By default it only reports; repairing the library requires the
   explicit `--apply` / `--drop-ghosts` flags.
 
+**Encrypted storage**
+
+- The storage of the notes can be encrypted in the browser: the master password
+  is stretched with Argon2id, the data key is wrapped, and every object and
+  every manifest is sealed with AES-256-GCM before the bytes reach the server.
+  The server becomes a blind object store: it stores the bytes under an
+  identifier and never sees a key — see
+  [`docs/ENCRYPTION.md`](docs/ENCRYPTION.md).
+- One path at a time: the store always talks to a `VaultService`, which is
+  either an adapter over the API of the notes (plain mode) or an adapter over
+  the sealed vault. In the sealed mode the server refuses the open endpoints
+  with `409 vault_sealed`, so the server cannot write plaintext even by
+  mistake.
+- The key lives only in the memory of the tab, as a non-extractable
+  `CryptoKey`. The storage locks itself on demand, after a period of
+  inactivity or when the window loses the focus; the screen of the unlocking
+  shows nothing but the name of the storage and the password field.
+- A recovery key can be enabled: it wraps the same data key and is the only
+  way back into the storage without the master password.
+- An existing plain storage can be migrated: the notes are sealed and stored
+  first, the copy is verified object by object, the server is switched only
+  after the verification, and the plaintext is removed **only** after an
+  explicit confirmation. The journal of the migration lives inside the sealed
+  manifest, so an interrupted migration continues instead of starting over.
+- Honest about the limits: the application cannot erase the copies that remain
+  in the history of a cloud provider, in its snapshots or in its backups —
+  they have to be cleaned in the settings of the provider. See
+  [`docs/VAULT.md`](docs/VAULT.md).
+- The plugin API 1.1.0 adds an optional `ctx.vault` state (`mode`,
+  `encrypted`, `locked`, `formatVersion`). A plugin never sees the key
+  material — the boundary is enforced by the import checker (rules R11 and
+  R12), not by a promise — see
+  [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md).
+
 **Application**
 
 - Installable PWA (web manifest, service worker, offline app shell).
@@ -95,11 +129,17 @@ network.
   icon set (Lucide), locally served Inter and JetBrains Mono, one spacing scale
   — see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 - The shell of the application is compact: there is no separate top bar. The
-  brand and the name of the open note live in the header of the left column, the
-  global actions (the toggles of both columns, the theme, the search, the stubs
-  of the graph and the archive) live in the permanent status bar at the bottom,
-  so a hidden column can always be brought back. Both columns are resized with
-  the same control.
+  brand and the path of the storage live in the header of the left column, the
+  actions of the storage (the search, the stubs of the graph and the archive,
+  the command palette, the plugins) live in the header of the EXPLORER section,
+  and the state of the document (the status of the autosave, the path, the
+  cursor, the counters) stays in the permanent status bar at the bottom, so a
+  hidden column can always be brought back. Both columns are resized with the
+  same control.
+- A small dot in the header of the EXPLORER section shows the state of the
+  connection with the backend (green — connected, amber — checking, red —
+  unreachable, click to retry). A lost connection is a state, not an error, so
+  it is not a banner.
 - The tree shows the hierarchy explicitly (guide lines, a uniform step of the
   indent) and the number of the notes in every folder.
 - Notes and folders can be dragged from one place of the tree to another. The
@@ -179,7 +219,11 @@ A plugin can:
   `folder.moved`, `editor.saved`, `workspace.opened`) — payloads never carry
   note content, only paths and metadata;
 - keep its own settings, stored separately in the `noto-plugins` IndexedDB
-  database under a per-plugin namespace.
+  database under a per-plugin namespace;
+- read the state of the storage through the optional `ctx.vault` (API 1.1.0):
+  `mode`, `encrypted`, `locked`, `formatVersion`. It is a state, not an access:
+  the key material is not in the API and cannot be imported by a plugin (rules
+  R11 and R12 of the boundary checker).
 
 **Managing plugins.** Open the app and press the **Plugins** button in the
 sidebar. The dialog lists every built-in plugin with its state (`Active`,
@@ -405,8 +449,10 @@ Other frontend commands:
 | `npm test` | Runs the Vitest suite once. |
 | `npm run test:watch` | Runs Vitest in watch mode. |
 | `npm run typecheck` | Type-checks the whole frontend with `tsc --noEmit`. |
-| `npm run check:boundaries` | Checks the architectural import boundaries (rules R1–R8) of the frontend source tree. |
+| `npm run check:boundaries` | Checks the architectural import boundaries (rules R1–R12) of the frontend source tree. |
 | `npm run measure` | Prints the bundle size report. |
+| `npx vitest run src/core/crypto` | Runs only the tests of the crypto core (KDF, the key hierarchy, the container). |
+| `npx vitest run src/core/vault` | Runs only the tests of the sealed vault (the manifest, the index, the conflicts, the service). |
 
 ### Helper scripts
 
@@ -549,6 +595,23 @@ Frontend:
 ```powershell
 cd E:\Code\Software\noto\frontend
 npm test
+```
+
+The crypto core and the sealed vault have their own suites; they can be run
+alone while working on them:
+
+```powershell
+cd E:\Code\Software\noto\frontend
+npx vitest run src/core/crypto
+npx vitest run src/core/vault
+```
+
+The backend of the sealed storage (`internal/sealed`) is covered by the Go
+suite:
+
+```powershell
+cd E:\Code\Software\noto\backend
+& $go test ./internal/sealed/... -race
 ```
 
 Both at once:
@@ -1092,6 +1155,10 @@ noto/
 │   ├── SECURITY.md           threat model and hardening checklist
 │   ├── PERFORMANCE.md        measurements and the methodology
 │   ├── ARCHITECTURE.md       structure of the application
+│   ├── ENCRYPTION.md         the encrypted storage: the scheme and the guarantees
+│   ├── VAULT.md              the storage of the notes: the modes and the migration
+│   ├── UI_AUDIT.md           the audit of the interface
+│   ├── DESIGN_SYSTEM.md      the visual rules of the application
 │   ├── PLUGIN_API.md         plugin contract reference
 │   ├── PLUGIN_SECURITY.md    plugin trust model and limitations
 │   └── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin

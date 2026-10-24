@@ -39,7 +39,10 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'")
+		// 'wasm-unsafe-eval' allows the browser to compile the WebAssembly
+		// module of the key derivation (Argon2id) of the encrypted storage.
+		// It does not allow the evaluation of a string as JavaScript.
+		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'")
 		next.ServeHTTP(w, r)
 	})
 }

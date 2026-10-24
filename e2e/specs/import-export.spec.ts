@@ -46,7 +46,7 @@ test.describe('import and export', () => {
     // Open the imported note so that "Export current folder" targets "Imported".
     await expandFolder(page, 'Imported');
     await treeFile(page, 'note.md').click();
-    await expect(page.locator('.app-title')).toHaveText('note.md');
+    await expect(page.locator('[data-testid="editor-tab"] .tab-name').first()).toHaveText('note.md');
 
     await page.getByRole('button', { name: 'Import and export', exact: true }).click();
     const exportDialog = page.getByRole('dialog', { name: 'Import & Export' });

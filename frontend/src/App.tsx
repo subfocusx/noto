@@ -12,7 +12,6 @@ import { OutlinePanel } from './components/OutlinePanel';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
   PluginCommandSlot,
-  PluginContextMenuSlot,
   PluginPanelSlot,
   PluginSidebarSlot,
   PluginToolbarSlot,
@@ -27,11 +26,21 @@ import type { TrashPanelProps } from './components/TrashPanel';
 import type { TransferPanelProps } from './components/TransferPanel';
 import { TreeContextMenu } from './components/TreeContextMenu';
 import { createPluginApi } from './core/api/pluginApi';
+import { connectionMonitor } from './core/connection/monitor';
+import {
+  detectVaultMode,
+  getVaultSessionState,
+  lockVault,
+  subscribeVaultSession,
+} from './core/vault/session';
+import { AutoLock } from './core/vault/autoLock';
+import { syncVaultServiceWithSession } from './core/vault/vaultService';
 import { registerAppCommands, APP_COMMAND_PREFIX } from './core/commands/appCommands';
 import { CommandRegistry } from './core/commands/commandRegistry';
 import { matchesShortcut, SHORTCUTS } from './core/commands/shortcuts';
 import { EventBus } from './core/events/eventBus';
 import { SettingsStore } from './core/settings/settingsStore';
+import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs } from './core/settings/prefs';
 import { appStore } from './core/store/appStore';
 import { useAppActions, useAppState } from './core/store/hooks';
 import { extractHeadings } from './lib/outline';
@@ -72,6 +81,27 @@ function toManagerStatus(state: PluginState): PluginManagerStatus {
   return 'disabled';
 }
 
+/** The props of the wizard of the encrypted storage. */
+type VaultSetupDialogProps = {
+  open: boolean;
+  onClose(): void;
+  onDone(): void;
+  onMigrate?(): void;
+};
+
+/** The props of the wizard of the migration. */
+type VaultMigrationDialogProps = {
+  open: boolean;
+  onClose(): void;
+  onDone(): void;
+};
+
+/** The props of the screen of the unlocking. */
+type VaultUnlockScreenProps = {
+  onUnlocked(): void;
+  storageName?: string;
+};
+
 export function App() {
   const state = useAppState();
   const actions = useAppActions();
@@ -89,9 +119,49 @@ export function App() {
 
   const { tree, note, ui, env, dialog, draftOffer, banner } = state;
 
+  // The state of the storage (open or sealed, locked or not) lives in the
+  // session of the vault: the application re-renders when it changes.
+  const [vaultSession, setVaultSession] = useState(getVaultSessionState());
+  useEffect(() => subscribeVaultSession(setVaultSession), []);
+
+  // The mode of the storage is owned by the server: the folder on the disk
+  // says whether it is sealed.
+  useEffect(() => {
+    void detectVaultMode();
+  }, []);
+
+  // The automatic lock: the storage is locked after a while without
+  // activity, so that a forgotten tab does not keep the key in the memory.
+  useEffect(() => {
+    if (vaultSession.mode !== 'sealed' || vaultSession.locked) return;
+    const autoLock = new AutoLock({
+      timeoutMs: (loadPrefs().autoLockMinutes ?? AUTO_LOCK_MINUTES_DEFAULT) * 60_000,
+      onLock: () => {
+        void lockVault();
+      },
+    });
+    autoLock.start();
+    const activity = (): void => {
+      autoLock.touch();
+    };
+    window.addEventListener('keydown', activity);
+    window.addEventListener('pointerdown', activity);
+    return () => {
+      autoLock.stop();
+      window.removeEventListener('keydown', activity);
+      window.removeEventListener('pointerdown', activity);
+    };
+  }, [vaultSession.mode, vaultSession.locked]);
+
   useEffect(() => {
     appStore.start();
-    return () => appStore.stop();
+    // The store reads and writes through the service of the current mode:
+    // the open one, or the sealed one when the storage is encrypted.
+    const stopSync = syncVaultServiceWithSession();
+    return () => {
+      stopSync();
+      appStore.stop();
+    };
   }, []);
 
   /* --------------------------------------------------------------- theme */
@@ -236,6 +306,18 @@ export function App() {
       settings,
       createApi: () => createPluginApi(),
       getEditor: () => pluginEditor(),
+      // A plugin may ask whether the storage is encrypted and whether it is
+      // locked. It never sees a key: the state is a frozen copy of four
+      // fields, published by the application.
+      getVaultState: () => {
+        const session = getVaultSessionState();
+        return {
+          mode: session.mode,
+          encrypted: session.mode === 'sealed',
+          locked: session.locked,
+          formatVersion: session.formatVersion,
+        };
+      },
       subscribeEditor: (cb) => {
         editorSubscribersRef.current.add(cb);
         cb(pluginEditor());
@@ -333,12 +415,13 @@ export function App() {
 
   /* -------------------------------------------------------------- events */
 
-  /** The notes that are open in the tab strip of the editor. */
-  const [tabs, setTabs] = useState<string[]>([]);
-
   // The storage of the notes is asked for once, at the start: when the user
   // has not chosen a folder yet, the picker opens right away.
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
+  /** True when the wizard of the encrypted storage is shown. */
+  const [vaultSetupOpen, setVaultSetupOpen] = useState(false);
+  /** True when the wizard of the migration is shown. */
+  const [vaultMigrationOpen, setVaultMigrationOpen] = useState(false);
 
   /**
    * True when the right column is opened as a drawer over the editor on a
@@ -369,7 +452,6 @@ export function App() {
 
   /** Opens a note and tells the plugins about it. */
   const openNote = async (path: string): Promise<void> => {
-    setTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
     await actions.openNote(path);
     const snapshot = appStore.getSnapshot();
     const host = hostRef.current;
@@ -554,19 +636,44 @@ export function App() {
   const [lazyOverlays, setLazyOverlays] = useState<{
     SearchPanel: ComponentType<SearchPanelProps>;
     VaultPicker: ComponentType<VaultPickerProps>;
+    VaultSetupDialog: ComponentType<VaultSetupDialogProps>;
+    VaultMigrationDialog: ComponentType<VaultMigrationDialogProps>;
+    VaultUnlockScreen: ComponentType<VaultUnlockScreenProps>;
   } | null>(null);
 
   useEffect(() => {
-    if ((!ui.searchOpen && !vaultPickerOpen) || lazyOverlays) return;
+    // The screens of the encrypted storage are loaded together with the other
+    // overlays: they drag the crypto core with them, and an open storage must
+    // not pay for it.
+    const needed =
+      ui.searchOpen ||
+      vaultPickerOpen ||
+      vaultSetupOpen ||
+      vaultMigrationOpen ||
+      vaultSession.mode === 'sealed';
+    if (!needed || lazyOverlays) return;
     let cancelled = false;
     void import('./components/LazyOverlays').then((module) => {
       if (cancelled) return;
-      setLazyOverlays({ SearchPanel: module.SearchPanel, VaultPicker: module.VaultPicker });
+      setLazyOverlays({
+        SearchPanel: module.SearchPanel,
+        VaultPicker: module.VaultPicker,
+        VaultSetupDialog: module.VaultSetupDialog,
+        VaultMigrationDialog: module.VaultMigrationDialog,
+        VaultUnlockScreen: module.VaultUnlockScreen,
+      });
     });
     return () => {
       cancelled = true;
     };
-  }, [ui.searchOpen, vaultPickerOpen, lazyOverlays]);
+  }, [
+    ui.searchOpen,
+    vaultPickerOpen,
+    vaultSetupOpen,
+    vaultMigrationOpen,
+    vaultSession.mode,
+    lazyOverlays,
+  ]);
 
   const [SettingsDialogComponent, setSettingsDialogComponent] = useState<
     ComponentType<SettingsDialogProps> | null
@@ -636,11 +743,11 @@ export function App() {
   /** The open notes for the tab strip of the editor. */
   const tabItems = useMemo(
     () =>
-      tabs.map((path) => ({
+      ui.openPaths.map((path) => ({
         path,
         name: path.split('/').pop() ?? path,
       })),
-    [tabs],
+    [ui.openPaths],
   );
 
   /** The number of the words of the open note. */
@@ -784,8 +891,25 @@ export function App() {
     }
   };
 
+  // An encrypted storage that is locked shows nothing but the screen of the
+  // unlocking: the notes must not stay in the memory of a locked tab.
+  if (vaultSession.mode === 'sealed' && vaultSession.locked) {
+    return lazyOverlays ? (
+      <lazyOverlays.VaultUnlockScreen
+        storageName={vaultName}
+        onUnlocked={() => {
+          void actions.refreshTree();
+        }}
+      />
+    ) : null;
+  }
+
   return (
-    <div class={`app${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}>
+    <div
+      class={`app${ui.drawerOpen ? ' drawer-open' : ''}${ui.sidebarCollapsed ? ' sidebar-collapsed' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}
+      data-vault-mode={vaultSession.mode}
+      data-vault-locked={vaultSession.locked ? 'true' : 'false'}
+    >
       {!env.online ? (
         <div class="offline-banner" role="status" data-testid="offline-banner">
           Offline — changes are kept locally and will be retried.
@@ -836,6 +960,12 @@ export function App() {
             onDelete={(node) => actions.openDialog({ kind: 'delete', node })}
             onOpenTrash={() => actions.openDialog({ kind: 'trash' })}
             onOpenSearch={() => actions.setSearchOpen(true)}
+            onOpenPalette={() => actions.setPaletteOpen(true)}
+            onOpenPlugins={() => setPluginsOpen(true)}
+            // The state of the backend is measured by the monitor, not guessed
+            // from the network of the browser.
+            connection={env.connection}
+            onRetryConnection={() => void connectionMonitor.check()}
             onOpenTransfer={() => actions.openDialog({ kind: 'transfer' })}
             onRefresh={() => void actions.refreshTree()}
             loading={tree.loading}
@@ -859,29 +989,9 @@ export function App() {
             onResizeWidth={actions.setSidebarWidth}
             recentCollapsed={ui.recentCollapsed}
             onToggleRecent={() => actions.setRecentCollapsed(!ui.recentCollapsed)}
-            noteTitle={note.path ? note.path.split('/').pop()! : 'Noto'}
-            online={env.online}
+            hasPluginItems={pluginSidebarItems.length > 0}
           >
-            <PluginSidebarSlot items={pluginSidebarItems} />
-            <PluginContextMenuSlot items={pluginContextMenuItems} path={note.path ?? ''} />
-            <button
-              type="button"
-              class="icon-button"
-              aria-label="Plugins"
-              title="Plugins"
-              onClick={() => setPluginsOpen(true)}
-            >
-              <Icon name="bookmark" size={15} />
-            </button>
-            <button
-              type="button"
-              class="icon-button"
-              aria-label="Open command palette"
-              title="Open command palette"
-              onClick={() => actions.setPaletteOpen(true)}
-            >
-              <Icon name="dots-vertical" size={15} />
-            </button>
+            {pluginSidebarItems.length > 0 ? <PluginSidebarSlot items={pluginSidebarItems} /> : null}
           </Sidebar>
         </div>
 
@@ -891,11 +1001,9 @@ export function App() {
             activePath={note.path}
             onSelect={(path) => void openNote(path)}
             onClose={(path) => {
-              setTabs((prev) => {
-                const rest = prev.filter((item) => item !== path);
-                if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
-                return rest;
-              });
+              actions.closeTab(path);
+              const rest = ui.openPaths.filter((item) => item !== path);
+              if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
             }}
           />
 
@@ -936,7 +1044,6 @@ export function App() {
               </div>
             ) : null}
           </div>
-          <PluginPanelSlot panels={pluginPanels} />
           </div>
         </main>
 
@@ -953,6 +1060,7 @@ export function App() {
               if (heading?.line) editorRef.current?.scrollToLine(heading.line);
             }}
           />
+          <PluginPanelSlot panels={pluginPanels} />
           {narrow ? null : (
             <ColumnResizer
               side="right"
@@ -988,7 +1096,6 @@ export function App() {
         panelVisible={narrow ? panelOverlayOpen : ui.rightPanelVisible}
         onToggleTheme={actions.toggleTheme}
         theme={env.effectiveTheme}
-        onOpenSearch={() => actions.setSearchOpen(true)}
         onToggleDrawer={actions.toggleDrawer}
         drawerOpen={ui.drawerOpen}
       />
@@ -1086,6 +1193,7 @@ export function App() {
           isFolder={ui.contextMenu.isFolder}
           x={ui.contextMenu.x}
           y={ui.contextMenu.y}
+          pluginItems={pluginContextMenuItems}
           onClose={actions.closeContextMenu}
           onRename={() => {
             const node = contextNode;
@@ -1180,6 +1288,36 @@ export function App() {
             if (!ui.vaultConfigured) {
               actions.showBanner('No storage folder chosen — the notes are kept in the default folder');
             }
+          }}
+          onCreateEncrypted={() => {
+            setVaultPickerOpen(false);
+            setVaultSetupOpen(true);
+          }}
+        />
+      ) : null}
+
+      {vaultSetupOpen && lazyOverlays ? (
+        <lazyOverlays.VaultSetupDialog
+          open={vaultSetupOpen}
+          onClose={() => setVaultSetupOpen(false)}
+          onDone={() => {
+            setVaultSetupOpen(false);
+            void actions.refreshTree();
+          }}
+          onMigrate={() => {
+            setVaultSetupOpen(false);
+            setVaultMigrationOpen(true);
+          }}
+        />
+      ) : null}
+
+      {vaultMigrationOpen && lazyOverlays ? (
+        <lazyOverlays.VaultMigrationDialog
+          open={vaultMigrationOpen}
+          onClose={() => setVaultMigrationOpen(false)}
+          onDone={() => {
+            setVaultMigrationOpen(false);
+            void actions.refreshTree();
           }}
         />
       ) : null}

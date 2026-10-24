@@ -9,6 +9,7 @@ import (
 
 	"noto/backend/internal/config"
 	"noto/backend/internal/notes"
+	"noto/backend/internal/sealed"
 	"noto/backend/internal/web"
 )
 
@@ -49,6 +50,17 @@ type Server struct {
 	// changed at runtime, but it is a storage, so the application does not
 	// ask the user for a folder.
 	vaultFixed bool
+
+	// sealedMu guards the sealed store and the mode of the vault.
+	sealedMu sync.RWMutex
+	// sealedStoreRef is the blind object store of a sealed vault. It is nil
+	// when the server was not started in the sealed mode; the store is then
+	// created over the internal directory of the current vault.
+	sealedStoreRef *sealed.Store
+	// sealedMode reports that the vault is sealed. In sealed mode the open
+	// endpoints of the notes answer with a conflict, because the server
+	// stores only ciphertext.
+	sealedMode bool
 
 	log *slog.Logger
 	mux *http.ServeMux
@@ -170,32 +182,56 @@ func (s *Server) Handler() http.Handler {
 // routes registers every endpoint of the REST API.
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
-	s.mux.HandleFunc("GET /api/tree", s.handleTree)
-	s.mux.HandleFunc("POST /api/folders", s.handleCreateFolder)
-	s.mux.HandleFunc("POST /api/files", s.handleCreateFile)
-	s.mux.HandleFunc("GET /api/notes", s.handleGetNote)
-	s.mux.HandleFunc("PUT /api/notes", s.handlePutNote)
-	s.mux.HandleFunc("POST /api/notes/rename", s.handleRename)
-	s.mux.HandleFunc("POST /api/notes/move", s.handleMove)
-	s.mux.HandleFunc("POST /api/notes/duplicate", s.handleDuplicate)
-	s.mux.HandleFunc("DELETE /api/notes", s.handleDelete)
-	s.mux.HandleFunc("POST /api/notes/restore", s.handleRestore)
-	s.mux.HandleFunc("GET /api/trash", s.handleTrash)
-	s.mux.HandleFunc("GET /api/search", s.handleSearch)
-	s.mux.HandleFunc("POST /api/search/reindex", s.handleReindex)
-	s.mux.HandleFunc("POST /api/import/files", s.handleImportFiles)
-	s.mux.HandleFunc("POST /api/import/zip", s.handleImportZip)
-	s.mux.HandleFunc("GET /api/export/note", s.handleExportNote)
-	s.mux.HandleFunc("GET /api/export/folder", s.handleExportFolder)
-	s.mux.HandleFunc("GET /api/export/all", s.handleExportAll)
-	s.mux.HandleFunc("POST /api/attachments", s.handleUploadAttachment)
-	s.mux.HandleFunc("GET /api/attachments", s.handleListAttachments)
-	s.mux.HandleFunc("GET /api/attachments/{id}/raw", s.handleRawAttachment)
-	s.mux.HandleFunc("DELETE /api/attachments/{id}", s.handleDeleteAttachment)
+
+	// The endpoints of the open pipeline of the notes are wrapped, so that
+	// they answer with a conflict when the vault is sealed. The server
+	// stores only ciphertext in the sealed mode and must never write a
+	// plaintext file.
+	s.mux.HandleFunc("GET /api/tree", s.openRoute(s.handleTree))
+	s.mux.HandleFunc("POST /api/folders", s.openRoute(s.handleCreateFolder))
+	s.mux.HandleFunc("POST /api/files", s.openRoute(s.handleCreateFile))
+	s.mux.HandleFunc("GET /api/notes", s.openRoute(s.handleGetNote))
+	s.mux.HandleFunc("PUT /api/notes", s.openRoute(s.handlePutNote))
+	s.mux.HandleFunc("POST /api/notes/rename", s.openRoute(s.handleRename))
+	s.mux.HandleFunc("POST /api/notes/move", s.openRoute(s.handleMove))
+	s.mux.HandleFunc("POST /api/notes/duplicate", s.openRoute(s.handleDuplicate))
+	s.mux.HandleFunc("DELETE /api/notes", s.openRoute(s.handleDelete))
+	s.mux.HandleFunc("POST /api/notes/restore", s.openRoute(s.handleRestore))
+	s.mux.HandleFunc("GET /api/trash", s.openRoute(s.handleTrash))
+	s.mux.HandleFunc("GET /api/search", s.openRoute(s.handleSearch))
+	s.mux.HandleFunc("POST /api/search/reindex", s.openRoute(s.handleReindex))
+	s.mux.HandleFunc("POST /api/import/files", s.openRoute(s.handleImportFiles))
+	s.mux.HandleFunc("POST /api/import/zip", s.openRoute(s.handleImportZip))
+	s.mux.HandleFunc("GET /api/export/note", s.openRoute(s.handleExportNote))
+	s.mux.HandleFunc("GET /api/export/folder", s.openRoute(s.handleExportFolder))
+	s.mux.HandleFunc("GET /api/export/all", s.openRoute(s.handleExportAll))
+	s.mux.HandleFunc("POST /api/attachments", s.openRoute(s.handleUploadAttachment))
+	s.mux.HandleFunc("GET /api/attachments", s.openRoute(s.handleListAttachments))
+	s.mux.HandleFunc("GET /api/attachments/{id}/raw", s.openRoute(s.handleRawAttachment))
+	s.mux.HandleFunc("DELETE /api/attachments/{id}", s.openRoute(s.handleDeleteAttachment))
 	s.mux.HandleFunc("GET /api/vault", s.handleGetVault)
-	s.mux.HandleFunc("POST /api/vault", s.handleSetVault)
-	s.mux.HandleFunc("DELETE /api/vault", s.handleDeleteVault)
+	// The vault cannot be changed while it is sealed: a new vault would
+	// need the open pipeline of the notes.
+	s.mux.HandleFunc("POST /api/vault", s.openRoute(s.handleSetVault))
+	s.mux.HandleFunc("DELETE /api/vault", s.openRoute(s.handleDeleteVault))
 	s.mux.HandleFunc("GET /api/vault/browse", s.handleBrowseVault)
+
+	// The endpoints of the sealed mode serve the ciphertext of the vault.
+	// The client encrypts everything before it writes it, so the server
+	// never sees a plaintext.
+	s.mux.HandleFunc("GET /api/vault/sealed/status", s.handleSealedStatus)
+	s.mux.HandleFunc("GET /api/vault/sealed/keystore", s.handleGetSealedKeystore)
+	s.mux.HandleFunc("PUT /api/vault/sealed/keystore", s.handlePutSealedKeystore)
+	s.mux.HandleFunc("GET /api/vault/sealed/objects", s.handleListSealedObjects)
+	s.mux.HandleFunc("GET /api/vault/sealed/objects/{id}", s.handleGetSealedObject)
+	s.mux.HandleFunc("PUT /api/vault/sealed/objects/{id}", s.handlePutSealedObject)
+	s.mux.HandleFunc("DELETE /api/vault/sealed/objects/{id}", s.handleDeleteSealedObject)
+	s.mux.HandleFunc("GET /api/vault/sealed/manifests", s.handleListSealedManifests)
+	s.mux.HandleFunc("GET /api/vault/sealed/manifests/{gen}", s.handleGetSealedManifest)
+	s.mux.HandleFunc("PUT /api/vault/sealed/manifests/{gen}", s.handlePutSealedManifest)
+	s.mux.HandleFunc("DELETE /api/vault/sealed/manifests/{gen}", s.handleDeleteSealedManifest)
+	s.mux.HandleFunc("POST /api/vault/sealed/enable", s.handleEnableSealed)
+	s.mux.HandleFunc("POST /api/vault/sealed/purge-plaintext", s.handlePurgePlaintext)
 
 	// The maintenance endpoints are only registered when they are enabled
 	// explicitly, so that they stay out of the route contract of a normal

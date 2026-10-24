@@ -46,6 +46,20 @@ const ALLOWED_COMPONENT_PLUGIN_IMPORTS = [
 /** The only modules `src/plugins/builtin/**` may import from `src/plugins/`. */
 const ALLOWED_BUILTIN_PLUGIN_IMPORTS = [PLUGIN_CONTRACT];
 
+/**
+ * The modules that own the key material of the encrypted storage.
+ *
+ * The key hierarchy (the master password, the wrapping key and the data key)
+ * lives in `src/core/crypto/**`. Only the core itself may use it: the user
+ * interface must never handle a key, and a plugin must never be able to reach
+ * one. This is the boundary that makes the "no key material for plugins"
+ * promise enforceable instead of decorative.
+ */
+const KEY_MATERIAL_MODULES = ['src/core/crypto/keys', 'src/core/crypto/sealed'];
+
+/** The layers that are allowed to use the key material. */
+const KEY_MATERIAL_CONSUMERS = ['src/core/crypto/', 'src/core/vault/'];
+
 /** Source extensions scanned by the checker. */
 const SCAN_EXTENSIONS = ['.ts', '.tsx'];
 
@@ -301,6 +315,50 @@ function checkImport(fileKey, imp, target) {
       fileKey,
       imp.line,
       `src/plugins/builtin/** must not import src/api/client.ts directly; use the public facade`,
+    );
+  }
+
+  // R9: the core must not depend on the user interface.
+  if (inLayer(fileKey, LAYERS.core) && inLayer(target, LAYERS.components)) {
+    report(
+      'R9',
+      fileKey,
+      imp.line,
+      `src/core/** must not import from src/components/** (imports "${target}")`,
+    );
+  }
+
+  // R10: the crypto core does not know the vault; the dependency points the
+  // other way only, so that the key material stays a leaf of the graph.
+  if (inLayer(fileKey, 'src/core/crypto/') && inLayer(target, 'src/core/vault/')) {
+    report(
+      'R10',
+      fileKey,
+      imp.line,
+      `src/core/crypto/** must not import from src/core/vault/** (imports "${target}")`,
+    );
+  }
+
+  // R11: a plugin must never be able to reach the key material.
+  if (inLayer(fileKey, LAYERS.plugins) && inLayer(target, 'src/core/crypto/')) {
+    report(
+      'R11',
+      fileKey,
+      imp.line,
+      `src/plugins/** must not import the crypto core (imports "${target}"); plugins never see keys`,
+    );
+  }
+
+  // R12: only the core may use the key material.
+  if (
+    KEY_MATERIAL_MODULES.includes(target) &&
+    !KEY_MATERIAL_CONSUMERS.some((prefix) => inLayer(fileKey, prefix))
+  ) {
+    report(
+      'R12',
+      fileKey,
+      imp.line,
+      `"${target}" owns the key material and may only be imported by ${KEY_MATERIAL_CONSUMERS.join(' or ')} (imports "${target}")`,
     );
   }
 }

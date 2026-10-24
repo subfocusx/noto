@@ -24,7 +24,7 @@ import (
 // only be changed together with a deliberate change of the contract.
 
 // contractCSP is the exact value of the Content-Security-Policy header.
-const contractCSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+const contractCSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'"
 
 // contractSecurityHeaders is the exact set of security headers and their
 // values that every response carries.

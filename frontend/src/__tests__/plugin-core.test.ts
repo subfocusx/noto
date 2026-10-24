@@ -393,6 +393,37 @@ describe('builtin loader', () => {
       expect(plugin.manifest.id).toMatch(/^[a-z0-9][a-z0-9._-]*$/);
     }
   });
+
+  it('keeps the built-in plugins compatible with API 1.1.0 without any change', () => {
+    // The built-in plugins were written for API 1.0.0 and were NOT touched
+    // by the additive bump: they must keep working unchanged.
+    expect(builtinPlugins.length).toBeGreaterThan(0);
+    for (const plugin of builtinPlugins) {
+      expect(plugin.manifest.minApiVersion).toBe('1.0.0');
+      expect(isCompatible(plugin.manifest.minApiVersion, PLUGIN_API_VERSION)).toBe(true);
+    }
+  });
+
+  it('activates the built-in plugins without any vault state', async () => {
+    const registry = new PluginRegistry();
+    const bus = new EventBus<PluginEventMap>();
+    const commands = new CommandRegistry();
+    const settings = new SettingsStore();
+    const host = new PluginHost({
+      registry,
+      bus,
+      commands,
+      settings,
+      createApi: () => createPluginApi(),
+      getEditor: () => null,
+    });
+    for (const plugin of builtinPlugins) {
+      registry.register(plugin);
+      registry.enable(plugin.manifest.id);
+      await host.activate(plugin.manifest.id);
+      expect(registry.get(plugin.manifest.id)?.state).toBe('active');
+    }
+  });
 });
 
 // Type level check: a panel renders Preact children.

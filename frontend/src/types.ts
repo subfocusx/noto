@@ -79,3 +79,15 @@ export interface SaveNoteResponse {
 }
 
 export type ConflictPolicy = 'skip' | 'rename' | 'overwrite';
+
+/**
+ * The state of the connection between the interface and the backend.
+ *
+ * The indicator of the sidebar shows it at a glance: the user must know
+ * whether the changes reach the disk without opening a dialog.
+ *
+ * The definition lives in the core, next to the monitor that measures it; the
+ * re-export keeps the type reachable from the whole application without
+ * duplicating it.
+ */
+export type { ConnectionState } from './core/connection/types';

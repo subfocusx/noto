@@ -46,7 +46,7 @@ describe('the status bar', () => {
     renderFooter();
 
     const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.app-footer-actions button'));
-    expect(buttons.length).toBe(7);
+    expect(buttons.length).toBe(4);
     for (const button of buttons) {
       expect(button.getAttribute('aria-label')).toBeTruthy();
       expect(button.getAttribute('title')).toBeTruthy();
@@ -103,40 +103,13 @@ describe('the status bar', () => {
     expect(screen.getByRole('button', { name: 'Toggle theme' }).querySelector('svg')).toBeTruthy();
   });
 
-  it('marks the graph and the archive as not implemented', () => {
+  it('holds no action of the vault', () => {
     renderFooter();
 
-    const graph = screen.getByRole('button', { name: 'Graph' });
-    expect(graph.getAttribute('aria-disabled')).toBe('true');
-    expect(graph.getAttribute('title')).toBe('Not implemented yet');
-
-    const archive = screen.getByRole('button', { name: 'Archive' });
-    expect(archive.getAttribute('aria-disabled')).toBe('true');
-    expect(archive.getAttribute('title')).toBe('Not implemented yet');
-  });
-
-  it('calls the handlers of the graph and of the archive when they exist', () => {
-    const onOpenGraph = vi.fn();
-    const onOpenArchive = vi.fn();
-    renderFooter({ onOpenGraph, onOpenArchive });
-
-    const graph = screen.getByRole('button', { name: 'Graph' });
-    expect(graph.getAttribute('aria-disabled')).toBe('false');
-    expect(graph.getAttribute('title')).toBe('Graph');
-    fireEvent.click(graph);
-    expect(onOpenGraph).toHaveBeenCalled();
-
-    const archive = screen.getByRole('button', { name: 'Archive' });
-    expect(archive.getAttribute('aria-disabled')).toBe('false');
-    fireEvent.click(archive);
-    expect(onOpenArchive).toHaveBeenCalled();
-  });
-
-  it('opens the search', () => {
-    const onOpenSearch = vi.fn();
-    renderFooter({ onOpenSearch });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Search notes' }));
-    expect(onOpenSearch).toHaveBeenCalled();
+    // The search, the graph and the archive live in the header of the
+    // explorer: the status bar shows the state of the document.
+    expect(screen.queryByRole('button', { name: 'Search notes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Graph' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
 });

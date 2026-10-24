@@ -88,7 +88,7 @@ test.describe('the change of the storage', () => {
     expect(set.status()).toBe(200);
 
     await page.goto(SWITCH_URL);
-    await expect(page.locator('.app-title')).toBeVisible();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
 
     await openSidebarIfNeeded(page);
     const change = page.getByRole('button', { name: 'Change the storage of the notes' });

@@ -33,6 +33,7 @@ describe('the icon registry', () => {
       'chevron-right',
       'chevron-up',
       'circle',
+      'command',
       'copy',
       'dots-vertical',
       'file-plus',

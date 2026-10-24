@@ -26,6 +26,7 @@ import (
 	"noto/backend/internal/config"
 	"noto/backend/internal/notes"
 	"noto/backend/internal/restore"
+	"noto/backend/internal/sealed"
 	"noto/backend/internal/sqlitestore"
 	"noto/backend/internal/vault"
 )
@@ -254,32 +255,36 @@ func runServer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.EnsureDirs(); err != nil {
-		return err
+
+	// The mode of the vault is stored in the internal directory of the
+	// vault. A sealed vault is read before the directories are created, so
+	// that the server does not create anything in a vault it cannot read.
+	sealedStore, err := sealed.New(cfg.DataDir)
+	if err != nil {
+		return fmt.Errorf("cannot prepare the sealed store: %w", err)
+	}
+	mode, modeErr := sealedStore.Mode(context.Background())
+	sealedMode := mode == sealed.ModeSealed
+	if modeErr != nil {
+		// The mode of the vault cannot be read. The server must not fall
+		// back to the open mode, because it would then write a plaintext
+		// file in a vault that is maybe sealed.
+		logger.Warn("cannot read the mode of the vault, using the sealed mode", "err", modeErr)
+		sealedMode = true
+	}
+	if !sealedMode {
+		if err := cfg.EnsureDirs(); err != nil {
+			return err
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	factory := newServiceFactory(ctx, baseCfg)
-	svc, closer, err := factory(vaultPath)
+	apiServer, err := newAPIServer(ctx, baseCfg, cfg, logger, sealedStore, sealedMode, vaultPath)
 	if err != nil {
-		return fmt.Errorf("cannot create the notes service: %w", err)
+		return err
 	}
-
-	// Make sure the search index matches the notes directory.
-	if count, err := svc.Reindex(ctx); err != nil {
-		logger.Warn("cannot rebuild the search index", "err", err)
-	} else {
-		logger.Info("search index is up to date", "indexed", count)
-	}
-
-	apiServer, err := api.NewWithFactory(cfg, svc, logger, factory)
-	if err != nil {
-		closer()
-		return fmt.Errorf("cannot create the API server: %w", err)
-	}
-	apiServer.SetServiceCloser(closer)
 	apiServer.SetVaultPath(vaultPath)
 	apiServer.SetVaultFixed(vaultFixed)
 	defer apiServer.Close()
@@ -320,6 +325,63 @@ func runServer(ctx context.Context) error {
 	}
 	logger.Info("server stopped")
 	return nil
+}
+
+// newAPIServer builds the API server of the application.
+//
+// In the open mode the server uses the SQLite database and the usual factory
+// that can change the vault. In the sealed mode the database is never opened:
+// the notes service is wired to the blocked store, so that an accidental call
+// of the open pipeline fails loudly instead of writing a plaintext file.
+func newAPIServer(ctx context.Context, baseCfg, cfg config.Config, logger *slog.Logger, sealedStore *sealed.Store, sealedMode bool, vaultPath string) (*api.Server, error) {
+	if sealedMode {
+		svc, err := notes.NewService(sealedServiceConfig(cfg), sealed.NewBlockedStore())
+		if err != nil {
+			return nil, fmt.Errorf("cannot create the notes service: %w", err)
+		}
+		// The factory is left out on purpose: a sealed vault cannot be
+		// changed at runtime, because a new vault would need the open
+		// pipeline of the notes.
+		apiServer, err := api.NewWithFactory(cfg, svc, logger, nil)
+		if err != nil {
+			return nil, fmt.Errorf("cannot create the API server: %w", err)
+		}
+		apiServer.SetSealedStore(sealedStore)
+		logger.Info("the vault is sealed: the server stores only ciphertext")
+		return apiServer, nil
+	}
+
+	factory := newServiceFactory(ctx, baseCfg)
+	svc, closer, err := factory(vaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create the notes service: %w", err)
+	}
+
+	// Make sure the search index matches the notes directory.
+	if count, err := svc.Reindex(ctx); err != nil {
+		logger.Warn("cannot rebuild the search index", "err", err)
+	} else {
+		logger.Info("search index is up to date", "indexed", count)
+	}
+
+	apiServer, err := api.NewWithFactory(cfg, svc, logger, factory)
+	if err != nil {
+		closer()
+		return nil, fmt.Errorf("cannot create the API server: %w", err)
+	}
+	apiServer.SetServiceCloser(closer)
+	return apiServer, nil
+}
+
+// sealedServiceConfig returns the configuration of the notes service of a
+// sealed vault. The trash and the attachments of a sealed vault are not used,
+// so they point to the internal directory of the vault, which keeps the
+// server from creating directories that hold plaintext.
+func sealedServiceConfig(cfg config.Config) config.Config {
+	out := cfg
+	out.TrashDir = cfg.DataDir
+	out.AttachmentsDir = cfg.DataDir
+	return out
 }
 
 // resolveVault returns the vault the server has to serve and the effective

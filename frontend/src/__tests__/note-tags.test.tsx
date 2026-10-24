@@ -19,6 +19,55 @@ describe('the tags of the open note', () => {
     // The strip carries the button that adds the first tag.
     expect(view.getByTestId('note-tags')).toBeTruthy();
     expect(view.getByLabelText('Add a tag to the note')).toBeTruthy();
+    // The empty state is not empty: the row still names itself.
+    expect(view.getByText('Tags')).toBeTruthy();
+  });
+
+  it('names the group and keeps the name for the assistive technology', () => {
+    const view = render(<NoteTags content="" onAddTag={() => {}} onRemoveTag={() => {}} />);
+
+    const label = view.getByText('Tags');
+    expect(label).toBeTruthy();
+    // The label repeats what the row already says: it is decorative.
+    expect(label.closest('[aria-hidden="true"]')).toBeTruthy();
+    // The row keeps its own accessible name.
+    expect(view.getByRole('group', { name: 'Tags of the note' })).toBeTruthy();
+  });
+
+  it('renders the tags as pills', () => {
+    const view = render(<NoteTags content="#work #urgent" onAddTag={() => {}} onRemoveTag={() => {}} />);
+
+    const pills = view.container.querySelectorAll('.q9-note-tag');
+    expect(pills).toHaveLength(2);
+    expect(pills[0]?.textContent).toContain('#work');
+    expect(pills[1]?.textContent).toContain('#urgent');
+    // Every pill carries the button that removes it.
+    expect(view.getByLabelText('Remove the tag work')).toBeTruthy();
+    expect(view.getByLabelText('Remove the tag urgent')).toBeTruthy();
+  });
+
+  it('keeps the field inside the row of the tags', () => {
+    const view = render(<NoteTags content="#work" onAddTag={() => {}} onRemoveTag={() => {}} />);
+
+    const row = view.getByTestId('note-tags');
+    expect(row.querySelector('.q9-note-tag-add')).toBeTruthy();
+
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    // The field takes the place of the button inside the same row: the row
+    // does not grow and does not shrink.
+    expect(row.querySelector('.q9-note-tag-input')).toBeTruthy();
+    expect(row.querySelector('.q9-note-tag-add')).toBeNull();
+  });
+
+  it('opens the field with a placeholder and an accessible name', () => {
+    const view = render(<NoteTags content="" onAddTag={() => {}} onRemoveTag={() => {}} />);
+
+    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+
+    const field = view.getByLabelText('Name of the new tag');
+    expect(field.getAttribute('placeholder')).toBe('Add a tag…');
+    expect(view.getByPlaceholderText('Add a tag…')).toBe(field);
   });
 
   it('adds a tag through the field', () => {
@@ -30,6 +79,57 @@ describe('the tags of the open note', () => {
     fireEvent.keyDown(view.getByLabelText('Name of the new tag'), { key: 'Enter' });
 
     expect(onAddTag).toHaveBeenCalledWith('idea');
+  });
+
+  it('normalises the tag and closes the field on the Enter key', () => {
+    const onAddTag = vi.fn();
+    const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
+
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    const field = view.getByLabelText('Name of the new tag');
+    fireEvent.input(field, { target: { value: '  Idea  ' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onAddTag).toHaveBeenCalledTimes(1);
+    expect(onAddTag).toHaveBeenCalledWith('idea');
+    // The field is closed: the button is back in the row.
+    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
+    expect(view.getByLabelText('Add a tag to the note')).toBeTruthy();
+  });
+
+  it('closes the field on the Escape key without adding anything', () => {
+    const onAddTag = vi.fn();
+    const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
+
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    const field = view.getByLabelText('Name of the new tag');
+    fireEvent.input(field, { target: { value: 'idea' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+
+    expect(onAddTag).not.toHaveBeenCalled();
+    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
+  });
+
+  it('confirms the tag when the field loses the focus', () => {
+    const onAddTag = vi.fn();
+    const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
+
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    const field = view.getByLabelText('Name of the new tag');
+    fireEvent.input(field, { target: { value: 'idea' } });
+    fireEvent.blur(field);
+
+    expect(onAddTag).toHaveBeenCalledTimes(1);
+    expect(onAddTag).toHaveBeenCalledWith('idea');
+  });
+
+  it('hides the button and the field in the read-only mode', () => {
+    const view = render(
+      <NoteTags content="#work" readOnly onAddTag={() => {}} onRemoveTag={() => {}} />,
+    );
+
+    expect(view.queryByLabelText('Add a tag to the note')).toBeNull();
+    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
   });
 
   it('adds the tag only once when the field is submitted twice', () => {

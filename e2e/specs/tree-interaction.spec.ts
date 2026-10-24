@@ -159,11 +159,13 @@ test.describe('the tree of the notes', () => {
     await expect(row).toBeVisible();
 
     // The right click opens the menu of the row, and the menu of the browser
-    // never appears.
+    // never appears. The panel does not paint the name of the node — it is a
+    // narrow column of icons — but its accessible name says which node it
+    // acts on.
     await row.click({ button: 'right' });
     const menu = page.locator('.context-menu');
     await expect(menu).toBeVisible();
-    await expect(menu).toContainText(folder);
+    await expect(menu).toHaveAttribute('aria-label', `Actions of ${folder}`);
 
     // The folder can be created inside the folder of the menu.
     const inner = `${folder}-inner`;
@@ -254,6 +256,73 @@ test.describe('the tree of the notes', () => {
             files?: { path: string }[];
           };
           return (tree.files ?? []).some((file) => file.path === 'target/movable.md');
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+  });
+
+  test('a folder can be dropped into another folder', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
+
+    await gotoApp(page);
+
+    // Two folders at the root of the vault.
+    const suffix = Date.now().toString(36);
+    const inner = `dd-inner-${suffix}`;
+    const outer = `dd-outer-${suffix}`;
+    await page.evaluate(async ([a, b]) => {
+      for (const name of [a, b]) {
+        await fetch('/api/folders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentPath: '', name }),
+        });
+      }
+    }, [inner, outer]);
+    await page.reload();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+
+    // The inner folder is dragged onto the outer one.
+    await page.evaluate((name) => {
+      const transfer = new DataTransfer();
+      (window as unknown as { __transfer?: DataTransfer }).__transfer = transfer;
+      const label = [...document.querySelectorAll('.tree-name')].find(
+        (element) => element.textContent === name,
+      );
+      const row = label?.closest('.tree-row') as HTMLElement | null;
+      if (!row) throw new Error('the tree does not show the folder');
+
+      const event = new DragEvent('dragstart', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', { value: transfer });
+      row.dispatchEvent(event);
+    }, inner);
+    await expect.poll(() => page.evaluate(() => !!document.querySelector('.tree-row.dragging'))).toBe(true);
+
+    await page.evaluate((name) => {
+      const transfer = (window as unknown as { __transfer?: DataTransfer }).__transfer;
+      const label = [...document.querySelectorAll('.tree-name')].find(
+        (element) => element.textContent === name,
+      );
+      const targetRow = label?.closest('.tree-row') as HTMLElement | null;
+      if (!transfer || !targetRow) throw new Error('the tree does not show the folder');
+
+      const over = new DragEvent('dragover', { bubbles: true, cancelable: true });
+      Object.defineProperty(over, 'dataTransfer', { value: transfer });
+      targetRow.dispatchEvent(over);
+
+      const drop = new DragEvent('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, 'dataTransfer', { value: transfer });
+      targetRow.dispatchEvent(drop);
+    }, outer);
+
+    // The inner folder now lives inside the outer one.
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get('/api/tree');
+          const tree = (await res.json()) as { folders?: { path: string }[] };
+          return (tree.folders ?? []).some((folder) => folder.path === `${outer}/${inner}`);
         },
         { timeout: 15_000 },
       )

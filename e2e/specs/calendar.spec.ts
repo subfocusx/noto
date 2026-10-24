@@ -1,10 +1,10 @@
 /**
  * The calendar of the vault.
  *
- * The section shows a month of the vault: the days that carry notes are marked
- * with a dot, and the notes of the day the user picked are listed under the
- * grid. The data comes from the tree — a note belongs to the day it was written
- * on and to the day it was changed on.
+ * The section shows a month of the vault: the day of the machine carries a
+ * dot, the days that carry notes are tinted, and the notes of the day the user
+ * picked are listed under the grid. The data comes from the tree — a note
+ * belongs to the day it was written on and to the day it was changed on.
  */
 import { expect, test } from '@playwright/test';
 import { gotoApp, openSidebarIfNeeded } from '../helpers/app';
@@ -55,9 +55,12 @@ test.describe('the calendar of the vault', () => {
     const section = page.locator('.column-section[aria-label="Calendar"]');
     await expect(section).toBeVisible();
 
-    // The day of today carries the note, so it is marked with a dot.
-    const cell = section.locator('.calendar-day').filter({ has: page.locator('.calendar-dot') });
+    // The day of today carries the note, so it is tinted. The tint and the
+    // dot are two different signs: the dot marks the day of the machine, the
+    // tint marks a day that carries records.
+    const cell = section.locator('.calendar-day-has-notes');
     await expect(cell.first()).toBeVisible();
+    await expect(section.locator('.calendar-day-today .calendar-today-dot')).toHaveCount(1);
 
     // The day can be picked, and the note of the day is listed. The vault
     // holds other notes of the same day, so the list is checked for the note
@@ -66,5 +69,33 @@ test.describe('the calendar of the vault', () => {
     await expect(section.locator('.calendar-day-selected')).toHaveCount(1);
     await expect(section.locator('.calendar-note-list')).toBeVisible();
     await expect(section.locator('.calendar-note-name').filter({ hasText: note })).toHaveCount(1);
+  });
+
+  test('a reminder of the picked day can be added and removed', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    const section = page.locator('.column-section[aria-label="Calendar"]');
+    await expect(section).toBeVisible();
+
+    // The panel of the day exists only when a day is picked.
+    const today = section.locator('.calendar-day-today');
+    await expect(today).toHaveCount(1);
+    await today.click();
+
+    await section.getByRole('button', { name: 'Add a reminder' }).click();
+    await section.getByLabel('Time of the reminder').fill('18:30');
+    await section.getByLabel('Text of the reminder').fill('Call the vet');
+    await section.getByRole('button', { name: 'Add', exact: true }).click();
+
+    // The reminder is in the list of the day, with its moment and its text.
+    await expect(section.locator('.calendar-reminder')).toHaveCount(1);
+    await expect(section.locator('.calendar-reminder-time')).toContainText('18:30');
+    await expect(section.locator('.calendar-reminder-text')).toHaveText('Call the vet');
+
+    // And it can be taken back.
+    await section.getByRole('button', { name: 'Remove the reminder' }).click();
+    await expect(section.locator('.calendar-reminder')).toHaveCount(0);
   });
 });

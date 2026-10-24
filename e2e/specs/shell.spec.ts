@@ -175,7 +175,7 @@ test.describe('the shell of the application', () => {
     await expect(footer.getByRole('button')).toHaveCount(1);
   });
 
-  test('the tabs are flat: the active one is marked with an underline', async ({
+  test('the tabs are pills: the open notes are told apart', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
@@ -185,7 +185,15 @@ test.describe('the shell of the application', () => {
     const tab = page.locator('.tab-strip .tab').first();
     if ((await tab.count()) === 0) return;
 
+    // The tab is a pill: it has rounded corners at the top, so that two open
+    // notes do not run into each other.
     const radius = await tab.evaluate((element) => getComputedStyle(element).borderRadius);
-    expect(radius).toBe('0px');
+    expect(radius).not.toBe('0px');
+
+    // There is a gap between two tabs.
+    const gap = await page
+      .locator('.tab-strip')
+      .evaluate((element) => getComputedStyle(element).gap);
+    expect(Number.parseInt(gap, 10)).toBeGreaterThan(0);
   });
 });

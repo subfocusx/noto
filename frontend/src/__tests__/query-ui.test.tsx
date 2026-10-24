@@ -9,6 +9,8 @@ import {
   type QueryService,
 } from '../core/query/service';
 import { FilterPanel } from '../components/FilterPanel';
+import { FiltersSection } from '../components/sections/FiltersSection';
+import { SearchSection } from '../components/sections/SearchSection';
 import type { TagCount } from '../types';
 
 /** A service that answers what the test wants it to answer. */
@@ -199,14 +201,17 @@ describe('the service of the query', () => {
 });
 
 describe('the block of the selection', () => {
-  it('shows the query of the store and the number of the matches', () => {
-    setQueryService(fakeService({}));
+  it('shows the query of the store and the number of the matches', async () => {
+    setQueryService(fakeService({ outcome: { total: 1 } }));
     appStore.actions.setQuery('tag == "work"');
 
     const view = render(<FilterPanel />);
 
     const input = view.getByLabelText('Filter of the notes') as HTMLInputElement;
     expect(input.value).toBe('tag == "work"');
+
+    await appStore.actions.runQuery('tag == "work"');
+    await waitFor(() => expect(view.getByText('1 note matches')).toBeTruthy());
   });
 
   it('runs the query after the debounce delay', async () => {
@@ -290,6 +295,74 @@ describe('the saved filters', () => {
     fireEvent.click(view.getByLabelText('Delete the filter Work'));
 
     expect(view.queryByText('Work')).toBeNull();
+  });
+});
+
+describe('the place of the counter of the filter', () => {
+  it('shows the number of the matching notes in the section of the filters', async () => {
+    setQueryService(fakeService({ outcome: { total: 1 } }));
+    appStore.actions.setQuery('tag == "work"');
+    await appStore.actions.runQuery('tag == "work"');
+
+    const view = render(<FiltersSection />);
+
+    await waitFor(() => expect(view.getByText('1 note matches')).toBeTruthy());
+    expect(view.container.querySelectorAll('.q9-query-count')).toHaveLength(1);
+  });
+
+  it('uses the plural form when several notes match', async () => {
+    setQueryService(fakeService({ outcome: { total: 2 } }));
+    appStore.actions.setQuery('tag == "work"');
+    await appStore.actions.runQuery('tag == "work"');
+
+    const view = render(<FiltersSection />);
+
+    await waitFor(() => expect(view.getByText('2 notes match')).toBeTruthy());
+  });
+
+  it('has exactly one button that clears the filter', async () => {
+    setQueryService(fakeService({ outcome: { total: 1 } }));
+    appStore.actions.setQuery('tag == "work"');
+    await appStore.actions.runQuery('tag == "work"');
+
+    const view = render(<FiltersSection />);
+
+    expect(view.getAllByLabelText('Clear the filter')).toHaveLength(1);
+  });
+
+  it('does not show the number of the matching notes in the section of the search', async () => {
+    setQueryService(fakeService({ outcome: { total: 2 } }));
+    appStore.actions.setQuery('tag == "work"');
+    await appStore.actions.runQuery('tag == "work"');
+
+    const view = render(<SearchSection onOpenNote={() => undefined} />);
+
+    expect(view.container.querySelector('.q9-query-count')).toBeNull();
+    expect(view.queryAllByLabelText('Clear the filter')).toHaveLength(0);
+  });
+
+  it('offers to open the filters when a filter is applied', async () => {
+    const onOpenFilters = vi.fn();
+    setQueryService(fakeService({ outcome: { total: 1 } }));
+    appStore.actions.setQuery('tag == "work"');
+    await appStore.actions.runQuery('tag == "work"');
+
+    const view = render(
+      <SearchSection onOpenNote={() => undefined} onOpenFilters={onOpenFilters} />,
+    );
+
+    expect(
+      view.getByText('A filter is applied — the tree shows only the matching notes.'),
+    ).toBeTruthy();
+
+    fireEvent.click(view.getByRole('button', { name: 'Open the filters' }));
+    expect(onOpenFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer the filters without a handler', () => {
+    const view = render(<SearchSection onOpenNote={() => undefined} />);
+
+    expect(view.queryByRole('button', { name: 'Open the filters' })).toBeNull();
   });
 });
 

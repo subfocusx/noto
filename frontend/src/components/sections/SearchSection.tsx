@@ -6,7 +6,9 @@
 //
 // The search of the text and the filter of the query language are two
 // different things: the first finds a word in the notes, the second asks the
-// vault which notes match a condition. Both are here, and both are named.
+// vault which notes match a condition. The filter itself lives in the section
+// Filters, where the query is written; here a short line says that a filter is
+// applied and offers to open it.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { search } from '../../api/client';
 import { useAppActions, useAppState } from '../../core/store/hooks';
@@ -14,11 +16,12 @@ import { loadViews, type SavedView } from '../../core/views/types';
 import { debounce } from '../../lib/debounce';
 import { errorMessage } from '../../lib/errors';
 import type { SearchHit } from '../../types';
-import { Icon } from '../../ui/icons';
 
 export interface SearchSectionProps {
   /** Called with the path of the note the user picked. */
   onOpenNote(path: string): void;
+  /** Called when the user asks to open the section of the filters. */
+  onOpenFilters?(): void;
 }
 
 /** The delay of the search, in milliseconds. */
@@ -86,7 +89,7 @@ export function SearchSection(props: SearchSectionProps) {
    *
    * The filter belongs to the query language, so it is applied to the query of
    * the store: the tree of the notes is filtered by it, and the number of the
-   * matching notes is shown here.
+   * matching notes is shown in the section Filters.
    */
   const applyView = (view: SavedView): void => {
     actions.setQuery(view.query);
@@ -136,6 +139,23 @@ export function SearchSection(props: SearchSectionProps) {
           ) : null}
         </ul>
 
+        {state.ui.query.trim() ? (
+          <div class="section-filter-status">
+            <p class="section-hint">
+              A filter is applied — the tree shows only the matching notes.
+            </p>
+            {props.onOpenFilters ? (
+              <button
+                type="button"
+                class="q9-button q9-button-quiet"
+                onClick={() => props.onOpenFilters?.()}
+              >
+                Open the filters
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         <div class="sidebar-section">
           <div class="sidebar-section-title">
             <span>Saved filters</span>
@@ -159,26 +179,10 @@ export function SearchSection(props: SearchSectionProps) {
               ))}
             </div>
           )}
-          {state.ui.queryTotal > 0 ? (
-            <span class="q9-query-count" role="status">
-              {state.ui.queryTotal} {state.ui.queryTotal === 1 ? 'note matches' : 'notes match'}
-            </span>
-          ) : null}
           {state.ui.queryError ? (
             <p class="q9-query-error" role="alert">
               {state.ui.queryError}
             </p>
-          ) : null}
-          {state.ui.query ? (
-            <button
-              type="button"
-              class="icon-button"
-              title="Clear the filter"
-              aria-label="Clear the filter"
-              onClick={() => actions.clearQuery()}
-            >
-              <Icon name="x" size={14} />
-            </button>
           ) : null}
         </div>
       </div>

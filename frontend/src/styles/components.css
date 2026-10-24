@@ -1769,9 +1769,25 @@ kbd {
   flex: none;
 }
 
+/* The counter of the filter and the button that clears it share one row. */
+.q9-query-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .q9-query-count {
   color: var(--fg-secondary);
   font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* The line of the search section that points at the section of the filters. */
+.section-filter-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .q9-query-warning {

@@ -144,7 +144,15 @@ export function FilterPanel() {
             run.flush();
           }}
         />
-        {hasQuery ? (
+      </div>
+
+      {hasQuery ? (
+        <div class="q9-query-status">
+          {state.ui.queryError ? null : (
+            <span class="q9-query-count" role="status">
+              {state.ui.queryTotal === 1 ? '1 note matches' : `${state.ui.queryTotal} notes match`}
+            </span>
+          )}
           <button
             type="button"
             class="icon-button q9-query-clear"
@@ -154,14 +162,7 @@ export function FilterPanel() {
           >
             <Icon name="x" size={14} />
           </button>
-        ) : null}
-      </div>
-
-      {hasQuery && !state.ui.queryError ? (
-        <span class="q9-query-count" role="status">
-          {state.ui.queryTotal} {state.ui.queryTotal === 1 ? 'note' : 'notes'} match
-          {state.ui.queryTotal === 1 ? 'es' : ''}
-        </span>
+        </div>
       ) : null}
       {state.ui.queryPartial ? (
         <p class="q9-query-warning" role="status">

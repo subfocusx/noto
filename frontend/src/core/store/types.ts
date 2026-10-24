@@ -7,6 +7,7 @@ import type { Draft } from '../../lib/drafts';
 import type { Node, SearchHit, TagCount } from '../../types';
 import type { ThemePreference } from '../settings/prefs';
 import type { ConnectionState } from '../connection/types';
+import type { Notification } from '../notifications/types';
 
 export type ViewMode = 'editor' | 'split' | 'preview';
 
@@ -16,7 +17,14 @@ export type ViewMode = 'editor' | 'split' | 'preview';
  * The rail of the sections is an accordion: exactly one section is open at a
  * time, and the choice survives a reload.
  */
-export type RailSection = 'explorer' | 'search' | 'filters' | 'history' | 'trash';
+export type RailSection =
+  | 'explorer'
+  | 'calendar'
+  | 'search'
+  | 'filters'
+  | 'history'
+  | 'notifications'
+  | 'trash';
 
 export type DialogKind =
   | null
@@ -110,6 +118,26 @@ export interface UiState {
    * never disappears, so the section is the only thing that changes.
    */
   railSection: RailSection;
+  /**
+   * The month the calendar shows, as `YYYY-MM`.
+   *
+   * The empty string means "the month of today": the calendar shows it until
+   * the user walks to another month.
+   */
+  calendarMonth: string;
+  /**
+   * The day the user selected in the calendar, as `YYYY-MM-DD`.
+   *
+   * `null` means that no day is selected.
+   */
+  calendarDay: string | null;
+  /**
+   * The notifications of the session, the newest first.
+   *
+   * The list lives in the store, so the rail, the section of the notifications
+   * and the plugins always see the same list.
+   */
+  notifications: Notification[];
   /** The width of the sidebar in pixels. */
   sidebarWidth: number;
   /** The sort order of the tree. */

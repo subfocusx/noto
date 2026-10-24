@@ -20,6 +20,15 @@ import {
 import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
 import type { ContextMenuState, DialogState, RailSection, ViewMode } from './types';
 import { asksForName } from './types';
+import {
+  clearNotifications as clearNotificationList,
+  createNotification,
+  dismissNotification as dismissFromList,
+  markAllNotificationsRead as markAllInList,
+  markNotificationRead as markInList,
+  pushNotification as pushToList,
+  type NotificationInput,
+} from '../notifications/types';
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
 import { getQueryService } from '../query/service';
@@ -471,6 +480,22 @@ export function dailyNoteName(date: Date = new Date()): string {
 }
 
 /**
+ * Reads a day of the calendar (`YYYY-MM-DD`) as a local date.
+ *
+ * `new Date('2026-10-24')` is the midnight in the time zone of UTC, which in
+ * a negative offset is the evening of the day before: the note of the "24th"
+ * would be written with the name of the "23rd". The parts are therefore read
+ * one by one, so the date is always the local one.
+ */
+export function localDateOf(day: string): Date {
+  const parts = day.split('-').map((part) => Number.parseInt(part, 10));
+  const year = parts[0] ?? 1970;
+  const month = parts[1] ?? 1;
+  const dayOfMonth = parts[2] ?? 1;
+  return new Date(year, month - 1, dayOfMonth);
+}
+
+/**
  * Opens the daily note of the given day, creating it when it is missing.
  *
  * An existing note is never overwritten: it is simply opened. When a folder
@@ -609,6 +634,71 @@ export function setRailSection(section: RailSection): void {
   if (getSnapshot().ui.railSection === section) return;
   update((prev) => ({ ...prev, ui: { ...prev.ui, railSection: section } }));
   persistPrefs();
+}
+
+/**
+ * Shows another month in the calendar.
+ *
+ * The empty string means "the month of today": the section of the calendar
+ * shows it when the user never chose a month.
+ */
+export function setCalendarMonth(month: string): void {
+  if (getSnapshot().ui.calendarMonth === month) return;
+  update((prev) => ({ ...prev, ui: { ...prev.ui, calendarMonth: month } }));
+}
+
+/**
+ * Selects a day of the calendar.
+ *
+ * The day is the key of a date (`YYYY-MM-DD`); `null` means that no day is
+ * selected.
+ */
+export function setCalendarDay(day: string | null): void {
+  if (getSnapshot().ui.calendarDay === day) return;
+  update((prev) => ({ ...prev, ui: { ...prev.ui, calendarDay: day } }));
+}
+
+/**
+ * Tells the user something.
+ *
+ * The notification is created unread and is put at the head of the list: the
+ * newest event is the one the user must see first.
+ */
+export function notify(input: NotificationInput): void {
+  const notification = createNotification(input);
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, notifications: pushToList(prev.ui.notifications, notification) },
+  }));
+}
+
+/** Marks one notification as read. */
+export function markNotificationRead(id: string): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, notifications: markInList(prev.ui.notifications, id) },
+  }));
+}
+
+/** Marks every notification as read. */
+export function markAllNotificationsRead(): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, notifications: markAllInList(prev.ui.notifications) },
+  }));
+}
+
+/** Removes one notification from the list. */
+export function dismissNotification(id: string): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, notifications: dismissFromList(prev.ui.notifications, id) },
+  }));
+}
+
+/** Removes every notification from the list. */
+export function clearNotifications(): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, notifications: clearNotificationList() } }));
 }
 
 /** Changes the width of the sidebar; the value is clamped. */
@@ -970,6 +1060,13 @@ export interface AppActions {
   applyTheme(theme: ThemePreference): void;
   expandFolder(path: string): void;
   setRailSection(section: RailSection): void;
+  setCalendarMonth(month: string): void;
+  setCalendarDay(day: string | null): void;
+  notify(input: NotificationInput): void;
+  markNotificationRead(id: string): void;
+  markAllNotificationsRead(): void;
+  dismissNotification(id: string): void;
+  clearNotifications(): void;
   setSidebarWidth(width: number): void;
   setTreeSort(sort: TreeSort): void;
   setEditorFontSize(size: number): void;
@@ -1034,6 +1131,13 @@ export const actions: AppActions = {
   applyTheme,
   expandFolder,
   setRailSection,
+  setCalendarMonth,
+  setCalendarDay,
+  notify,
+  markNotificationRead,
+  markAllNotificationsRead,
+  dismissNotification,
+  clearNotifications,
   setSidebarWidth,
   setTreeSort,
   setEditorFontSize,

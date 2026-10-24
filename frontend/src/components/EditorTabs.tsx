@@ -24,10 +24,12 @@ export interface EditorTabsProps {
   onNewTab?(): void;
 }
 
-/** The height of a tab, in pixels. */
-export const TAB_HEIGHT = 32;
-
-/** The horizontal padding of a tab, in pixels. */
+/**
+ * The horizontal padding of a tab, in pixels.
+ *
+ * The height of the strip is not written here: the stylesheet owns it, so the
+ * strip of the tabs has the same height as the header of every other column.
+ */
 export const TAB_PADDING_X = 8;
 
 /** The gap between two tabs, in pixels. */
@@ -44,7 +46,6 @@ export const TAB_DIRTY_DOT = 6;
  */
 function tabStyle(active: boolean): Record<string, string> {
   return {
-    height: `${TAB_HEIGHT}px`,
     padding: `0 ${TAB_PADDING_X}px`,
     border: 'none',
     borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
@@ -90,7 +91,6 @@ export function EditorTabs(props: EditorTabsProps) {
         display: 'flex',
         alignItems: 'stretch',
         gap: `${TAB_GAP}px`,
-        height: `${TAB_HEIGHT}px`,
         overflow: 'hidden',
       }}
     >

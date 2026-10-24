@@ -74,12 +74,6 @@
   overflow: hidden;
 }
 
-.app.sidebar-collapsed .sidebar-wrap {
-  width: 0;
-  border-right: 0;
-  overflow: hidden;
-}
-
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -254,6 +248,11 @@
 
 /* ------------------------------------------------------- tab strip, crumbs */
 
+/*
+ * The strip of the tabs is the header of the workspace: it has the height of
+ * the header of every other column and the same background, so the line under
+ * the headers of the application is one single line.
+ */
 .tab-strip {
   flex: none;
   display: flex;
@@ -262,7 +261,7 @@
   height: var(--tab-height);
   padding: 0 var(--space-2);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-inset);
+  background: var(--bg-sidebar);
   overflow-x: auto;
 }
 
@@ -318,7 +317,7 @@
   min-height: 30px;
   padding: 0 var(--space-5);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-surface);
+  background: var(--bg-sidebar);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--fg-muted);
@@ -394,13 +393,19 @@
   .app .icon-button.menu-button {
     display: inline-flex;
   }
-}
 
-@media (max-width: 480px) {
-  .drawer-backdrop {
+  /*
+   * The column of the sections becomes a drawer: the rail of the sections
+   * stays where it is, so the user always knows where the sections are, and
+   * the column opens over the editor when the user asks for it.
+   *
+   * The backdrop covers the editor only while the drawer is open: a closed
+   * drawer must not intercept the clicks.
+   */
+  .app.drawer-open .drawer-backdrop {
     display: block;
     position: fixed;
-    inset: 0;
+    inset: 0 0 0 var(--rail-width);
     background: rgb(0 0 0 / 45%);
     z-index: var(--z-drawer);
   }
@@ -409,10 +414,14 @@
     position: fixed;
     top: 0;
     bottom: 0;
-    left: 0;
+    left: var(--rail-width);
     width: min(300px, 86vw);
     z-index: calc(var(--z-drawer) + 10);
-    transform: translateX(-100%);
+    /*
+     * The closed drawer stands completely to the left of the window: it must
+     * not cover the buttons of the status bar, which are under the rail.
+     */
+    transform: translateX(calc(-100% - var(--rail-width)));
     transition: transform var(--duration-normal) var(--ease-out);
     padding-top: env(safe-area-inset-top);
     padding-left: env(safe-area-inset-left);
@@ -421,11 +430,9 @@
   .app.drawer-open .sidebar-wrap {
     transform: translateX(0);
   }
+}
 
-  .app.sidebar-collapsed .sidebar-wrap {
-    width: min(300px, 86vw);
-  }
-
+@media (max-width: 480px) {
   .panel-wrap {
     position: fixed;
     top: 0;

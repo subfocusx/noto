@@ -1,0 +1,86 @@
+/*
+ * The strip of the open notes.
+ *
+ * The strip is the header of the workspace: it keeps the height of every other
+ * header, so the line of the frame stays one line (see §3.2 of the design
+ * system). The tabs themselves are pills with a gap between them: the notes
+ * that are open must be told apart at a glance.
+ */
+.tab-strip {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  height: var(--tab-height);
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* The tab: a pill that stands on the line of the frame.
+   The inactive tab is a card of its own (a background and a faint frame), so
+   that the open notes are told apart at a glance; the active tab is raised
+   and merges with the surface of the editor below it. */
+.tab-strip .tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 240px;
+  height: calc(var(--tab-height) - 4px);
+  margin-bottom: 3px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  font-size: var(--text-base);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab-strip .tab:hover {
+  background: var(--bg-container-high);
+  color: var(--fg-secondary);
+}
+
+.tab-strip .tab.active {
+  border-color: var(--border);
+  border-bottom-color: transparent;
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+
+/* The dot of a note with unsaved changes. */
+.tab-strip .tab-dirty {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  min-width: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The name of the note: it is cut with an ellipsis, it is never wrapped. */
+.tab-strip .tab-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The button that closes the active note. */
+.tab-strip .tab .tab-close {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+}
+
+/* The button that opens an empty tab. */
+.tab-strip .tab-new {
+  align-self: center;
+}

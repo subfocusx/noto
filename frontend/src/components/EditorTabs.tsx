@@ -1,3 +1,10 @@
+// The strip of the open notes.
+//
+// The strip is the header of the workspace: it keeps the height of every other
+// header, so the line of the frame stays one line (see §3.2 of the design
+// system). The notes that are open are pills with a gap between them — the
+// shape lives in `styles/tabs.css`, the component describes no style of its
+// own.
 import { useRef } from 'preact/hooks';
 import { Icon } from '../ui/icons';
 
@@ -27,39 +34,17 @@ export interface EditorTabsProps {
 /**
  * The horizontal padding of a tab, in pixels.
  *
- * The height of the strip is not written here: the stylesheet owns it, so the
- * strip of the tabs has the same height as the header of every other column.
+ * The stylesheet owns the shape of the tab: the constant mirrors the padding
+ * of `styles/tabs.css` (`--space-3`), so the two can be checked against each
+ * other by the tests.
  */
-export const TAB_PADDING_X = 8;
+export const TAB_PADDING_X = 12;
 
-/** The gap between two tabs, in pixels. */
-export const TAB_GAP = 2;
+/** The gap between two tabs, in pixels (`--space-1` of the stylesheet). */
+export const TAB_GAP = 4;
 
 /** The diameter of the dot of an unsaved note, in pixels. */
 export const TAB_DIRTY_DOT = 6;
-
-/**
- * The style of a tab.
- *
- * The strip is flat: the active tab is marked by an underline of the accent
- * colour and by the surface colour, the other tabs stay transparent.
- */
-function tabStyle(active: boolean): Record<string, string> {
-  return {
-    padding: `0 ${TAB_PADDING_X}px`,
-    border: 'none',
-    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-    borderRadius: '0',
-    background: active ? 'var(--bg-surface)' : 'transparent',
-    color: active ? 'var(--fg)' : 'var(--fg-muted)',
-    boxShadow: 'none',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    font: 'inherit',
-    cursor: 'pointer',
-  };
-}
 
 /**
  * The strip of the open notes.
@@ -82,18 +67,7 @@ export function EditorTabs(props: EditorTabsProps) {
   };
 
   return (
-    <div
-      class="tab-strip"
-      role="tablist"
-      aria-label="Open notes"
-      data-testid="tab-strip"
-      style={{
-        display: 'flex',
-        alignItems: 'stretch',
-        gap: `${TAB_GAP}px`,
-        overflow: 'hidden',
-      }}
-    >
+    <div class="tab-strip" role="tablist" aria-label="Open notes" data-testid="tab-strip">
       {props.tabs.map((tab, index) => {
         const active = tab.path === props.activePath;
         return (
@@ -108,7 +82,6 @@ export function EditorTabs(props: EditorTabsProps) {
             aria-selected={active}
             title={tab.path}
             data-testid="editor-tab"
-            style={tabStyle(active)}
             onClick={() => props.onSelect(tab.path)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowRight') {
@@ -128,20 +101,12 @@ export function EditorTabs(props: EditorTabsProps) {
                 role="img"
                 aria-label={`Unsaved changes in ${tab.name}`}
                 data-testid="tab-dirty"
-                style={{
-                  width: `${TAB_DIRTY_DOT}px`,
-                  height: `${TAB_DIRTY_DOT}px`,
-                  minWidth: `${TAB_DIRTY_DOT}px`,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  display: 'inline-block',
-                }}
               />
             ) : null}
             <span class="tab-name">{tab.name}</span>
             {active ? (
               <span
-                class="icon-button"
+                class="icon-button tab-close"
                 role="button"
                 tabIndex={0}
                 aria-label={`Close ${tab.name}`}
@@ -167,7 +132,7 @@ export function EditorTabs(props: EditorTabsProps) {
       {props.onNewTab ? (
         <button
           type="button"
-          class="icon-button"
+          class="icon-button tab-new"
           aria-label="New tab"
           title="New tab"
           onClick={() => props.onNewTab?.()}

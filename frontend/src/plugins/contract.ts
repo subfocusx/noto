@@ -9,7 +9,7 @@
 // `PLUGIN_API_VERSION`.
 
 import type { ComponentChildren } from 'preact';
-import type { Node, NoteContent, SaveNoteResponse, SearchHit } from '../types';
+import type { Node, NoteContent, SaveNoteResponse, SearchHit, TagCount } from '../types';
 
 /**
  * The error thrown when a plugin tries to do something it did not ask for in
@@ -25,10 +25,13 @@ export { PluginPermissionError } from '../core/api/pluginApi';
  * Version of the plugin API implemented by this build.
  *
  * `1.1.0` added the optional `ctx.vault` state (see {@link PluginVaultState}).
- * The bump is additive: a plugin that requires `1.0.0` keeps working
- * unchanged, because the new member is optional.
+ * `1.2.0` added the query capability: `ctx.api.query()` and `ctx.api.tags()`
+ * (see {@link PluginQueryResult}), behind the new permission `query.read`.
+ *
+ * Every bump so far is additive: a plugin that requires `1.0.0` keeps working
+ * unchanged, because the new members are optional.
  */
-export const PLUGIN_API_VERSION = '1.1.0';
+export const PLUGIN_API_VERSION = '1.2.0';
 
 /** Capabilities a plugin may request in its manifest. */
 export type PluginPermission =
@@ -36,6 +39,7 @@ export type PluginPermission =
   | 'notes.write'
   | 'tree.read'
   | 'search.read'
+  | 'query.read'
   | 'editor.read'
   | 'editor.write'
   | 'ui.contribute'
@@ -128,6 +132,36 @@ export type NoteContentLike = NoteContent;
 export type NodeLike = Node;
 /** Shape of a search hit returned by {@link PluginApi.search}. */
 export type SearchHitLike = SearchHit;
+/** Shape of a tag with its counter returned by {@link PluginApi.tags}. */
+export type TagCountLike = TagCount;
+
+/**
+ * A note that matches a query, as a plugin sees it.
+ *
+ * The hit is a {@link SearchHitLike} with two optional timestamps. The host
+ * fills them in when it knows them (the sealed mode evaluates the query over
+ * the decrypted notes and knows their dates); the open mode may leave them
+ * empty, because the server answers with the hits of the index.
+ */
+export interface PluginQueryHit extends SearchHitLike {
+  /** The moment of the creation of the note (ISO 8601), when the host knows it. */
+  createdAt?: string;
+  /** The moment of the last change of the note (ISO 8601), when the host knows it. */
+  updatedAt?: string;
+}
+
+/**
+ * The answer of a query.
+ *
+ * `total` is the number of the matching notes before the limit; `partial` is
+ * true when the properties of some notes could not be recalculated, so the
+ * answer may be incomplete.
+ */
+export interface PluginQueryResult {
+  hits: PluginQueryHit[];
+  total: number;
+  partial: boolean;
+}
 
 /** Data access available to a plugin. */
 export interface PluginApi {
@@ -135,6 +169,31 @@ export interface PluginApi {
   getTree(): Promise<{ folders: NodeLike[]; files: NodeLike[] }>;
   search(query: string, limit?: number): Promise<SearchHitLike[]>;
   saveNote(path: string, content: string, revision: number): Promise<SaveNoteResponse>;
+  /**
+   * Runs a query of the query language (API 1.2.0).
+   *
+   * Requires the permission `query.read`. The answer carries the paths, the
+   * names and the snippets of the matching notes — never the key material of
+   * the encrypted storage: in the sealed mode the query is evaluated locally
+   * over the decrypted notes.
+   *
+   * The member is optional in the type, so that an implementation of
+   * `PluginApi` written for API 1.0.0 or 1.1.0 keeps compiling. The host of
+   * API 1.2.0 always provides it.
+   */
+  query?(query: string, limit?: number): Promise<PluginQueryResult>;
+  /**
+   * Returns the tags of the vault with the number of the notes that carry them
+   * (API 1.2.0).
+   *
+   * Requires the permission `query.read`. Like {@link PluginApi.query}, it
+   * never exposes the key material.
+   *
+   * The member is optional in the type, so that an implementation of
+   * `PluginApi` written for API 1.0.0 or 1.1.0 keeps compiling. The host of
+   * API 1.2.0 always provides it.
+   */
+  tags?(): Promise<TagCountLike[]>;
 }
 
 /** A command contributed by a plugin (palette / shortcut). */
@@ -255,6 +314,8 @@ export interface PluginVaultState {
  * | `api.saveNote`                             | `notes.write`  |
  * | `api.getTree`                              | `tree.read`    |
  * | `api.search`                               | `search.read`  |
+ * | `api.query`                                | `query.read`   |
+ * | `api.tags`                                 | `query.read`   |
  * | `editor.getText/getSelection/getCursor`    | `editor.read`  |
  * | `editor.onChange/onSelectionChange`        | `editor.read`  |
  * | `editor.insert/insertAt/replaceSelection`  | `editor.write` |
@@ -263,6 +324,11 @@ export interface PluginVaultState {
  *
  * Reading the own settings of the plugin (`settings.get` / `settings.all`)
  * needs no permission: the namespace belongs to the plugin itself.
+ *
+ * A query (`api.query`, `api.tags`) never exposes the key material of the
+ * encrypted storage: in the sealed mode the query is evaluated locally over
+ * the decrypted notes, and the plugin sees only the answer — the paths, the
+ * names, the snippets and the counters.
  *
  * A forbidden operation throws a {@link PluginPermissionError} into the code
  * of the plugin — it is never a silent no-op.

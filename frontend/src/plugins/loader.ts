@@ -10,6 +10,10 @@ import type { Plugin } from './contract';
 import { insertTemplatePlugin } from './builtin/insert-template';
 import { wordCountPlugin } from './builtin/word-count';
 import { backlinksPlugin } from './builtin/backlinks';
+import { graphPlugin } from './builtin/graph';
+import { tagsPlugin } from './builtin/tags';
+import { activityPlugin } from './builtin/activity';
+import { linksPlugin } from './builtin/links';
 
 /**
  * The built-in plugins known to this build.
@@ -21,4 +25,8 @@ export const builtinPlugins: Plugin[] = [
   wordCountPlugin,
   insertTemplatePlugin,
   backlinksPlugin,
+  graphPlugin,
+  tagsPlugin,
+  activityPlugin,
+  linksPlugin,
 ];

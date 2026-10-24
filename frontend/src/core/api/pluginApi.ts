@@ -7,6 +7,10 @@
 // All HTTP goes through the existing API modules (`src/api/notes.ts`,
 // `src/api/tree.ts`, `src/api/search.ts`); this file never calls `fetch`.
 //
+// The query capability (API 1.2.0) lives in `core/api/pluginQuery.ts`: it
+// asks the server in the open mode and evaluates the query locally over the
+// decrypted notes in the sealed mode. It never exposes the key material.
+//
 // ---------------------------------------------------------------------------
 // Permissions
 // ---------------------------------------------------------------------------
@@ -25,10 +29,14 @@
 //
 // The mapping "operation -> permission" lives here, so that the host and the
 // API never disagree about what a plugin is allowed to do.
-import type { NoteContent, SaveNoteResponse, SearchHit, TreeResponse } from '../../types';
+import type { NoteContent, SaveNoteResponse, SearchHit, TagCount, TreeResponse } from '../../types';
 import { getNote as apiGetNote, saveNote as apiSaveNote } from '../../api/notes';
 import { getTree as apiGetTree } from '../../api/tree';
 import { search as apiSearch } from '../../api/search';
+import {
+  createPluginQueryApi,
+  type PluginQueryResult,
+} from './pluginQuery';
 
 /**
  * The state of the encrypted storage, as a plugin may see it.
@@ -77,6 +85,24 @@ export interface PluginApiLike {
   search(query: string, limit?: number): Promise<SearchHit[]>;
   saveNote(path: string, content: string, revision: number): Promise<SaveNoteResponse>;
   /**
+   * Runs a query of the query language.
+   *
+   * The implementation lives in `core/api/pluginQuery.ts`: it asks the server
+   * in the open mode and evaluates the query locally over the decrypted notes
+   * in the sealed mode.
+   *
+   * The member is optional in the type, so that an implementation of the API
+   * written for API 1.0.0 or 1.1.0 keeps compiling. The host of API 1.2.0
+   * always provides it.
+   */
+  query?(query: string, limit?: number): Promise<PluginQueryResult>;
+  /**
+   * Returns the tags of the vault with the number of the notes that carry them.
+   *
+   * The member is optional in the type, like {@link PluginApiLike.query}.
+   */
+  tags?(): Promise<TagCount[]>;
+  /**
    * The state of the encrypted storage, when the application published it.
    *
    * Absent while nothing was published: a plugin can then not know anything
@@ -99,6 +125,7 @@ export type PluginPermissionName =
   | 'notes.write'
   | 'tree.read'
   | 'search.read'
+  | 'query.read'
   | 'editor.read'
   | 'editor.write'
   | 'ui.contribute'
@@ -160,6 +187,8 @@ export const PLUGIN_API_PERMISSIONS = {
   saveNote: 'notes.write',
   getTree: 'tree.read',
   search: 'search.read',
+  query: 'query.read',
+  tags: 'query.read',
 } as const satisfies Record<Exclude<keyof PluginApiLike, 'vault'>, PluginPermissionName>;
 
 /** The restrictions applied to an API instance. */
@@ -206,6 +235,20 @@ export function restrictPluginApi(
       requirePermission(pluginId, permissions, PLUGIN_API_PERMISSIONS.saveNote);
       return api.saveNote(path, content, revision);
     },
+    async query(query: string, limit?: number): Promise<PluginQueryResult> {
+      requirePermission(pluginId, permissions, PLUGIN_API_PERMISSIONS.query);
+      if (!api.query) {
+        throw new Error('the query capability is not available in this build');
+      }
+      return api.query(query, limit);
+    },
+    async tags(): Promise<TagCount[]> {
+      requirePermission(pluginId, permissions, PLUGIN_API_PERMISSIONS.tags);
+      if (!api.tags) {
+        throw new Error('the query capability is not available in this build');
+      }
+      return api.tags();
+    },
   };
   // The state of the storage travels with the API: it is published by the
   // application, and the plugin only ever gets a frozen copy of it.
@@ -218,7 +261,24 @@ export function restrictPluginApi(
     get: (): PluginVaultStateLike | undefined =>
       api.vault ? freezeVaultState(api.vault) : undefined,
   });
+  // The query capability (API 1.2.0) is not enumerable either: the set of the
+  // keys of `ctx.api` stays the same as in API 1.0.0, so a plugin that walks
+  // over the API keeps working unchanged.
+  hideQueryMembers(restricted);
   return restricted;
+}
+
+/**
+ * Makes the members of the query capability non-enumerable.
+ *
+ * The set of the keys of the API object is a part of the contract of the
+ * platform: a plugin may walk over it. The new members of API 1.2.0 are
+ * therefore hidden, exactly like the state of the storage.
+ */
+function hideQueryMembers(api: PluginApiLike): void {
+  for (const member of ['query', 'tags'] as const) {
+    Object.defineProperty(api, member, { enumerable: false });
+  }
 }
 
 /**
@@ -249,6 +309,8 @@ export function createPluginApi(
     saveNote?: (path: string, content: string, revision: number) => Promise<SaveNoteResponse>;
     getTree?: () => Promise<TreeResponse>;
     search?: (query: string, limit?: number) => Promise<SearchHit[]>;
+    query?: (query: string, limit?: number) => Promise<PluginQueryResult>;
+    tags?: () => Promise<TagCount[]>;
   } = {},
   options: PluginApiOptions = {},
 ): PluginApiLike {
@@ -256,6 +318,12 @@ export function createPluginApi(
   const saveNote = deps.saveNote ?? apiSaveNote;
   const getTree = deps.getTree ?? apiGetTree;
   const search = deps.search ?? ((query: string, limit?: number) => apiSearch(query, limit ?? 50));
+  // The query capability knows both storage modes: it asks the server in the
+  // open mode and evaluates the query locally over the decrypted notes in the
+  // sealed mode.
+  const queryApi = createPluginQueryApi();
+  const runQuery = deps.query ?? queryApi.query;
+  const fetchTags = deps.tags ?? queryApi.tags;
 
   const api: PluginApiLike = {
     getNote(path: string): Promise<NoteContent> {
@@ -266,6 +334,19 @@ export function createPluginApi(
     },
     search(query: string, limit?: number): Promise<SearchHit[]> {
       return search(query, limit);
+    },
+    /**
+     * Runs a query of the query language.
+     *
+     * The query never exposes the key material: in the sealed mode it is
+     * evaluated locally over the decrypted notes.
+     */
+    query(query: string, limit?: number): Promise<PluginQueryResult> {
+      return runQuery(query, limit);
+    },
+    /** Returns the tags of the vault with the number of the notes that carry them. */
+    tags(): Promise<TagCount[]> {
+      return fetchTags();
     },
     /**
      * Saves a note with optimistic locking. The server rejects a stale
@@ -286,6 +367,9 @@ export function createPluginApi(
     get: (): PluginVaultStateLike | undefined =>
       options.vaultState ? freezeVaultState(options.vaultState) : undefined,
   });
+  // The members of the query capability (API 1.2.0) are not enumerable either:
+  // the set of the keys of the API object stays the same as in API 1.0.0.
+  hideQueryMembers(api);
 
   if (options.permissions === undefined) return api;
   if (options.pluginId === undefined) {

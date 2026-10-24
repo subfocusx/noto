@@ -1,4 +1,4 @@
-# Noto — Plugin API (v1.1.0)
+# Noto — Plugin API (v1.2.0)
 
 Справочник публичного контракта плагинов. Источник истины — код:
 
@@ -17,8 +17,13 @@
 
 ```ts
 // frontend/src/plugins/contract.ts
-export const PLUGIN_API_VERSION = '1.1.0';
+export const PLUGIN_API_VERSION = '1.2.0';
 ```
+
+Версия `1.2.0` добавила **возможность запроса**: `ctx.api.query()` и
+`ctx.api.tags()` за новым правом `query.read` (§3, §5.1). Изменение
+аддитивное: новые члены необязательны в типе, поэтому плагин, объявивший
+`minApiVersion: '1.0.0'`, продолжает работать без единой правки.
 
 Версия `1.1.0` добавила **одно** необязательное поле — состояние
 запечатанного хранилища `ctx.vault` (§4.1). Изменение аддитивное: плагин,
@@ -93,7 +98,7 @@ minApiVersion: '1.0.0'
 ## 3. Права (`permissions`)
 
 Полный набор — `PLUGIN_PERMISSIONS` (`frontend/src/plugins/manifest.ts:16`),
-тип `PluginPermission` (`frontend/src/plugins/contract.ts:18`). Ровно восемь прав.
+тип `PluginPermission` (`frontend/src/plugins/contract.ts:18`). Ровно девять прав.
 
 | Право | Что оно означает по смыслу | Что даёт на практике сейчас |
 | --- | --- | --- |
@@ -101,6 +106,7 @@ minApiVersion: '1.0.0'
 | `notes.write` | Запись заметок | `ctx.api.saveNote(path, content, revision)` — запись идёт через optimistic locking. |
 | `tree.read` | Чтение дерева заметок | `ctx.api.getTree()` возвращает `{ folders, files }`. |
 | `search.read` | Поиск по заметкам | `ctx.api.search(query, limit?)`. |
+| `query.read` | Выборка заметок языком запросов (API 1.2.0) | `ctx.api.query(query, limit?)` и `ctx.api.tags()`. Плагин видит пути, имена и сниппеты совпавших заметок — но никогда материал ключей. |
 | `editor.read` | Чтение текста открытой заметки | `ctx.editor.getText()`, `getSelection()`, `getCursor()`, подписки `onChange` / `onSelectionChange`. |
 | `editor.write` | Изменение текста открытой заметки | `ctx.editor.insert()`, `insertAt()`, `replaceSelection()` — изменения идут через CodeMirror, поэтому автосохранение продолжает работать. |
 | `ui.contribute` | Вклад в интерфейс | Регистрация панели, пункта сайдбара, пункта контекстного меню, кнопки тулбара, секции настроек, команды. |
@@ -131,6 +137,8 @@ minApiVersion: '1.0.0'
 | `ctx.api.saveNote(path, content, revision)` | `notes.write` | `restrictPluginApi` |
 | `ctx.api.getTree()` | `tree.read` | `restrictPluginApi` |
 | `ctx.api.search(query, limit?)` | `search.read` | `restrictPluginApi` |
+| `ctx.api.query(query, limit?)` | `query.read` | `restrictPluginApi` |
+| `ctx.api.tags()` | `query.read` | `restrictPluginApi` |
 | `ctx.editor.getText()` / `getSelection()` / `getCursor()` | `editor.read` | `restrictEditor` |
 | `ctx.editor.onChange()` / `onSelectionChange()` | `editor.read` | `restrictEditor` |
 | `ctx.editor.insert()` / `insertAt()` / `replaceSelection()` | `editor.write` | `restrictEditor` |
@@ -305,6 +313,39 @@ export function activate(ctx: PluginContext): void {
 | `getTree` | `() => Promise<{ folders: Node[]; files: Node[] }>` | Дерево заметок плоскими массивами. |
 | `search` | `(query: string, limit?: number) => Promise<SearchHit[]>` | Полнотекстовый поиск. Значение `limit` по умолчанию — `50` (`core/api/pluginApi.ts:39`). |
 | `saveNote` | `(path: string, content: string, revision: number) => Promise<SaveNoteResponse>` | Записывает заметку с optimistic locking. |
+| `query` | `(query: string, limit?: number) => Promise<PluginQueryResult>` | Выборка заметок языком запросов (API 1.2.0, право `query.read`). |
+| `tags` | `() => Promise<TagCount[]>` | Теги хранилища с числом заметок (API 1.2.0, право `query.read`). |
+
+### 5.1. Возможность запроса (API 1.2.0)
+
+Язык запросов описан в [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md). Плагин
+спрашивает хранилище тем же языком, что и человек:
+
+```ts
+const answer = await ctx.api.query?.("tag == 'work' && !has_incomplete_tasks");
+for (const hit of answer?.hits ?? []) {
+  console.log(hit.path, hit.title ?? hit.name);
+}
+const tags = await ctx.api.tags?.();
+// [{ tag: 'work', count: 12 }, { tag: 'home', count: 3 }]
+```
+
+| Поле ответа | Тип | Смысл |
+| --- | --- | --- |
+| `hits` | `PluginQueryHit[]` | Совпавшие заметки: путь, имя, сниппет и, когда хост знает, заголовок и таймстемпы. |
+| `total` | `number` | Число совпавших заметок до применения ограничения. |
+| `partial` | `boolean` | `true`, если свойства части заметок не удалось пересчитать, — ответ может быть неполным. |
+
+Как это работает в двух режимах хранения:
+
+* **открытое хранилище** — запрос уходит на сервер (`POST /api/query`), ответ
+  строит SQL-компилятор языка;
+* **запечатанное хранилище** — запрос выполняется **в браузере** над
+  расшифрованными заметками (`frontend/src/core/api/pluginQuery.ts`), поэтому
+  ключевой материал наружу не выходит никогда.
+
+Плагин без права `query.read` получает `PluginPermissionError` — тихого
+no-op здесь нет.
 
 Про `saveNote` важно:
 

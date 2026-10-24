@@ -394,13 +394,23 @@ describe('builtin loader', () => {
     }
   });
 
-  it('keeps the built-in plugins compatible with API 1.1.0 without any change', () => {
-    // The built-in plugins were written for API 1.0.0 and were NOT touched
-    // by the additive bump: they must keep working unchanged.
+  it('keeps the built-in plugins compatible with the older APIs without any change', () => {
+    // The plugins written before the query capability were NOT touched by the
+    // additive bumps: they must keep working unchanged. The plugins of API
+    // 1.2.0 declare the version they need.
     expect(builtinPlugins.length).toBeGreaterThan(0);
     for (const plugin of builtinPlugins) {
-      expect(plugin.manifest.minApiVersion).toBe('1.0.0');
       expect(isCompatible(plugin.manifest.minApiVersion, PLUGIN_API_VERSION)).toBe(true);
+    }
+    for (const id of ['word-count', 'insert-template', 'backlinks']) {
+      const plugin = builtinPlugins.find((item) => item.manifest.id === id);
+      expect(plugin).toBeDefined();
+      expect(plugin?.manifest.minApiVersion).toBe('1.0.0');
+    }
+    for (const id of ['graph', 'tags', 'activity', 'links']) {
+      const plugin = builtinPlugins.find((item) => item.manifest.id === id);
+      expect(plugin).toBeDefined();
+      expect(plugin?.manifest.minApiVersion).toBe('1.2.0');
     }
   });
 

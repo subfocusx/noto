@@ -146,7 +146,29 @@ CREATE TABLE IF NOT EXISTS trash (
   size          INTEGER NOT NULL DEFAULT 0,
   deleted_at    INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS note_props (
+  path        TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  title       TEXT NOT NULL DEFAULT '',
+  tags        TEXT NOT NULL DEFAULT '[]',
+  flags       INTEGER NOT NULL DEFAULT 0,
+  updated_at  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_note_props_tag ON note_props(tags);
 ```
+
+The schema version is stored in `PRAGMA user_version`. It is `1` for the
+vaults created before the query language and `2` since the migration of the
+phase 8: version `2` adds the table `note_props` and its index. The migration
+is idempotent: opening a vault of version `1` twice leaves it at version `2`,
+and the data of the version `1` is never touched.
+
+The table `note_props` holds the **derived** properties of the notes (the
+title, the tags and the boolean flags). They are a cache of the text of the
+note: the file on the disk stays the source of truth, and the rows are
+rebuilt when the note is saved or when the index is rebuilt. A row whose
+flags contain the bit `PropStale` marks a note whose properties could not be
+recalculated; the answer of a query then carries `partial: true`.
 
 Notes:
 
@@ -200,6 +222,25 @@ Stable error codes: `bad_request`, `invalid_path`, `not_found`, `conflict`,
 * `GET /api/search?q=term&limit=50` → `200 {"hits":[SearchHit]}`
   Empty `q` → `200 {"hits":[]}`.
 * `POST /api/search/reindex` → `200 {"indexed":N}`
+
+### Query (the query language)
+The query language is described in [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md).
+The endpoints below are the server side of the language; in the encrypted
+storage the same queries are answered by the browser.
+
+* `POST /api/query` body `{"query":"tag == 'work'","limit":50}` →
+  `200 {"hits":[SearchHit],"total":N,"partial":bool}`
+  * `hits` are the notes that match the query; `total` is the number of the
+    matching notes (before the limit); `partial` is `true` when the derived
+    properties of some notes could not be recalculated, so the answer may be
+    incomplete.
+  * An empty query → `200 {"hits":[],"total":0,"partial":false}`.
+  * A broken query → `400 bad_request` with the message of the parser
+    (`unknown field: <name>`, `unknown operator: <name>`, `expected a value`…).
+  * The limit is optional; the default is `50`.
+* `GET /api/tags` → `200 {"tags":[{"tag":"work","count":3}]}`
+  The tags of the vault with the number of the notes that carry them, the
+  biggest count first and then by name.
 
 ### Import / export
 * `POST /api/import/files` — `multipart/form-data` with

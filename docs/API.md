@@ -506,6 +506,53 @@ Response `200`:
 { "indexed": 128 }
 ```
 
+## Query (the query language)
+
+The language itself is described in [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md).
+The two endpoints below are the server side of the language: the encrypted
+storage answers the same questions in the browser.
+
+### `POST /api/query`
+
+Body:
+
+```json
+{ "query": "tag == 'work' && folder != ''", "limit": 50 }
+```
+
+Response `200`:
+
+```json
+{
+  "hits": [
+    { "path": "journal/a.md", "name": "a.md", "kind": "query", "snippet": "" }
+  ],
+  "total": 12,
+  "partial": false
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `hits` | `SearchHit[]` | the notes that match the query |
+| `total` | number | the number of the matching notes, before the limit |
+| `partial` | boolean | `true` when the derived properties of some notes could not be recalculated, so the answer may be incomplete |
+
+An empty query answers `{"hits":[],"total":0,"partial":false}` with status
+`200`. A broken query answers `400` with the envelope of the error and the
+message of the parser (`unknown field: colour`, `unknown operator: ~`,
+`expected a value`, …).
+
+### `GET /api/tags`
+
+Response `200`:
+
+```json
+{ "tags": [ { "tag": "work", "count": 12 }, { "tag": "home", "count": 3 } ] }
+```
+
+The tags are sorted by their count (the biggest first) and then by their name.
+
 ## Import and export
 
 ### `POST /api/import/files`

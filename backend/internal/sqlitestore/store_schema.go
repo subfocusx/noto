@@ -8,7 +8,11 @@ import (
 
 // schemaVersion is the current schema version. It is stored in the SQLite
 // user_version pragma and bumped whenever migrations below change.
-const schemaVersion = 1
+//
+// Version 2 added the table of the derived properties of the notes. The
+// migration is additive: the statements are idempotent, so a database of the
+// version 1 is opened, extended and kept.
+const schemaVersion = 2
 
 // init applies the pragmas and runs the migrations.
 func (s *Store) init(ctx context.Context) error {
@@ -112,4 +116,15 @@ var schemaStatements = []string{
 	`CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_path)`,
 	`CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_path)`,
 	`CREATE INDEX IF NOT EXISTS idx_trash_original ON trash(original_path)`,
+	// The derived properties of the notes. The table is a cache: the files on
+	// the disk stay the source of truth.
+	`CREATE TABLE IF NOT EXISTS note_props (
+  path        TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  title       TEXT NOT NULL DEFAULT '',
+  tags        TEXT NOT NULL DEFAULT '',
+  flags       INTEGER NOT NULL DEFAULT 0,
+  updated_at  INTEGER NOT NULL DEFAULT 0
+)`,
+	`CREATE INDEX IF NOT EXISTS idx_note_props_tag ON note_props(tags)`,
 }

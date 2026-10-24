@@ -200,6 +200,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/trash", s.openRoute(s.handleTrash))
 	s.mux.HandleFunc("GET /api/search", s.openRoute(s.handleSearch))
 	s.mux.HandleFunc("POST /api/search/reindex", s.openRoute(s.handleReindex))
+	s.mux.HandleFunc("POST /api/query", s.openRoute(s.handleQuery))
+	s.mux.HandleFunc("GET /api/tags", s.openRoute(s.handleTags))
 	s.mux.HandleFunc("POST /api/import/files", s.openRoute(s.handleImportFiles))
 	s.mux.HandleFunc("POST /api/import/zip", s.openRoute(s.handleImportZip))
 	s.mux.HandleFunc("GET /api/export/note", s.openRoute(s.handleExportNote))

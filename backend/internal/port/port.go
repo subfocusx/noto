@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"noto/backend/internal/model"
+	"noto/backend/internal/query"
 )
 
 // Store persists note metadata, the full text search index, attachments
@@ -51,4 +52,22 @@ type Store interface {
 	ListTrash(ctx context.Context) ([]model.Node, error)
 	// DeleteTrash removes a trash entry.
 	DeleteTrash(ctx context.Context, trashPath string) error
+
+	// UpsertNoteProps inserts or replaces the derived properties of a note.
+	//
+	// The properties are a cache of the text of the note: the file on the disk
+	// stays the source of truth.
+	UpsertNoteProps(ctx context.Context, p model.NoteProps) error
+	// GetNoteProps returns the derived properties of a single path.
+	GetNoteProps(ctx context.Context, path string) (model.NoteProps, bool, error)
+	// ListNoteProps returns the derived properties of every known note.
+	ListNoteProps(ctx context.Context) ([]model.NoteProps, error)
+	// DeleteNoteProps drops the derived properties of a path.
+	DeleteNoteProps(ctx context.Context, path string) error
+	// QueryNotes returns the notes that match a query of the query language.
+	//
+	// The query is compiled by the implementation: the store decides how the
+	// selection is calculated (SQL in the open mode, a predicate over the
+	// memory in the tests).
+	QueryNotes(ctx context.Context, e query.Expr, limit int) ([]model.SearchHit, error)
 }

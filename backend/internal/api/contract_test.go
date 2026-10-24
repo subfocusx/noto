@@ -352,6 +352,24 @@ func TestRouteContract(t *testing.T) {
 			wantKeys:   []string{"hits"},
 		},
 		{
+			name:   "POST /api/query",
+			method: http.MethodPost,
+			path:   "/api/query",
+			body:   `{"query":"tag == 'pineapple'","limit":10}`,
+			seed: func(t *testing.T, ts *httptest.Server, _ *contractEnv) {
+				contractSeedFile(t, ts, "a", "# Apple\\n\\n#pineapple")
+			},
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"hits", "total", "partial"},
+		},
+		{
+			name:       "GET /api/tags",
+			method:     http.MethodGet,
+			path:       "/api/tags",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"tags"},
+		},
+		{
 			name:       "POST /api/search/reindex",
 			method:     http.MethodPost,
 			path:       "/api/search/reindex",

@@ -7,8 +7,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"noto/backend/internal/model"
+	"noto/backend/internal/query"
 )
 
 // TrashRow is a trashed entry of the memory store.
@@ -28,6 +30,7 @@ type MemStore struct {
 	index       map[string]indexEntry
 	attachments map[string]model.Attachment
 	trash       map[string]TrashRow
+	props       map[string]model.NoteProps
 	closed      bool
 }
 
@@ -43,7 +46,125 @@ func NewMemStore() *MemStore {
 		index:       map[string]indexEntry{},
 		attachments: map[string]model.Attachment{},
 		trash:       map[string]TrashRow{},
+		props:       map[string]model.NoteProps{},
 	}
+}
+
+// UpsertNoteProps implements port.Store.
+func (s *MemStore) UpsertNoteProps(_ context.Context, p model.NoteProps) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.props[p.Path] = p
+	return nil
+}
+
+// GetNoteProps implements port.Store.
+func (s *MemStore) GetNoteProps(_ context.Context, path string) (model.NoteProps, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	props, found := s.props[path]
+	return props, found, nil
+}
+
+// ListNoteProps implements port.Store.
+func (s *MemStore) ListNoteProps(_ context.Context) ([]model.NoteProps, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.NoteProps, 0, len(s.props))
+	for _, props := range s.props {
+		out = append(out, props)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+// DeleteNoteProps implements port.Store.
+func (s *MemStore) DeleteNoteProps(_ context.Context, path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.props, path)
+	return nil
+}
+
+// QueryNotes implements port.Store.
+//
+// The memory store evaluates the query with the predicate of the query
+// package: the answer must be the same as the one of the SQL store.
+func (s *MemStore) QueryNotes(_ context.Context, e query.Expr, limit int) ([]model.SearchHit, error) {
+	if e == nil {
+		return []model.SearchHit{}, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	predicate := query.CompilePredicate(e, time.Now())
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	paths := make([]string, 0, len(s.notes))
+	for path := range s.notes {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	hits := []model.SearchHit{}
+	for _, path := range paths {
+		note, ok := s.queryNote(path)
+		if !ok || !predicate(note) {
+			continue
+		}
+		hits = append(hits, model.SearchHit{Path: path, Name: note.Name, Kind: "query"})
+		if len(hits) >= limit {
+			break
+		}
+	}
+	return hits, nil
+}
+
+// queryNote builds the data of a note for the predicate of a query.
+func (s *MemStore) queryNote(path string) (query.Note, bool) {
+	node, found := s.notes[path]
+	if !found {
+		return query.Note{}, false
+	}
+	entry, hasIndex := s.index[path]
+	props := s.props[path]
+	note := query.Note{
+		Path:      node.Path,
+		Name:      node.Name,
+		Content:   entry.body,
+		Title:     props.Title,
+		Tags:      props.Tags,
+		Folder:    node.ParentPath,
+		Ext:       extOf(node.Name),
+		CreatedAt: node.CreatedAt.Unix(),
+		UpdatedAt: node.UpdatedAt.Unix(),
+	}
+	if hasIndex {
+		note.Name = entry.name
+	}
+	note.HasTaskList = props.Flags&model.PropHasTaskList != 0
+	note.HasIncompleteTasks = props.Flags&model.PropHasIncompleteTasks != 0
+	note.HasCode = props.Flags&model.PropHasCode != 0
+	note.HasImage = props.Flags&model.PropHasImage != 0
+	note.HasLink = props.Flags&model.PropHasLink != 0
+	for _, attachment := range s.attachments {
+		if attachment.NotePath == path {
+			note.HasAttachments = true
+			break
+		}
+	}
+	return note, true
+}
+
+// extOf returns the extension of a file name, without the dot, lower cased.
+func extOf(name string) string {
+	at := strings.LastIndex(name, ".")
+	if at < 0 || at == len(name)-1 {
+		return ""
+	}
+	return strings.ToLower(name[at+1:])
 }
 
 // Close implements port.Store.

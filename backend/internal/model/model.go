@@ -48,6 +48,52 @@ type SearchHit struct {
 	Snippet string `json:"snippet"`
 }
 
+// The bits of the derived properties of a note.
+//
+// The properties are derived from the text of the note in one pass (see the
+// package `internal/metadata`). They are a CACHE: the file on the disk stays
+// the source of truth, and the cache is rebuilt when the note is saved or when
+// the index is rebuilt.
+const (
+	// PropHasTaskList marks a note that contains a task list.
+	PropHasTaskList uint32 = 1 << iota
+	// PropHasIncompleteTasks marks a note that contains a task that is not
+	// done yet.
+	PropHasIncompleteTasks
+	// PropHasCode marks a note that contains a code block or inline code.
+	PropHasCode
+	// PropHasImage marks a note that contains an image.
+	PropHasImage
+	// PropHasLink marks a note that contains a link.
+	PropHasLink
+	// PropStale marks a note whose properties could not be recalculated.
+	// The note itself is intact; the next reindex repairs the row.
+	PropStale
+)
+
+// NoteProps are the properties derived from the text of a note.
+type NoteProps struct {
+	// Path is the path of the note relative to the notes root.
+	Path string `json:"path"`
+	// Name is the file name of the note.
+	Name string `json:"name"`
+	// Title is the text of the first heading of the note, empty when the note
+	// has none.
+	Title string `json:"title"`
+	// Tags are the tags of the note, lower cased, without the `#`.
+	Tags []string `json:"tags"`
+	// Flags is the bit mask of the boolean properties.
+	Flags uint32 `json:"flags"`
+	// UpdatedAt is the moment the properties were calculated.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// TagCount is a tag of the vault and the number of the notes that carry it.
+type TagCount struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
+}
+
 // Attachment is an uploaded binary stored outside of the notes directory.
 type Attachment struct {
 	ID        string    `json:"id"`

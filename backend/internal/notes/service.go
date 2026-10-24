@@ -175,12 +175,16 @@ func (s *Service) indexFile(ctx context.Context, rel, content string) error {
 	if err := s.store.IndexContent(ctx, rel, baseOf(rel), content); err != nil {
 		return newErr(ErrInternal, "cannot update the search index")
 	}
+	// The properties of the note are derived from its text: they are
+	// recalculated with the index, so that they never lag behind the file.
+	s.refreshNoteProps(ctx, rel, baseOf(rel), content)
 	return nil
 }
 
 // removeFromIndex drops a path from the search index.
 func (s *Service) removeFromIndex(ctx context.Context, rel string) {
 	_ = s.store.RemoveContent(ctx, rel)
+	_ = s.store.DeleteNoteProps(ctx, rel)
 }
 
 // walkNotes walks the notes root and calls fn for every file and folder.

@@ -11,9 +11,11 @@ package porttest
 import (
 	"context"
 	"testing"
+	"time"
 
 	"noto/backend/internal/model"
 	"noto/backend/internal/port"
+	"noto/backend/internal/query"
 )
 
 // Divergence describes a case of the conformance suite that an
@@ -102,6 +104,8 @@ func (s *suite) run() {
 	s.runCase("a query with special characters does not fail", s.caseSpecialCharacters)
 	s.runCase("remove a content drops the path from the index", s.caseRemoveContent)
 	s.runCase("clear the index empties it", s.caseClearIndex)
+	s.runCase("the properties of a note are stored, listed and deleted", s.caseProps)
+	s.runCase("a query of the query language selects the notes", s.caseQueryNotes)
 	s.runCase("attachments are stored, listed, read and deleted", s.caseAttachments)
 	s.runCase("trash entries are stored, listed and deleted", s.caseTrash)
 }
@@ -435,6 +439,143 @@ func (s *suite) caseClearIndex() {
 	}
 	if len(hits) != 0 {
 		s.cur.Fatalf("the cleared index still holds hits: %+v", hits)
+	}
+}
+
+// ------------------------------------------------------------ properties ---
+
+// caseProps checks UpsertNoteProps, GetNoteProps, ListNoteProps and
+// DeleteNoteProps.
+//
+// The properties are a cache of the text of the note: every implementation
+// must store them, read them back and drop them with the note.
+func (s *suite) caseProps() {
+	ctx := context.Background()
+	store := s.store()
+
+	props := model.NoteProps{
+		Path:  "a.md",
+		Name:  "a.md",
+		Title: "Alpha",
+		Tags:  []string{"work", "urgent"},
+		Flags: model.PropHasTaskList | model.PropHasIncompleteTasks,
+	}
+	if err := store.UpsertNoteProps(ctx, props); err != nil {
+		s.cur.Fatalf("upsert note props: %v", err)
+	}
+
+	got, found, err := store.GetNoteProps(ctx, "a.md")
+	if err != nil {
+		s.cur.Fatalf("get note props: %v", err)
+	}
+	if !found {
+		s.cur.Fatalf("the properties of a.md were not found")
+	}
+	if got.Title != props.Title || got.Name != props.Name {
+		s.cur.Fatalf("unexpected properties %+v", got)
+	}
+	if len(got.Tags) != 2 || got.Tags[0] != "work" || got.Tags[1] != "urgent" {
+		s.cur.Fatalf("unexpected tags %+v", got.Tags)
+	}
+	if got.Flags&model.PropHasTaskList == 0 || got.Flags&model.PropHasIncompleteTasks == 0 {
+		s.cur.Fatalf("unexpected flags %d", got.Flags)
+	}
+
+	// An upsert of the same path replaces the stored properties.
+	props.Title = "Beta"
+	props.Tags = []string{"work"}
+	if err := store.UpsertNoteProps(ctx, props); err != nil {
+		s.cur.Fatalf("upsert note props again: %v", err)
+	}
+	got, found, err = store.GetNoteProps(ctx, "a.md")
+	if err != nil {
+		s.cur.Fatalf("get note props again: %v", err)
+	}
+	if !found || got.Title != "Beta" || len(got.Tags) != 1 {
+		s.cur.Fatalf("the properties were not updated: %+v", got)
+	}
+
+	list, err := store.ListNoteProps(ctx)
+	if err != nil {
+		s.cur.Fatalf("list note props: %v", err)
+	}
+	if len(list) != 1 || list[0].Path != "a.md" {
+		s.cur.Fatalf("unexpected list of the properties %+v", list)
+	}
+
+	if err := store.DeleteNoteProps(ctx, "a.md"); err != nil {
+		s.cur.Fatalf("delete note props: %v", err)
+	}
+	if _, found, err := store.GetNoteProps(ctx, "a.md"); err != nil {
+		s.cur.Fatalf("get deleted note props: %v", err)
+	} else if found {
+		s.cur.Fatalf("the deleted properties are still there")
+	}
+	list, err = store.ListNoteProps(ctx)
+	if err != nil {
+		s.cur.Fatalf("list note props after delete: %v", err)
+	}
+	if len(list) != 0 {
+		s.cur.Fatalf("unexpected list of the properties after the delete: %+v", list)
+	}
+}
+
+// caseQueryNotes checks that a query of the query language selects the notes
+// that match it.
+//
+// The case uses a tag, because the tag is a derived property: an
+// implementation that does not know the properties cannot answer the query.
+func (s *suite) caseQueryNotes() {
+	ctx := context.Background()
+	store := s.store()
+
+	now := time.Now()
+	node := model.Node{
+		Path:      "a.md",
+		Name:      "a.md",
+		Type:      model.NodeFile,
+		ParentPath: "",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.UpsertNote(ctx, node); err != nil {
+		s.cur.Fatalf("upsert note: %v", err)
+	}
+	if err := store.IndexContent(ctx, "a.md", "a.md", "the body of the note"); err != nil {
+		s.cur.Fatalf("index content: %v", err)
+	}
+	if err := store.UpsertNoteProps(ctx, model.NoteProps{
+		Path:  "a.md",
+		Name:  "a.md",
+		Title: "Alpha",
+		Tags:  []string{"work"},
+		Flags: model.PropHasTaskList,
+	}); err != nil {
+		s.cur.Fatalf("upsert note props: %v", err)
+	}
+
+	expr, err := query.Parse("tag == 'work'")
+	if err != nil {
+		s.cur.Fatalf("parse the query: %v", err)
+	}
+	hits, err := store.QueryNotes(ctx, expr, 10)
+	if err != nil {
+		s.cur.Fatalf("query the notes: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Path != "a.md" {
+		s.cur.Fatalf("the query did not select the note: %+v", hits)
+	}
+
+	other, err := query.Parse("tag == 'home'")
+	if err != nil {
+		s.cur.Fatalf("parse the other query: %v", err)
+	}
+	hits, err = store.QueryNotes(ctx, other, 10)
+	if err != nil {
+		s.cur.Fatalf("query the notes again: %v", err)
+	}
+	if len(hits) != 0 {
+		s.cur.Fatalf("the query selected a note that does not match: %+v", hits)
 	}
 }
 

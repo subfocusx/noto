@@ -6,6 +6,7 @@ import (
 
 	"noto/backend/internal/model"
 	"noto/backend/internal/port"
+	"noto/backend/internal/query"
 )
 
 // ErrVaultSealed is the sentinel error of the blocked store. It means that
@@ -26,6 +27,26 @@ type blockedStore struct{}
 // NewBlockedStore creates a store that refuses every operation. It is used
 // in sealed mode, where the server stores only ciphertext.
 func NewBlockedStore() port.Store { return blockedStore{} }
+
+// UpsertNoteProps refuses to store the properties of a note.
+func (b blockedStore) UpsertNoteProps(ctx context.Context, p model.NoteProps) error { return err() }
+
+// GetNoteProps refuses to return the properties of a note.
+func (b blockedStore) GetNoteProps(ctx context.Context, path string) (model.NoteProps, bool, error) {
+	return model.NoteProps{}, false, err()
+}
+
+// ListNoteProps refuses to list the properties of the notes.
+func (b blockedStore) ListNoteProps(ctx context.Context) ([]model.NoteProps, error) { return nil, err() }
+
+// DeleteNoteProps refuses to drop the properties of a note.
+func (b blockedStore) DeleteNoteProps(ctx context.Context, path string) error { return err() }
+
+// QueryNotes refuses to run a query: the properties of the notes live in the
+// browser, not on the server.
+func (b blockedStore) QueryNotes(ctx context.Context, e query.Expr, limit int) ([]model.SearchHit, error) {
+	return nil, err()
+}
 
 // err returns the error of every refused operation.
 func err() error { return ErrVaultSealed }

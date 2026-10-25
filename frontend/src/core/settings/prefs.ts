@@ -45,6 +45,14 @@ export interface Prefs {
   expandedFolders: string[];
   /** The paths of the recently opened notes, the newest first. */
   recentPaths: string[];
+  /**
+   * The paths of the storages that were opened before, the newest first.
+   *
+   * The server holds one storage at a time, so the list of the recent ones
+   * lives with the preferences of the user: it is the quick way back to a
+   * storage without walking the disk again.
+   */
+  vaultRecents: string[];
   /** True when the right panel (outline) is visible. */
   rightPanelVisible: boolean;
   /** True when the right panel is pinned open even on narrow screens. */
@@ -105,6 +113,9 @@ export const RECENT_LIMIT = 20;
  */
 export const EXPANDED_FOLDERS_LIMIT = 5000;
 
+/** The number of the storages that are remembered as used. */
+export const VAULT_RECENTS_LIMIT = 8;
+
 /** The default number of minutes of inactivity before the vault locks itself. */
 export const AUTO_LOCK_MINUTES_DEFAULT = 15;
 
@@ -125,6 +136,7 @@ export const DEFAULT_PREFS: Prefs = {
   editorWrap: true,
   expandedFolders: [],
   recentPaths: [],
+  vaultRecents: [],
   rightPanelVisible: true,
   rightPanelPinned: false,
   rightPanelWidth: RIGHT_PANEL_WIDTH_DEFAULT,
@@ -227,6 +239,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     editorWrap: source.editorWrap !== false,
     expandedFolders: stringList(source.expandedFolders).slice(0, EXPANDED_FOLDERS_LIMIT),
     recentPaths: stringList(source.recentPaths).slice(0, RECENT_LIMIT),
+    vaultRecents: stringList(source.vaultRecents).slice(0, VAULT_RECENTS_LIMIT),
     rightPanelVisible: source.rightPanelVisible !== false,
     rightPanelPinned: source.rightPanelPinned === true,
     rightPanelWidth:
@@ -288,4 +301,16 @@ export function pushRecent(paths: string[], path: string): string[] {
 /** Removes a path from the list of the recent notes. */
 export function removeRecent(paths: string[], path: string): string[] {
   return paths.filter((item) => item !== path);
+}
+
+/**
+ * Adds a path to the list of the recent storages.
+ *
+ * The newest storage comes first, a path appears only once and the list never
+ * grows beyond {@link VAULT_RECENTS_LIMIT}.
+ */
+export function pushVaultRecent(paths: string[], path: string): string[] {
+  if (!path) return paths;
+  const rest = paths.filter((item) => item !== path);
+  return [path, ...rest].slice(0, VAULT_RECENTS_LIMIT);
 }

@@ -104,6 +104,8 @@ export function createInitialState(): AppState {
       vaultPath: '',
       vaultFixed: false,
       vaultBusy: false,
+      vaultRecents: prefs.vaultRecents,
+      vaultMenuOpen: false,
     },
     env: {
       online: initialOnline(),

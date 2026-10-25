@@ -12,6 +12,7 @@ import type { Node, NoteContent } from '../../types';
 import {
   clampRightPanelWidth,
   pushRecent as pushRecentPath,
+  pushVaultRecent,
   removeRecent as removeRecentPath,
   savePrefs,
   type ThemePreference,
@@ -42,7 +43,7 @@ import {
 import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
 import { getVaultService } from '../vault/vaultService';
-import { getSealedVault } from '../vault/session';
+import { detectVaultMode, getSealedVault, lockVault } from '../vault/session';
 import {
   deleteSealedDraft,
   getSealedDraft,
@@ -106,6 +107,7 @@ function persistPrefs(): void {
     rightPanelWidth: state.ui.rightPanelWidth,
     recentCollapsed: state.ui.recentCollapsed,
     treeShowCounts: state.ui.treeShowCounts,
+    vaultRecents: state.ui.vaultRecents,
   });
 }
 
@@ -1007,15 +1009,24 @@ export async function chooseVault(path: string): Promise<void> {
   update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: true } }));
   try {
     const info = await setVault(path);
+    const chosen = info.path ?? path;
     update((prev) => ({
       ...prev,
       ui: {
         ...prev.ui,
         vaultConfigured: true,
-        vaultPath: info.path ?? path,
+        vaultPath: chosen,
         vaultBusy: false,
+        vaultRecents: pushVaultRecent(prev.ui.vaultRecents, chosen),
       },
     }));
+    persistPrefs();
+    // The server now holds another folder: the key material of the previous
+    // storage must not survive the change, and the mode of the new storage
+    // must be read again. A storage that is encrypted shows the screen of the
+    // password instead of the notes of the previous one.
+    await lockVault();
+    await detectVaultMode();
     await refreshTree();
   } catch (err) {
     update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: false } }));
@@ -1046,6 +1057,11 @@ export function removeRecent(path: string): void {
     ui: { ...prev.ui, recentPaths: removeRecentPath(prev.ui.recentPaths, path) },
   }));
   persistPrefs();
+}
+
+/** Opens or closes the quick menu of the storage of the notes. */
+export function setVaultMenuOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, vaultMenuOpen: open } }));
 }
 
 /* ------------------------------------------------------------ environment */
@@ -1174,6 +1190,7 @@ export interface AppActions {
   applyTheme(theme: ThemePreference): void;
   expandFolder(path: string): void;
   setRailSection(section: RailSection): void;
+  setVaultMenuOpen(open: boolean): void;
   setCalendarMonth(month: string): void;
   setCalendarDay(day: string | null): void;
   notify(input: NotificationInput): void;
@@ -1252,6 +1269,7 @@ export const actions: AppActions = {
   applyTheme,
   expandFolder,
   setRailSection,
+  setVaultMenuOpen,
   setCalendarMonth,
   setCalendarDay,
   notify,

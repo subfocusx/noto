@@ -87,6 +87,14 @@ export interface SidebarProps {
   onResizeWidth?: (width: number) => void;
   /** Called when the user asks for the dialog of the choice of the storage. */
   onChooseVault?: () => void;
+  /** The storages that were opened before, the newest first. */
+  vaultRecents?: string[];
+  /** True when the quick menu of the storage is open. */
+  vaultMenuOpen?: boolean;
+  /** Called when the user opens or closes the quick menu of the storage. */
+  onVaultMenuToggle?(open: boolean): void;
+  /** Called when the user chooses a storage from the menu. */
+  onSwitchVault?(path: string): void;
   /** True when the storage is fixed by the environment and cannot be changed. */
   vaultFixed?: boolean;
   /** The total number of the folders of the vault. */
@@ -241,6 +249,10 @@ export function Sidebar(props: SidebarProps) {
           vaultPath={props.vaultPath}
           vaultFixed={props.vaultFixed}
           onChooseVault={props.onChooseVault}
+          vaultRecents={props.vaultRecents}
+          vaultMenuOpen={props.vaultMenuOpen}
+          onVaultMenuToggle={props.onVaultMenuToggle}
+          onSwitchVault={props.onSwitchVault}
           showCounts={props.showCounts}
           filterPaths={props.filterPaths}
           onOpenGraph={props.onOpenGraph}

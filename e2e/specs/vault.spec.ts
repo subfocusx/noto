@@ -95,6 +95,12 @@ test.describe('the change of the storage', () => {
     await expect(change).toBeVisible();
     await change.click();
 
+    // The quick menu of the storage opens first: the picker of the folders is
+    // one of its entries.
+    const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Choose another folder…' }).click();
+
     const picker = page.getByRole('dialog', { name: 'Choose the storage of the notes' });
     await expect(picker).toBeVisible();
     await expect(picker.getByLabel('Path of the folder')).toBeVisible();

@@ -92,6 +92,13 @@ export interface AppCommandDeps {
   /** Opens a section of the left column. */
   openSection(section: RailSection): void;
   /**
+   * Opens the quick menu of the storage of the notes.
+   *
+   * The menu lives in the header of the explorer, so the section is opened
+   * with it.
+   */
+  switchVault?(): void;
+  /**
    * Opens every folder of the tree at once.
    *
    * The callback is optional: the shell wires it when the store is ready.
@@ -174,6 +181,12 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
       title: 'Collapse all folders',
       description: 'Close every folder of the tree at once',
       run: () => deps.collapseAllFolders?.(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}switch-vault`,
+      title: 'Switch the storage of the notes',
+      description: 'Open the recent storages and change the storage',
+      run: () => deps.switchVault?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}settings`,

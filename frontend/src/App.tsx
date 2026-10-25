@@ -326,6 +326,12 @@ export function App() {
       },
       expandAllFolders: () => appStore.actions.expandAllFolders(),
       collapseAllFolders: () => appStore.actions.collapseAllFolders(),
+      switchVault: () => {
+        // The menu of the storage lives in the header of the explorer, so the
+        // section is opened with it.
+        appStore.actions.setRailSection('explorer');
+        appStore.actions.setVaultMenuOpen(true);
+      },
     });
 
     const host = new PluginHost({
@@ -1139,6 +1145,10 @@ export function App() {
             showCounts={ui.treeShowCounts}
             onMoveNode={moveByDrop}
             onChooseVault={() => setVaultPickerOpen(true)}
+            vaultRecents={ui.vaultRecents}
+            vaultMenuOpen={ui.vaultMenuOpen}
+            onVaultMenuToggle={actions.setVaultMenuOpen}
+            onSwitchVault={(path) => void actions.chooseVault(path)}
             sidebarWidth={ui.sidebarWidth}
             onResizeWidth={actions.setSidebarWidth}
             recentCollapsed={ui.recentCollapsed}

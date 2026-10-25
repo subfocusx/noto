@@ -138,10 +138,14 @@ export async function unlockVault(password: string): Promise<void> {
  * The key material is dropped, the manifest and the index are cleared. The
  * unsaved work in the local drafts is removed as well: it is encrypted with
  * the key that is about to disappear.
+ *
+ * The mode of the storage does not change: an open storage has no key
+ * material, so locking it only drops the material of a storage that was
+ * encrypted before.
  */
 export async function lockVault(): Promise<void> {
   if (vault) await vault.lock();
-  publish({ locked: state.mode === 'sealed', mode: 'sealed' });
+  if (state.mode === 'sealed') publish({ locked: true });
 }
 
 /**

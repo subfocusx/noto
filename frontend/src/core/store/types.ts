@@ -234,6 +234,15 @@ export interface UiState {
   vaultFixed: boolean;
   /** True while the storage is being read or changed. */
   vaultBusy: boolean;
+  /**
+   * The paths of the storages that were opened before, the newest first.
+   *
+   * The list is the quick way back to a storage: it is shown by the menu of
+   * the header of the storage.
+   */
+  vaultRecents: string[];
+  /** True when the quick menu of the storage is open. */
+  vaultMenuOpen: boolean;
 }
 
 /** The open context menu of the note tree. */

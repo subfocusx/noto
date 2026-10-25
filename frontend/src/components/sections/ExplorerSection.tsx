@@ -6,7 +6,7 @@
 //
 // The tree of the notes lives here, and so does the state of the drag and drop
 // between the folders: the two belong together and nothing else needs them.
-import { useMemo, useState } from 'preact/hooks';
+import { useMemo, useRef, useState } from 'preact/hooks';
 import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
 import { filterTree } from '../../lib/tree';
@@ -14,6 +14,7 @@ import { Icon } from '../../ui/icons';
 import { IconButton } from '../../ui/tooltip';
 import type { TreeContextMenuPayload } from '../TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from '../TreeRow';
+import { VaultSwitchMenu } from '../VaultSwitchMenu';
 
 export interface ExplorerSectionProps {
   /** The folders of the vault. */
@@ -58,6 +59,14 @@ export interface ExplorerSectionProps {
   vaultPath?: string;
   /** True when the storage is fixed by the environment and cannot be changed. */
   vaultFixed?: boolean;
+  /** The storages that were opened before, the newest first. */
+  vaultRecents?: string[];
+  /** True when the quick menu of the storage is open. */
+  vaultMenuOpen?: boolean;
+  /** Called when the user opens or closes the quick menu of the storage. */
+  onVaultMenuToggle?(open: boolean): void;
+  /** Called when the user chooses a storage from the menu. */
+  onSwitchVault?(path: string): void;
   /** Called when the user asks for the dialog of the choice of the storage. */
   onChooseVault?: () => void;
   /** False when the counters of the tree are hidden. */
@@ -90,6 +99,20 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   const [drag, setDrag] = useState<TreeDragState>({ path: null, isFolder: false });
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [rootOver, setRootOver] = useState(false);
+  /**
+   * The buttons that open the quick menu of the storage.
+   *
+   * The menu closes itself when the user clicks outside of it. The buttons that
+   * open it must not be seen as "outside", otherwise the click would close the
+   * menu and open it again.
+   */
+  const triggerRef = useRef<HTMLSpanElement | null>(null);
+
+  /** Opens or closes the quick menu of the storage. */
+  const toggleMenu = (): void => {
+    if (props.vaultFixed) return;
+    props.onVaultMenuToggle?.(!props.vaultMenuOpen);
+  };
 
   /**
    * The tree of the notes, filtered by the query of the user.
@@ -198,29 +221,44 @@ export function ExplorerSection(props: ExplorerSectionProps) {
           <Icon name="folder" size={15} />
         </span>
         <span class="vault-header-name">{props.vaultName ?? 'Noto'}</span>
-        {props.onChooseVault ? (
-          <button
-            type="button"
-            class="vault-header-path"
-            title={
-              props.vaultFixed
-                ? 'The storage is fixed by the environment (NOTO_VAULT_FIXED)'
-                : props.vaultPath
-            }
-            aria-label="Change the storage of the notes"
-            aria-disabled={props.vaultFixed ? 'true' : undefined}
-            onClick={() => {
-              if (props.vaultFixed) return;
-              props.onChooseVault?.();
-            }}
-          >
-            {props.vaultPath || 'Choose a folder…'}
-          </button>
-        ) : (
-          <span class="vault-header-path" title={props.vaultPath}>
-            {props.vaultPath}
-          </span>
-        )}
+        <span class="vault-header-triggers" ref={triggerRef}>
+          {props.onChooseVault ? (
+            <button
+              type="button"
+              class="vault-header-path"
+              title={
+                props.vaultFixed
+                  ? 'The storage is fixed by the environment (NOTO_VAULT_FIXED)'
+                  : props.vaultPath
+              }
+              aria-label="Change the storage of the notes"
+              aria-disabled={props.vaultFixed ? 'true' : undefined}
+              aria-haspopup="menu"
+              aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
+              onClick={toggleMenu}
+            >
+              {props.vaultPath || 'Choose a folder…'}
+            </button>
+          ) : (
+            <span class="vault-header-path" title={props.vaultPath}>
+              {props.vaultPath}
+            </span>
+          )}
+          {props.onChooseVault ? (
+            <button
+              type="button"
+              class="icon-button"
+              title="Switch the storage of the notes"
+              aria-label="Switch the storage of the notes"
+              aria-disabled={props.vaultFixed ? 'true' : undefined}
+              aria-haspopup="menu"
+              aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
+              onClick={toggleMenu}
+            >
+              <Icon name="folder-open" size={15} />
+            </button>
+          ) : null}
+        </span>
         <button
           type="button"
           class="icon-button"
@@ -248,6 +286,17 @@ export function ExplorerSection(props: ExplorerSectionProps) {
         >
           <Icon name="refresh-cw" size={15} />
         </button>
+        {props.vaultMenuOpen ? (
+          <VaultSwitchMenu
+            currentPath={props.vaultPath ?? ''}
+            recents={props.vaultRecents ?? []}
+            fixed={props.vaultFixed}
+            triggerRef={triggerRef}
+            onSwitch={(path) => props.onSwitchVault?.(path)}
+            onBrowse={() => props.onChooseVault?.()}
+            onClose={() => props.onVaultMenuToggle?.(false)}
+          />
+        ) : null}
       </header>
 
       <div class="column-body">

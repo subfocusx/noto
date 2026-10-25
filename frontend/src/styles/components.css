@@ -273,6 +273,7 @@
 /* ------------------------------------------------------------ vault column */
 
 .vault-header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -293,6 +294,13 @@
   border-radius: var(--radius-md);
   background: var(--accent-subtle);
   color: var(--accent);
+}
+
+/* The buttons that open the quick menu of the storage stand together, but they
+   do not change the row of the header: the wrapper is invisible for the
+   layout. */
+.vault-header-triggers {
+  display: contents;
 }
 
 /* The name of the vault keeps the room it needs: the path is the part that
@@ -780,6 +788,98 @@ button.vault-header-path:hover {
   height: 1px;
   margin: var(--space-1) 0;
   background: var(--border);
+}
+
+/* ------------------------------------------------------------- vault menu */
+
+/* The quick menu of the storage: it is anchored under the header of the
+   storage, so it opens where the user looks for it. */
+.vault-menu {
+  position: absolute;
+  z-index: var(--z-overlay);
+  top: calc(100% + 4px);
+  right: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 320px;
+  padding: var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-container);
+  box-shadow: var(--shadow-3);
+}
+
+.vault-menu-title {
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vault-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vault-menu-item:hover {
+  background: var(--bg-container-high);
+}
+
+.vault-menu-item-name {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-menu-item-path,
+.vault-menu-current-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+.vault-menu-current {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.vault-menu-current-name {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+
+.vault-menu-fixed {
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
 }
 
 /* -------------------------------------------------------------- sections */

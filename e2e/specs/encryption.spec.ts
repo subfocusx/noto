@@ -189,8 +189,12 @@ test.describe('the encrypted storage of the notes', () => {
       await expect(treeFile(page, `${marker}.md`)).toBeVisible();
     }
 
-    // The storage picker.
+    // The storage picker: the quick menu of the storage comes first.
     await page.getByRole('button', { name: 'Change the storage of the notes' }).click();
+    const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Choose another folder…' }).click();
+
     const picker = page.getByRole('dialog', { name: 'Choose the storage of the notes' });
     await expect(picker).toBeVisible();
     await picker.getByRole('button', { name: 'Set up an encrypted storage' }).click();

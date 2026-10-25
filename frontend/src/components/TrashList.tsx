@@ -7,6 +7,7 @@ import { getTrash } from '../api/client';
 import { appStore } from '../core/store/appStore';
 import { errorMessage } from '../lib/errors';
 import type { Node } from '../types';
+import { IconButton } from '../ui/tooltip';
 
 export interface TrashListProps {
   /** Called after a note was restored. */
@@ -56,9 +57,11 @@ export function TrashList(props: TrashListProps) {
           <li key={entry.path}>
             <span class="trash-name">{entry.name}</span>
             <span class="trash-path">{entry.path}</span>
-            <button type="button" class="text-button" onClick={() => restore(entry)}>
-              Restore
-            </button>
+            <IconButton
+              icon="rotate-ccw"
+              label={`Restore ${entry.name}`}
+              onClick={() => restore(entry)}
+            />
           </li>
         ))}
       </ul>

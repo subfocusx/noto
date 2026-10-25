@@ -1187,6 +1187,11 @@ button.sidebar-section-title {
   font-size: var(--text-sm);
 }
 
+/* The restore action of a row is an icon: it must not shrink in the flex row. */
+.trash-list .icon-button {
+  flex: none;
+}
+
 .attachments-header {
   display: flex;
   align-items: center;

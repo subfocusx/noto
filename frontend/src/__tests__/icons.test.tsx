@@ -59,6 +59,7 @@ describe('the icon registry', () => {
       'plus',
       'puzzle',
       'refresh-cw',
+      'rotate-ccw',
       'search',
       'settings',
       'star',

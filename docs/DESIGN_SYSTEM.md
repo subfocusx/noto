@@ -207,8 +207,9 @@ copy     dots-vertical  file-plus  file-text  filter
 folder   folder-open  folder-plus  hash      image
 link     menu        moon         more-horizontal  move
 network  panel-left  panel-right  pencil     plus
-puzzle   refresh-cw  search       settings   star
-sun      tags        trash        upload     x
+puzzle   refresh-cw  rotate-ccw  search      settings
+star     sun         tags        trash       upload
+x
 ```
 
 Чтобы добавить иконку, внесите её в `frontend/src/ui/icons.tsx` — реестр
@@ -251,8 +252,8 @@ sun      tags        trash        upload     x
   имя действия не может разойтись между подписью для assistive technology и
   подсказкой.
 - **Иконка вместо текста** — действует там, где действие однозначно: контекстное
-  меню дерева, подвал сайдбара, строка состояния. Текст сохраняется там, где он
-  несёт смысл (навигация, заголовки секций, палитра команд, диалоги).
+  меню дерева, подвал сайдбара, строка состояния, строка корзины. Текст сохраняется
+  там, где он несёт смысл (навигация, заголовки секций, палитра команд, диалоги).
 - **Дерево** — строка `--row-height`, иконка слева, имя с усечением, действия
   справа; выбранная строка — `--bg-selected`. Вложенность показывают
   направляющие линии (`--indent-step` = 16 px), число заметок в папке — счётчик

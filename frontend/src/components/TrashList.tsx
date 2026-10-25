@@ -49,7 +49,9 @@ export function TrashList(props: TrashListProps) {
     <>
       {loading ? <p class="dialog-hint">Loading…</p> : null}
       {error ? <p class="error-text">{error}</p> : null}
-      {!loading && entries.length === 0 ? (
+      {/* A refused load does not mean that the trash is empty: the two states
+          must never be shown together. */}
+      {!loading && !error && entries.length === 0 ? (
         <p class="dialog-hint">The trash is empty.</p>
       ) : null}
       <ul class="trash-list" data-testid="trash-list">

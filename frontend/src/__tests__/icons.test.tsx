@@ -103,3 +103,80 @@ describe('the icon registry', () => {
     expect(names).toEqual([...names].sort());
   });
 });
+
+describe('the icons of the phase 14', () => {
+  const NEW_NAMES = [
+    'rotate-ccw',
+    'chevrons-down-up',
+    'chevrons-up-down',
+    'lock',
+    'lock-open',
+  ] as const;
+
+  it('knows the five new names', () => {
+    for (const name of NEW_NAMES) {
+      expect(isIconName(name)).toBe(true);
+      expect(ICONS[name]).toBeDefined();
+    }
+  });
+
+  it('draws an svg for every new name', () => {
+    for (const name of NEW_NAMES) {
+      const { container, unmount } = render(<Icon name={name} />);
+      expect(container.querySelector('svg')).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it('hides the new icons from the assistive technology when no label is given', () => {
+    for (const name of NEW_NAMES) {
+      const { container, unmount } = render(<Icon name={name} />);
+      const svg = container.querySelector('svg');
+      expect(svg?.getAttribute('aria-hidden')).toBe('true');
+      expect(svg?.getAttribute('role')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('draws the locked and the unlocked glyph differently', () => {
+    const locked = render(<Icon name="lock" />).container.innerHTML;
+    const unlocked = render(<Icon name="lock-open" />).container.innerHTML;
+    expect(locked).not.toEqual(unlocked);
+  });
+
+  it('draws the two double chevron glyphs differently', () => {
+    const downUp = render(<Icon name="chevrons-down-up" />).container.innerHTML;
+    const upDown = render(<Icon name="chevrons-up-down" />).container.innerHTML;
+    expect(downUp).not.toEqual(upDown);
+  });
+
+  it('draws every new icon differently from the others', () => {
+    const marks = NEW_NAMES.map((name) => ({
+      name,
+      markup: render(<Icon name={name} />).container.innerHTML,
+    }));
+    for (const mark of marks) {
+      const twins = marks.filter((other) => other.name !== mark.name && other.markup === mark.markup);
+      expect(twins.map((twin) => twin.name)).toEqual([]);
+    }
+  });
+});
+
+describe('the glyphs of the whole registry', () => {
+  it('draws a different glyph for every name', () => {
+    const seen = new Map<string, string>();
+    const twins: string[] = [];
+    for (const name of ICON_NAMES) {
+      const { container, unmount } = render(<Icon name={name} />);
+      const markup = container.innerHTML;
+      unmount();
+      const owner = seen.get(markup);
+      if (owner === undefined) {
+        seen.set(markup, name);
+      } else {
+        twins.push(`${owner} and ${name}`);
+      }
+    }
+    expect(twins).toEqual([]);
+  });
+});

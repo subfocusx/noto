@@ -12,13 +12,13 @@
 import { useEffect, useState } from 'preact/hooks';
 import {
   migrateToSealed,
-  migrationPhaseLabel,
   purgePlaintextAfterMigration,
   type MigrationProgress,
   type MigrationResult,
   type PurgeResult,
 } from '../core/vault/migration';
 import { adoptSealedVault, getSealedVault } from '../core/vault/session';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 /** The props of the wizard. */
@@ -54,22 +54,27 @@ export function passwordStrength(password: string): Strength {
   return 'weak';
 }
 
-/** The label of the strength of a password. */
-function strengthLabel(strength: Strength): string {
+/** The label of the strength of a password. */function strengthLabel(strength: Strength): string {
   switch (strength) {
     case 'good':
-      return 'Strong password';
+      return 'vault.migration.strength.good';
     case 'fair':
-      return 'Weak password — use at least 12 characters';
+      return 'vault.migration.strength.fair';
     default:
-      return 'Very weak password — use at least 12 characters';
+      return 'vault.migration.strength.weak';
   }
+}
+
+/** The label of the phase of the migration. */
+function phaseLabel(phase: MigrationProgress['phase']): string {
+  return `vault.migration.phase.${phase}`;
 }
 
 /**
  * The wizard of the migration of an open storage into an encrypted one.
  */
 export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
+  const t = useT();
   const [step, setStep] = useState<Step>('warning');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -111,10 +116,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
       setResult(outcome);
       if (outcome.broken.length > 0 || (outcome.failedPaths?.length ?? 0) > 0) {
         // The storage was not switched: the plaintext is still on the disk.
-        setError(
-          'The copy could not be verified. The storage was not switched and the notes are still ' +
-            'on the disk as plain text. Fix the problem and run the migration again.',
-        );
+        setError(t('vault.migration.verifyFailed'));
         setStep('failed');
         return;
       }
@@ -122,7 +124,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
       await adoptSealedVault(password);
       setStep('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'The migration failed');
+      setError(err instanceof Error ? err.message : t('vault.migration.failed'));
       setStep('failed');
     }
   };
@@ -134,7 +136,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
       setPurged(outcome);
       setStep('done');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'The plaintext could not be removed');
+      setError(err instanceof Error ? err.message : t('vault.migration.purgeFailed'));
       setStep('failed');
     }
   };
@@ -153,15 +155,15 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
         class="dialog noto-migration"
         role="dialog"
         aria-modal="true"
-        aria-label="Encrypt the storage of the notes"
+        aria-label={t('vault.migration.title')}
         data-testid="vault-migration-dialog"
       >
         <header class="dialog-header">
-          <h2>Encrypt the storage of the notes</h2>
+          <h2>{t('vault.migration.title')}</h2>
           <button
             type="button"
             class="icon-button"
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
             onClick={props.onClose}
           >
             <Icon name="x" size={16} />
@@ -171,36 +173,32 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
         <div class="dialog-body">
           {step === 'warning' ? (
             <>
-              <p class="dialog-hint">
-                The notes of the folder are plain Markdown files today. The migration copies them into
-                an encrypted storage: every note is encrypted in your browser before it is written,
-                and the server never sees a title, a body or a path.
-              </p>
+              <p class="dialog-hint">{t('vault.migration.warning')}</p>
               <ul class="noto-migration-list">
-                <li>The plaintext files are removed from the disk only after the copy has been verified and after you have confirmed it.</li>
-                <li>The application cannot erase the copies that live in the version history of a cloud provider, in the snapshots or in the backups.</li>
-                <li>If the migration is interrupted, it continues where it stopped after you unlock the storage again.</li>
+                <li>{t('vault.migration.list1')}</li>
+                <li>{t('vault.migration.list2')}</li>
+                <li>{t('vault.migration.list3')}</li>
               </ul>
 
               <label class="field">
-                <span class="field-label">Master password of the encrypted storage</span>
+                <span class="field-label">{t('vault.migration.passwordLabel')}</span>
                 <input
                   type="password"
                   class="input"
                   value={password}
                   autoComplete="new-password"
-                  aria-label="Master password of the encrypted storage"
+                  aria-label={t('vault.migration.passwordLabel')}
                   onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
                 />
               </label>
               <label class="field">
-                <span class="field-label">Repeat the password</span>
+                <span class="field-label">{t('vault.migration.repeatLabel')}</span>
                 <input
                   type="password"
                   class="input"
                   value={confirmation}
                   autoComplete="new-password"
-                  aria-label="Repeat the master password"
+                  aria-label={t('vault.migration.repeatPassword')}
                   onInput={(event) => setConfirmation((event.target as HTMLInputElement).value)}
                 />
               </label>
@@ -208,19 +206,22 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
                 class={`noto-migration-strength noto-migration-strength-${strength}`}
                 data-testid="vault-migration-strength"
               >
-                {strengthLabel(strength)}
+                {t(strengthLabel(strength))}
               </p>
               {password.length > 0 && password !== confirmation ? (
-                <p class="field-error">The two passwords do not match.</p>
+                <p class="field-error">{t('vault.migration.mismatch')}</p>
               ) : null}
             </>
           ) : null}
 
           {step === 'running' ? (
             <div class="noto-migration-progress" data-testid="vault-migration-progress">
-              <p class="noto-migration-phase">{migrationPhaseLabel(progress?.phase ?? 'reading')}</p>
+              <p class="noto-migration-phase">{t(phaseLabel(progress?.phase ?? 'reading'))}</p>
               <p class="muted">
-                {progress?.copied ?? 0} of {progress?.total ?? 0} notes
+                {t('vault.migration.progress', {
+                  copied: progress?.copied ?? 0,
+                  total: progress?.total ?? 0,
+                })}
               </p>
               {progress?.currentPath ? (
                 <p class="noto-migration-path muted" title={progress.currentPath}>
@@ -232,26 +233,17 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
 
           {step === 'result' && result ? (
             <>
-              <p class="dialog-hint">
-                The copy is done and verified: {result.copied} notes are encrypted in the storage and
-                the server works with the encrypted storage now.
-              </p>
-              <p class="noto-migration-note">
-                The plain text files are still on the disk. They are only removed when you ask for it
-                below.
-              </p>
+              <p class="dialog-hint">{t('vault.migration.result', { count: result.copied })}</p>
+              <p class="noto-migration-note">{t('vault.migration.plaintextNote')}</p>
             </>
           ) : null}
 
           {step === 'confirm' ? (
             <>
-              <p class="dialog-hint">
-                The last step removes the plain text files of the folder from the disk. This cannot be
-                undone.
-              </p>
+              <p class="dialog-hint">{t('vault.migration.confirmHint')}</p>
               <ul class="noto-migration-list">
-                <li>The application cannot erase the copies that live in the version history of a cloud provider, in the snapshots or in the backups.</li>
-                <li>If you keep the files, the folder holds both the plain text notes and the encrypted storage.</li>
+                <li>{t('vault.migration.list2')}</li>
+                <li>{t('vault.migration.confirmList2')}</li>
               </ul>
             </>
           ) : null}
@@ -259,25 +251,24 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
           {step === 'done' && purged ? (
             <>
               <p class="dialog-hint">
-                The migration is finished: {result?.copied ?? 0} notes are encrypted and{' '}
-                {purged.deleted} plain text files ({purged.bytes} bytes) were removed from the disk.
+                {t('vault.migration.done', {
+                  count: result?.copied ?? 0,
+                  deleted: purged.deleted,
+                  bytes: purged.bytes,
+                })}
               </p>
-              <p class="noto-migration-note">
-                The copies that live in the version history of a cloud provider, in the snapshots and in
-                the backups are still there: the application cannot erase them. Remove them yourself if
-                they must not exist any more.
-              </p>
+              <p class="noto-migration-note">{t('vault.migration.doneNote')}</p>
             </>
           ) : null}
 
           {step === 'failed' ? (
             <>
               <p class="error-text" role="alert" data-testid="vault-migration-error">
-                {error ?? 'The migration failed'}
+                {error ?? t('vault.migration.failed')}
               </p>
               {result && result.broken.length > 0 ? (
                 <div class="noto-migration-broken">
-                  <p class="muted">The objects that could not be read back:</p>
+                  <p class="muted">{t('vault.migration.brokenTitle')}</p>
                   <ul>
                     {result.broken.map((id) => (
                       <li key={id}>
@@ -289,7 +280,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
               ) : null}
               {result && (result.failedPaths?.length ?? 0) > 0 ? (
                 <div class="noto-migration-broken">
-                  <p class="muted">The notes that could not be read:</p>
+                  <p class="muted">{t('vault.migration.failedPathsTitle')}</p>
                   <ul>
                     {(result.failedPaths ?? []).map((path) => (
                       <li key={path}>
@@ -299,10 +290,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
                   </ul>
                 </div>
               ) : null}
-              <p class="muted">
-                The notes that were copied are safe in the encrypted storage. The migration can be run
-                again: it continues with the notes that are missing.
-              </p>
+              <p class="muted">{t('vault.migration.safeNote')}</p>
             </>
           ) : null}
         </div>
@@ -311,7 +299,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
           {step === 'warning' ? (
             <>
               <button type="button" class="text-button" onClick={props.onClose}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -322,19 +310,19 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
                   void start();
                 }}
               >
-                Encrypt the storage
+                {t('vault.migration.encrypt')}
               </button>
             </>
           ) : null}
 
           {step === 'running' ? (
-            <span class="muted">The migration is running…</span>
+            <span class="muted">{t('vault.migration.running')}</span>
           ) : null}
 
           {step === 'result' ? (
             <>
               <button type="button" class="text-button" onClick={props.onClose}>
-                Keep the plain text files
+                {t('vault.migration.keepPlain')}
               </button>
               <button
                 type="button"
@@ -342,7 +330,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
                 data-testid="vault-migration-purge"
                 onClick={() => setStep('confirm')}
               >
-                Remove the plaintext files from the disk
+                {t('vault.migration.removePlain')}
               </button>
             </>
           ) : null}
@@ -350,7 +338,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
           {step === 'confirm' ? (
             <>
               <button type="button" class="text-button" onClick={() => setStep('result')}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -360,7 +348,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
                   void purge();
                 }}
               >
-                Remove the plaintext files from the disk
+                {t('vault.migration.removePlain')}
               </button>
             </>
           ) : null}
@@ -372,7 +360,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
               data-testid="vault-migration-close"
               onClick={close}
             >
-              Close
+              {t('common.close')}
             </button>
           ) : null}
 
@@ -383,7 +371,7 @@ export function VaultMigrationDialog(props: VaultMigrationDialogProps) {
               data-testid="vault-migration-close"
               onClick={props.onClose}
             >
-              Close
+              {t('common.close')}
             </button>
           ) : null}
         </footer>

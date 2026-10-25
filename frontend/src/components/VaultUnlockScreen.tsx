@@ -7,6 +7,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { getStorageName, unlockVault } from '../core/vault/session';
+import { t } from '../i18n';
+import { useT } from '../i18n/useT';
 
 export interface VaultUnlockScreenProps {
   /** Called when the storage is unlocked. */
@@ -26,10 +28,10 @@ export interface VaultUnlockScreenProps {
  * that does not answer) never reaches the user: the message is the same in
  * every case, so the screen leaks nothing about the storage.
  */
-export const UNLOCK_ERROR_MESSAGE = 'Wrong password or damaged storage.';
+export const UNLOCK_ERROR_MESSAGE = t('vault.unlock.error');
 
 /** The message of an empty password. */
-export const UNLOCK_EMPTY_MESSAGE = 'Enter the master password.';
+export const UNLOCK_EMPTY_MESSAGE = t('vault.unlock.empty');
 
 /**
  * The screen of the locked storage.
@@ -38,6 +40,7 @@ export const UNLOCK_EMPTY_MESSAGE = 'Enter the master password.';
  * soon as the screen appears. The form is submitted with the keyboard.
  */
 export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
+  const t = useT();
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,7 +73,7 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
     event.preventDefault();
     if (busy) return;
     if (!password) {
-      setError(UNLOCK_EMPTY_MESSAGE);
+      setError(t('vault.unlock.empty'));
       return;
     }
     setBusy(true);
@@ -83,7 +86,7 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
       // The password is dropped even when the attempt fails: it must not stay
       // in the memory of the tab longer than the attempt itself.
       setPassword('');
-      setError(UNLOCK_ERROR_MESSAGE);
+      setError(t('vault.unlock.error'));
     } finally {
       setBusy(false);
     }
@@ -91,7 +94,7 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
 
   return (
     <main class="vault-unlock" data-testid="vault-unlock">
-      <form class="vault-unlock-card" onSubmit={submit} aria-label="Unlock the encrypted storage">
+      <form class="vault-unlock-card" onSubmit={submit} aria-label={t('vault.unlock.label')}>
         <div class="vault-unlock-brand">
           <span class="vault-unlock-logo">Noto</span>
           <span class="vault-unlock-name" data-testid="vault-unlock-name">
@@ -99,14 +102,11 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
           </span>
         </div>
 
-        <h1 class="vault-unlock-title">The storage is locked</h1>
-        <p class="vault-unlock-hint">
-          Enter the master password of this storage. The notes are decrypted in this browser and stay
-          there.
-        </p>
+        <h1 class="vault-unlock-title">{t('vault.unlock.title')}</h1>
+        <p class="vault-unlock-hint">{t('vault.unlock.hint')}</p>
 
         <label class="field vault-field">
-          <span class="field-label">Master password</span>
+          <span class="field-label">{t('vault.unlock.password')}</span>
           <span class="vault-field-row">
             <input
               ref={fieldRef}
@@ -114,7 +114,7 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
               type={visible ? 'text' : 'password'}
               value={password}
               autocomplete="current-password"
-              aria-label="Master password"
+              aria-label={t('vault.unlock.password')}
               aria-invalid={error ? 'true' : undefined}
               disabled={busy}
               onInput={(event) => {
@@ -125,11 +125,11 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
             <button
               type="button"
               class="button"
-              aria-label={visible ? 'Hide the master password' : 'Show the master password'}
+              aria-label={visible ? t('vault.setup.hideLabel') : t('vault.setup.showLabel')}
               aria-pressed={visible}
               onClick={() => setVisible(!visible)}
             >
-              {visible ? 'Hide' : 'Show'}
+              {visible ? t('vault.setup.hide') : t('vault.setup.show')}
             </button>
           </span>
         </label>
@@ -141,7 +141,7 @@ export function VaultUnlockScreen(props: VaultUnlockScreenProps) {
         ) : null}
 
         <button type="submit" class="primary-button" disabled={busy} aria-busy={busy ? 'true' : undefined}>
-          {busy ? 'Unlocking…' : 'Unlock'}
+          {busy ? t('vault.unlock.unlocking') : t('vault.unlock.unlock')}
         </button>
       </form>
     </main>

@@ -7,6 +7,11 @@
 //
 // The list lives in the store of the application (`../store`), so the rail, the
 // section of the notifications and the plugins always see the same list.
+//
+// The list is also written in `localStorage` (see `./persistence.ts`): a
+// notification is a fact about the work of the user, and it must survive a
+// reload of the page — the state of the reading survives it as well.
+import { saveNotifications } from './persistence';
 
 /** The kind of a notification: it decides the colour of the entry. */
 export type NotificationKind = 'info' | 'success' | 'warning' | 'error';
@@ -35,7 +40,7 @@ export interface Notification {
 }
 
 /**
- * The biggest number of the notifications of the session.
+ * The biggest number of the notifications.
  *
  * The oldest entries fall out of the list: the notifications of a long session
  * must not grow without a bound.
@@ -48,12 +53,13 @@ let counter = 0;
 /**
  * Builds the identifier of a notification.
  *
- * The time and a counter are enough: the identifiers are only unique inside
- * one session of the application.
+ * The time, a counter and a random part are enough: the identifier must be
+ * unique even when the list was restored from the storage of the browser.
  */
 export function newNotificationId(): string {
   counter += 1;
-  return `n${Date.now().toString(36)}-${counter.toString(36)}`;
+  const random = Math.random().toString(36).slice(2, 8);
+  return `n${Date.now().toString(36)}-${counter.toString(36)}-${random}`;
 }
 
 /** The data a caller gives to build a notification. */
@@ -89,14 +95,17 @@ export function createNotification(input: NotificationInput): Notification {
  * Puts a notification at the head of the list.
  *
  * The newest comes first and the list never grows beyond
- * {@link NOTIFICATION_LIMIT}.
+ * {@link NOTIFICATION_LIMIT}. The new list is written in the storage of the
+ * browser: the notification survives a reload of the page.
  */
 export function pushNotification(
   list: Notification[],
   notification: Notification,
 ): Notification[] {
   const next = [notification, ...list.filter((item) => item.id !== notification.id)];
-  return next.slice(0, NOTIFICATION_LIMIT);
+  const limited = next.slice(0, NOTIFICATION_LIMIT);
+  saveNotifications(limited);
+  return limited;
 }
 
 /** Marks one notification as read. */
@@ -107,7 +116,9 @@ export function markNotificationRead(list: Notification[], id: string): Notifica
     changed = true;
     return { ...item, read: true };
   });
-  return changed ? next : list;
+  if (!changed) return list;
+  saveNotifications(next);
+  return next;
 }
 
 /** Marks every notification as read. */
@@ -118,17 +129,22 @@ export function markAllNotificationsRead(list: Notification[]): Notification[] {
     changed = true;
     return { ...item, read: true };
   });
-  return changed ? next : list;
+  if (!changed) return list;
+  saveNotifications(next);
+  return next;
 }
 
 /** Removes one notification from the list. */
 export function dismissNotification(list: Notification[], id: string): Notification[] {
   const next = list.filter((item) => item.id !== id);
-  return next.length === list.length ? list : next;
+  if (next.length === list.length) return list;
+  saveNotifications(next);
+  return next;
 }
 
 /** Removes every notification from the list. */
 export function clearNotifications(): Notification[] {
+  saveNotifications([]);
   return [];
 }
 

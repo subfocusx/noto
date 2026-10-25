@@ -29,9 +29,9 @@ import { VaultSetupDialog } from '../components/VaultSetupDialog';
 import { VaultUnlockScreen } from '../components/VaultUnlockScreen';
 import {
   VaultSecuritySection,
-  SECURITY_CHANGE_FAILED,
-  SECURITY_CHECK_FAILED,
-  SECURITY_RECOVERY_FAILED,
+  securityChangeFailed,
+  securityCheckFailed,
+  securityRecoveryFailed,
 } from '../components/VaultSecuritySection';
 import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs } from '../core/settings/prefs';
 import { AutoLock } from '../core/vault/autoLock';
@@ -368,7 +368,7 @@ describe('the section of the security of an encrypted storage', () => {
     submitPasswordForm();
 
     await waitFor(() => expect(screen.getByTestId('vault-security-password-error')).not.toBeNull());
-    expect(screen.getByTestId('vault-security-password-error').textContent).toBe(SECURITY_CHANGE_FAILED);
+    expect(screen.getByTestId('vault-security-password-error').textContent).toBe(securityChangeFailed());
   });
 
   it('offers the limits of the auto-lock and writes the chosen one into the preferences', () => {
@@ -392,7 +392,7 @@ describe('the section of the security of an encrypted storage', () => {
     fireEvent.click(screen.getByTestId('vault-security-check'));
 
     await waitFor(() => expect(screen.getByTestId('vault-security-check-error')).not.toBeNull());
-    expect(screen.getByTestId('vault-security-check-error').textContent).toBe(SECURITY_CHECK_FAILED);
+    expect(screen.getByTestId('vault-security-check-error').textContent).toBe(securityCheckFailed());
     expect(screen.queryByTestId('vault-security-check-result')).toBeNull();
   });
 
@@ -459,7 +459,7 @@ describe('the section of the security of an encrypted storage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable the recovery key' }));
 
     await waitFor(() => expect(screen.getByTestId('vault-security-recovery-error')).not.toBeNull());
-    expect(screen.getByTestId('vault-security-recovery-error').textContent).toBe(SECURITY_RECOVERY_FAILED);
+    expect(screen.getByTestId('vault-security-recovery-error').textContent).toBe(securityRecoveryFailed());
   });
 
   it('does not enable a recovery key that was never created', () => {

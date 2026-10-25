@@ -6,12 +6,17 @@
 // bundle of the application and are loaded with the section that shows them.
 import type { NotificationKind } from './types';
 
-/** The kind of a notification decides the colour of the entry. */
-export const NOTIFICATION_LABELS: Record<NotificationKind, string> = {
-  info: 'Information',
-  success: 'Done',
-  warning: 'Warning',
-  error: 'Error',
+/**
+ * The key of the label of every kind of notification.
+ *
+ * The core knows the key, not the text: the section that shows the
+ * notifications translates the key (see `../../i18n`).
+ */
+export const NOTIFICATION_LABEL_KEYS: Record<NotificationKind, string> = {
+  info: 'notification.info',
+  success: 'notification.success',
+  warning: 'notification.warning',
+  error: 'common.error',
 };
 
 /**

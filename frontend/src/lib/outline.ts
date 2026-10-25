@@ -3,7 +3,28 @@
 // The outline is the list of the headings of the Markdown text. It is built
 // from the raw text of the note (not from the rendered HTML), so it is cheap
 // and works while the note is being edited.
-import type { OutlineHeading } from '../components/OutlinePanel';
+//
+// The module is pure: it knows the Markdown, not the interface. The panel of
+// the right column draws what these functions return.
+import { compareStrings } from './ordering';
+
+/** One heading of the open note. */
+export interface OutlineHeading {
+  /** The identifier of the heading inside the document. */
+  id: string;
+  /** The text of the heading. */
+  text: string;
+  /** The level of the heading, from 1 to 4. */
+  level: number;
+  /** The line of the heading in the source of the note (1-based). */
+  line?: number;
+}
+
+/** A heading of the outline, with the sections that live under it. */
+export interface OutlineSection {
+  heading: OutlineHeading;
+  children: OutlineSection[];
+}
 
 /**
  * Builds the list of the headings of a Markdown text.
@@ -50,6 +71,64 @@ export function extractHeadings(source: string): OutlineHeading[] {
   }
 
   return headings;
+}
+
+/**
+ * Builds the tree of the sections of an outline.
+ *
+ * A heading lives under the heading of the level just above it; a heading
+ * whose level jumps (a level 3 under a level 1) lives under the last heading
+ * of a lower level.
+ */
+export function outlineSections(headings: readonly OutlineHeading[]): OutlineSection[] {
+  const roots: OutlineSection[] = [];
+  const stack: OutlineSection[] = [];
+
+  for (const heading of headings) {
+    const section: OutlineSection = { heading, children: [] };
+    const level = Math.max(1, heading.level);
+    while (stack.length > 0 && stack[stack.length - 1]!.heading.level >= level) {
+      stack.pop();
+    }
+    if (stack.length === 0) roots.push(section);
+    else stack[stack.length - 1]!.children.push(section);
+    stack.push(section);
+  }
+
+  return roots;
+}
+
+/**
+ * The path of the active section: the identifiers of its ancestors and its own.
+ *
+ * The path is empty when no section is active. It is what the panel uses to
+ * highlight the section the cursor is in and the way to it.
+ */
+export function activeSectionPath(
+  sections: readonly OutlineSection[],
+  activeId?: string | null,
+): string[] {
+  if (!activeId) return [];
+  const walk = (list: readonly OutlineSection[], trail: string[]): string[] | null => {
+    for (const section of list) {
+      const next = [...trail, section.heading.id];
+      if (section.heading.id === activeId) return next;
+      const found = walk(section.children, next);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(sections, []) ?? [];
+}
+
+/** The number of the headings of an outline. */
+export function outlineCount(headings: readonly OutlineHeading[]): number {
+  return headings.length;
+}
+
+/** The headings of an outline, sorted by their text. */
+export function outlineAlphabetically(headings: readonly OutlineHeading[]): OutlineHeading[] {
+  return [...headings].sort((a, b) => compareStrings(a.text, b.text));
 }
 
 /** Removes the trailing `#` characters and the inline markup of a heading. */

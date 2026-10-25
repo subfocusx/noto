@@ -43,6 +43,7 @@ export const QUERY_OPERATORS = [
   'contains',
   'startsWith',
   'endsWith',
+  'matches',
 ] as const;
 
 /** The name of an operator. */
@@ -53,6 +54,23 @@ const TIMESTAMP_OPERATORS: readonly QueryOperator[] = ['>', '>=', '<', '<='];
 
 /** The operators that compare a text with a text. */
 const TEXT_OPERATORS: readonly QueryOperator[] = ['contains', 'startsWith', 'endsWith'];
+
+/**
+ * The fields whose text is matched by a regular expression.
+ *
+ * The operator `matches` looks for the expression in these fields: the path of
+ * the note, its name, its title, its folder, its extension, its text and its
+ * tags.
+ */
+const REGEX_FIELDS: readonly QueryField[] = [
+  'path',
+  'name',
+  'title',
+  'folder',
+  'ext',
+  'content',
+  'tag',
+];
 
 /** The fields every operator works with. */
 const ALL_FIELDS: readonly QueryField[] = Object.keys(QUERY_FIELDS) as QueryField[];
@@ -84,11 +102,12 @@ export function isQueryOperator(name: string): name is QueryOperator {
  * `==` and `!=` work with every field, the comparison operators only with
  * the timestamps, `in` only with the list of tags, `contains` only with the
  * text of a note and `startsWith` / `endsWith` only with its path-like
- * fields.
+ * fields. `matches` works with the fields that hold the text of a note.
  */
 export function operatorFits(operator: QueryOperator, field: QueryField): boolean {
   if (operator === '==' || operator === '!=') return true;
   if (operator === 'in') return field === 'tag';
+  if (operator === 'matches') return REGEX_FIELDS.includes(field);
   if (TIMESTAMP_OPERATORS.includes(operator)) {
     return field === 'created_at' || field === 'updated_at';
   }

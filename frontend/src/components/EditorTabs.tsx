@@ -6,6 +6,7 @@
 // shape lives in `styles/tabs.css`, the component describes no style of its
 // own.
 import { useRef } from 'preact/hooks';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 /** One open note of the tab strip. */
@@ -52,6 +53,7 @@ export const TAB_DIRTY_DOT = 6;
  * The strip is empty (and renders nothing) when no note is open.
  */
 export function EditorTabs(props: EditorTabsProps) {
+  const t = useT();
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   if (props.tabs.length === 0) return null;
@@ -67,7 +69,7 @@ export function EditorTabs(props: EditorTabsProps) {
   };
 
   return (
-    <div class="tab-strip" role="tablist" aria-label="Open notes" data-testid="tab-strip">
+    <div class="tab-strip" role="tablist" aria-label={t('tabs.openNotes')} data-testid="tab-strip">
       {props.tabs.map((tab, index) => {
         const active = tab.path === props.activePath;
         return (
@@ -99,7 +101,7 @@ export function EditorTabs(props: EditorTabsProps) {
               <span
                 class="tab-dirty"
                 role="img"
-                aria-label={`Unsaved changes in ${tab.name}`}
+                aria-label={t('tabs.dirty', { name: tab.name })}
                 data-testid="tab-dirty"
               />
             ) : null}
@@ -109,8 +111,8 @@ export function EditorTabs(props: EditorTabsProps) {
                 class="icon-button tab-close"
                 role="button"
                 tabIndex={0}
-                aria-label={`Close ${tab.name}`}
-                title={`Close ${tab.name}`}
+                aria-label={t('tabs.close', { name: tab.name })}
+                title={t('tabs.close', { name: tab.name })}
                 data-testid="tab-close"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -133,8 +135,8 @@ export function EditorTabs(props: EditorTabsProps) {
         <button
           type="button"
           class="icon-button tab-new"
-          aria-label="New tab"
-          title="New tab"
+          aria-label={t('tabs.new')}
+          title={t('tabs.new')}
           onClick={() => props.onNewTab?.()}
         >
           <Icon name="plus" size={14} />

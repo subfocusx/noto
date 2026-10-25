@@ -104,3 +104,27 @@ export function jsonInit(method: string, body: unknown): RequestInit {
     body: JSON.stringify(body),
   };
 }
+
+/**
+ * The one and only place where binary HTTP happens.
+ *
+ * {@link request} parses the body as JSON, which cannot carry the bytes of a
+ * file: this function returns the body as a blob.
+ */
+export async function requestBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, init);
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw new ApiError('aborted', 'request aborted', 0);
+    }
+    throw new ApiError(
+      'network_error',
+      'Cannot reach the Noto server. Check that it is running and reachable.',
+      0,
+    );
+  }
+  if (!res.ok) throw await parseError(res);
+  return res.blob();
+}

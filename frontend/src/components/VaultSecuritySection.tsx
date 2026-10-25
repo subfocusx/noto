@@ -20,23 +20,28 @@ import {
   type VaultSessionState,
 } from '../core/vault/session';
 import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs, savePrefs } from '../core/settings/prefs';
-import {
-  VAULT_MIN_PASSWORD_LENGTH,
-  VAULT_PASSWORD_TOO_SHORT,
-} from '../core/vault/password';
+import { VAULT_MIN_PASSWORD_LENGTH } from '../core/vault/password';
+import { t } from '../i18n';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 /** The number of minutes the user can choose for the auto-lock. */
 const AUTO_LOCK_CHOICES = [1, 5, 15, 30, 60, 120];
 
-/** The message of a failed change of the password. */
-export const SECURITY_CHANGE_FAILED = 'The password was not changed. Check the old password.';
+/**
+ * The message of a failed change of the password.
+ *
+ * The catalogue of the strings is loaded before the first render, but the
+ * module can be imported earlier: the text is therefore read at the moment it
+ * is used, not when the module is loaded.
+ */
+export const securityChangeFailed = (): string => t('vault.security.changeFailed');
 
 /** The message of a failed integrity check. */
-export const SECURITY_CHECK_FAILED = 'The integrity check could not be run.';
+export const securityCheckFailed = (): string => t('vault.security.checkFailed');
 
 /** The message of a failed recovery key. */
-export const SECURITY_RECOVERY_FAILED = 'The recovery key was not enabled. Check the password.';
+export const securityRecoveryFailed = (): string => t('vault.security.recoveryFailed');
 
 /**
  * The props of the section.
@@ -52,8 +57,8 @@ export interface VaultSecuritySectionProps {
 
 /** The modes of the storage, as the interface names them. */
 const MODE_LABELS: Record<VaultSessionState['mode'], string> = {
-  open: 'Plain (not encrypted)',
-  sealed: 'Encrypted',
+  open: 'vault.security.mode.plain',
+  sealed: 'vault.security.mode.sealed',
 };
 
 /**
@@ -64,6 +69,7 @@ const MODE_LABELS: Record<VaultSessionState['mode'], string> = {
  * storage are not offered at all. An open storage offers the wizard instead.
  */
 export function VaultSecuritySection(props: VaultSecuritySectionProps) {
+  const t = useT();
   const [session, setSession] = useState<VaultSessionState>(() => getVaultSessionState());
   const [lockMinutes, setLockMinutes] = useState<number>(
     () => loadPrefs().autoLockMinutes ?? AUTO_LOCK_MINUTES_DEFAULT,
@@ -118,11 +124,11 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
     // The same rules as the wizard of the encrypted storage: a master password
     // that is too short is refused here too.
     if (newPassword.length < VAULT_MIN_PASSWORD_LENGTH) {
-      setPasswordError(VAULT_PASSWORD_TOO_SHORT);
+      setPasswordError(t('vault.password.tooShort', { min: VAULT_MIN_PASSWORD_LENGTH }));
       return;
     }
     if (!newPassword || newPassword !== newPassword2) {
-      setPasswordError('The new passwords do not match.');
+      setPasswordError(t('vault.security.passwordMismatch'));
       return;
     }
     setPasswordError(null);
@@ -134,7 +140,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       setPasswordDone(true);
       setShowPasswordForm(false);
     } catch {
-      setPasswordError(SECURITY_CHANGE_FAILED);
+      setPasswordError(t('vault.security.changeFailed'));
     }
   };
 
@@ -145,7 +151,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       const result = await integrityCheck();
       setCheckResult(result);
     } catch {
-      setCheckError(SECURITY_CHECK_FAILED);
+      setCheckError(t('vault.security.checkFailed'));
     } finally {
       setCheckBusy(false);
     }
@@ -157,7 +163,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       const key = await createRecoveryKey();
       setRecoveryKey(key);
     } catch {
-      setRecoveryError(SECURITY_RECOVERY_FAILED);
+      setRecoveryError(t('vault.security.recoveryFailed'));
     }
   };
 
@@ -170,7 +176,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       setRecoveryKey('');
       setRecoveryPassword('');
     } catch {
-      setRecoveryError(SECURITY_RECOVERY_FAILED);
+      setRecoveryError(t('vault.security.recoveryFailed'));
     }
   };
 
@@ -180,25 +186,25 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
   };
 
   return (
-    <section class="settings-group" aria-label="Security">
-      <h3>Security</h3>
+    <section class="settings-group" aria-label={t('vault.security.title')}>
+      <h3>{t('vault.security.title')}</h3>
 
       <div class="settings-row">
         <div class="settings-row-label">
-          <span>Encryption</span>
-          <span>The state of the storage of the notes</span>
+          <span>{t('vault.security.encryption')}</span>
+          <span>{t('vault.security.encryptionHint')}</span>
         </div>
-        <span data-testid="vault-security-mode">{MODE_LABELS[session.mode]}</span>
+        <span data-testid="vault-security-mode">{t(MODE_LABELS[session.mode])}</span>
       </div>
 
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Format version</span>
-            <span>The version of the format of the encrypted storage</span>
+            <span>{t('vault.security.format')}</span>
+            <span>{t('vault.security.formatHint')}</span>
           </div>
           <span data-testid="vault-security-format">
-            {session.formatVersion > 0 ? session.formatVersion : 'unknown'}
+            {session.formatVersion > 0 ? session.formatVersion : t('common.unknown')}
           </span>
         </div>
       ) : null}
@@ -206,11 +212,11 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Lock now</span>
-            <span>Forgets the key of the storage in this tab</span>
+            <span>{t('vault.security.lockNow')}</span>
+            <span>{t('vault.security.lockNowHint')}</span>
           </div>
           <button type="button" class="text-button" onClick={lockNow} data-testid="vault-security-lock">
-            Lock now
+            {t('vault.security.lockNow')}
           </button>
         </div>
       ) : null}
@@ -218,8 +224,8 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Change the password</span>
-            <span>The notes stay encrypted with the same key</span>
+            <span>{t('vault.security.changePassword')}</span>
+            <span>{t('vault.security.changePasswordHint')}</span>
           </div>
           <button
             type="button"
@@ -231,7 +237,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
             }}
             data-testid="vault-security-change-password"
           >
-            {showPasswordForm ? 'Cancel' : 'Change the password'}
+            {showPasswordForm ? t('common.cancel') : t('vault.security.changePassword')}
           </button>
         </div>
       ) : null}
@@ -239,44 +245,44 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed && showPasswordForm ? (
         <form
           class="vault-inline-form"
-          aria-label="Change the master password"
+          aria-label={t('vault.security.changePasswordForm')}
           onSubmit={(event) => {
             event.preventDefault();
             void changeThePassword();
           }}
         >
           <label class="field vault-field">
-            <span class="field-label">The current password</span>
+            <span class="field-label">{t('vault.security.currentPassword')}</span>
             <input
               class="input"
               type="password"
               value={oldPassword}
               autocomplete="current-password"
-              aria-label="The current password"
+              aria-label={t('vault.security.currentPassword')}
               onInput={(event) => setOldPassword((event.target as HTMLInputElement).value)}
             />
           </label>
 
           <label class="field vault-field">
-            <span class="field-label">The new password</span>
+            <span class="field-label">{t('vault.security.newPassword')}</span>
             <input
               class="input"
               type="password"
               value={newPassword}
               autocomplete="new-password"
-              aria-label="The new password"
+              aria-label={t('vault.security.newPassword')}
               onInput={(event) => setNewPassword((event.target as HTMLInputElement).value)}
             />
           </label>
 
           <label class="field vault-field">
-            <span class="field-label">Repeat the new password</span>
+            <span class="field-label">{t('vault.security.repeatNewPassword')}</span>
             <input
               class="input"
               type="password"
               value={newPassword2}
               autocomplete="new-password"
-              aria-label="Repeat the new password"
+              aria-label={t('vault.security.repeatNewPassword')}
               onInput={(event) => setNewPassword2((event.target as HTMLInputElement).value)}
             />
           </label>
@@ -289,7 +295,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
 
           <div class="button-row">
             <button type="submit" class="primary-button">
-              Change the password
+              {t('vault.security.changePassword')}
             </button>
           </div>
         </form>
@@ -297,25 +303,27 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
 
       {sealed && passwordDone ? (
         <p class="vault-ok-text" role="status">
-          The master password was changed.
+          {t('vault.security.passwordChanged')}
         </p>
       ) : null}
 
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Auto-lock</span>
-            <span>Locks the storage after this many minutes without activity</span>
+            <span>{t('vault.security.autoLock')}</span>
+            <span>{t('vault.security.autoLockHint')}</span>
           </div>
           <select
-            aria-label="Auto-lock after N minutes"
+            aria-label={t('vault.security.autoLockLabel')}
             value={String(lockMinutes)}
             onChange={(event) => onAutoLockChange(Number((event.target as HTMLSelectElement).value))}
             data-testid="vault-security-auto-lock"
           >
             {AUTO_LOCK_CHOICES.map((minutes) => (
               <option key={minutes} value={String(minutes)}>
-                {minutes} {minutes === 1 ? 'minute' : 'minutes'}
+                {minutes === 1
+                  ? t('vault.security.minute', { count: minutes })
+                  : t('vault.security.minutes', { count: minutes })}
               </option>
             ))}
           </select>
@@ -325,8 +333,8 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Check the integrity</span>
-            <span>Opens every sealed object and reports the broken ones</span>
+            <span>{t('vault.security.check')}</span>
+            <span>{t('vault.security.checkHint')}</span>
           </div>
           <button
             type="button"
@@ -335,19 +343,26 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
             disabled={checkBusy}
             data-testid="vault-security-check"
           >
-            {checkBusy ? 'Checking…' : 'Check the integrity'}
+            {checkBusy ? t('vault.security.checking') : t('vault.security.check')}
           </button>
         </div>
       ) : null}
 
       {sealed && checkResult ? (
         <p class="vault-ok-text" role="status" data-testid="vault-security-check-result">
-          {checkResult.checked} objects checked, {checkResult.broken.length} broken.
+          {t('vault.security.checkResult', {
+            checked: checkResult.checked,
+            broken: checkResult.broken.length,
+          })}
         </p>
       ) : null}
 
       {sealed && checkResult && checkResult.broken.length > 0 ? (
-        <ul class="vault-broken-list" aria-label="The broken objects" data-testid="vault-security-broken">
+        <ul
+          class="vault-broken-list"
+          aria-label={t('vault.security.brokenList')}
+          data-testid="vault-security-broken"
+        >
           {checkResult.broken.map((id) => (
             <li key={id}>
               <code>{id}</code>
@@ -365,11 +380,15 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Recovery key</span>
-            <span>The key that opens the storage when the password is lost</span>
+            <span>{t('vault.security.recovery')}</span>
+            <span>{t('vault.security.recoveryHint')}</span>
           </div>
           <span data-testid="vault-security-recovery">
-            {recoveryEnabled === null ? 'unknown' : recoveryEnabled ? 'enabled' : 'not enabled'}
+            {recoveryEnabled === null
+              ? t('common.unknown')
+              : recoveryEnabled
+                ? t('vault.security.recoveryEnabled')
+                : t('vault.security.recoveryDisabled')}
           </span>
         </div>
       ) : null}
@@ -377,8 +396,8 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>New recovery key</span>
-            <span>The old key stops working at once</span>
+            <span>{t('vault.security.newRecovery')}</span>
+            <span>{t('vault.security.newRecoveryHint')}</span>
           </div>
           <button
             type="button"
@@ -386,7 +405,7 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
             onClick={() => void generateRecoveryKey()}
             data-testid="vault-security-new-recovery"
           >
-            Generate a new recovery key
+            {t('vault.security.generateRecovery')}
           </button>
         </div>
       ) : null}
@@ -396,23 +415,23 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
           <code class="vault-recovery-key" data-testid="vault-security-recovery-key">
             {recoveryKey}
           </code>
-          <p class="field-hint">Copy this key now: it is shown once.</p>
+          <p class="field-hint">{t('vault.security.copyNow')}</p>
 
           <label class="field vault-field">
-            <span class="field-label">The master password</span>
+            <span class="field-label">{t('vault.security.masterPassword')}</span>
             <input
               class="input"
               type="password"
               value={recoveryPassword}
               autocomplete="current-password"
-              aria-label="The master password"
+              aria-label={t('vault.security.masterPassword')}
               onInput={(event) => setRecoveryPassword((event.target as HTMLInputElement).value)}
             />
           </label>
 
           <div class="button-row">
             <button type="button" class="primary-button" onClick={() => void enableRecovery()}>
-              Enable the recovery key
+              {t('vault.security.enableRecovery')}
             </button>
           </div>
         </div>
@@ -427,8 +446,8 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
       {!sealed ? (
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Encrypted storage</span>
-            <span>The notes are kept as plain files, and the password has no meaning yet</span>
+            <span>{t('vault.security.encryptedStorage')}</span>
+            <span>{t('vault.security.encryptedStorageHint')}</span>
           </div>
           <button
             type="button"
@@ -436,14 +455,14 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
             onClick={() => props.onSetUpEncrypted?.()}
             data-testid="vault-security-setup"
           >
-            Set up an encrypted storage
+            {t('vault.security.setup')}
           </button>
         </div>
       ) : null}
 
       <p class="vault-security-note">
         <Icon name="archive" size={13} />
-        <span>The password is never written to the disk and never leaves this browser.</span>
+        <span>{t('vault.security.note')}</span>
       </p>
     </section>
   );

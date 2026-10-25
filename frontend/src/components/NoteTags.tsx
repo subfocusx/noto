@@ -9,6 +9,7 @@
 // tag.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { extractProps } from '../core/metadata/extract';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface NoteTagsProps {
@@ -35,18 +36,6 @@ export function normalizeTag(raw: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** The name of the group for the assistive technology. */
-const GROUP_NAME = 'Tags of the note';
-
-/** The explanation of the strip; it is the tooltip of the label. */
-const LABEL_HINT = 'The tags of a note are written in its text as #word.';
-
-/** The placeholder of the field that adds a tag. */
-const PLACEHOLDER = 'Add a tag…';
-
-/** The explanation of the field; it is its tooltip. */
-const FIELD_HINT = 'The Enter key confirms the tag, the Escape key cancels it.';
-
 /**
  * The strip of the tags of the open note.
  *
@@ -58,6 +47,7 @@ const FIELD_HINT = 'The Enter key confirms the tag, the Escape key cancels it.';
  * it repeats what the row already says.
  */
 export function NoteTags(props: NoteTagsProps) {
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState('');
   // The field is submitted by the Enter key and by the loss of the focus. The
@@ -103,10 +93,10 @@ export function NoteTags(props: NoteTagsProps) {
   };
 
   return (
-    <div class="q9-note-tags" data-testid="note-tags" role="group" aria-label={GROUP_NAME}>
-      <span class="note-tags-label" title={LABEL_HINT} aria-hidden="true">
+    <div class="q9-note-tags" data-testid="note-tags" role="group" aria-label={t('tags.group')}>
+      <span class="note-tags-label" title={t('tags.hint')} aria-hidden="true">
         <Icon name="tags" size={12} />
-        <span class="note-tags-label-text">Tags</span>
+        <span class="note-tags-label-text">{t('tags.label')}</span>
       </span>
       {tags.map((tag) => (
         <span key={tag} class="q9-note-tag">
@@ -115,8 +105,8 @@ export function NoteTags(props: NoteTagsProps) {
             <button
               type="button"
               class="q9-note-tag-x"
-              title={`Remove the tag ${tag}`}
-              aria-label={`Remove the tag ${tag}`}
+              title={t('tags.remove', { tag })}
+              aria-label={t('tags.remove', { tag })}
               onClick={() => props.onRemoveTag(tag)}
             >
               <Icon name="x" size={11} />
@@ -130,9 +120,9 @@ export function NoteTags(props: NoteTagsProps) {
           type="text"
           class="q9-note-tag-input"
           value={value}
-          placeholder={PLACEHOLDER}
-          title={FIELD_HINT}
-          aria-label="Name of the new tag"
+          placeholder={t('tags.placeholder')}
+          title={t('tags.fieldHint')}
+          aria-label={t('tags.newName')}
           spellcheck={false}
           onInput={(event) => setValue((event.target as HTMLInputElement).value)}
           onKeyDown={(event) => {
@@ -152,8 +142,8 @@ export function NoteTags(props: NoteTagsProps) {
         <button
           type="button"
           class="q9-note-tag-add"
-          title="Add a tag to the note"
-          aria-label="Add a tag to the note"
+          title={t('tags.add')}
+          aria-label={t('tags.add')}
           onClick={open}
         >
           <Icon name="plus" size={12} />

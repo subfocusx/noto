@@ -5,6 +5,7 @@
 // user reach the disk. The dot is the only part of the interface that is
 // coloured by state, so it must stay small and quiet.
 import type { ConnectionState } from '../types';
+import { useT } from '../i18n/useT';
 
 export interface ConnectionIndicatorProps {
   /** The state of the connection with the backend. */
@@ -13,13 +14,13 @@ export interface ConnectionIndicatorProps {
   onRetry?(): void;
 }
 
-/** The names of every state, for the tooltip and for the assistive technology. */
+/** The name of every state, for the tooltip and for the assistive technology. */
 const LABELS: Record<ConnectionState, { label: string; title: string }> = {
-  connected: { label: 'Backend connected', title: 'Backend connected — click to check again' },
-  connecting: { label: 'Checking the backend', title: 'Checking the backend…' },
+  connected: { label: 'connection.connected', title: 'connection.connectedTitle' },
+  connecting: { label: 'connection.connecting', title: 'connection.connectingTitle' },
   unreachable: {
-    label: 'The backend is unreachable',
-    title: 'The backend is unreachable — click to retry',
+    label: 'connection.unreachable',
+    title: 'connection.unreachableTitle',
   },
 };
 
@@ -32,14 +33,15 @@ const LABELS: Record<ConnectionState, { label: string; title: string }> = {
  * backend that was down is up again.
  */
 export function ConnectionIndicator(props: ConnectionIndicatorProps) {
+  const t = useT();
   const { label, title } = LABELS[props.connection];
   return (
     <button
       type="button"
       class={`conn-dot ${props.connection}`}
       role="status"
-      aria-label={label}
-      title={title}
+      aria-label={t(label)}
+      title={t(title)}
       onClick={() => {
         if (!props.onRetry) return;
         props.onRetry();

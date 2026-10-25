@@ -12,10 +12,14 @@ import type { ComponentChildren, ComponentType } from 'preact';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import type { RailSection } from '../core/store/types';
+import { useAppActions } from '../core/store/hooks';
+import { STORAGE_FIXED_MESSAGE } from '../core/storages/fixedStorage';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 import { ColumnResizer } from './ColumnResizer';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
 import { ExplorerSection } from './sections/ExplorerSection';
+import { ActivityPanel } from './sections/ActivityPanel';
 import type { CalendarSectionProps } from './sections/CalendarSection';
 import type { FavoritesSectionProps } from './sections/FavoritesSection';
 import type { HistorySectionProps } from './sections/HistorySection';
@@ -48,9 +52,17 @@ export interface SidebarProps {
   onRename(node: Node): void;
   onMove(node: Node): void;
   onDelete(node: Node): void;
-  /** Opens the graph of the vault; the feature is not implemented yet. */
+  /**
+   * Opens the graph of the vault.
+   *
+   * When the shell does not answer, the explorer opens the graph by itself.
+   */
   onOpenGraph?(): void;
-  /** Opens the archive of the vault; the feature is not implemented yet. */
+  /**
+   * Opens the archive of the vault.
+   *
+   * When the shell does not answer, the explorer opens the archive by itself.
+   */
   onOpenArchive?(): void;
   /** Opens the command palette of the application. */
   onOpenPalette?(): void;
@@ -69,6 +81,12 @@ export interface SidebarProps {
   onOpenRecent?: (path: string) => void;
   /** Called when a recent note is removed from the list. */
   onRemoveRecent?: (path: string) => void;
+  /**
+   * Restores a version of the note that is open.
+   *
+   * The section restores the version by itself when the shell does not answer.
+   */
+  onRestoreVersion?: (path: string, revision: number) => void | Promise<void>;
   /**
    * The paths that currently exist in the tree.
    *
@@ -163,8 +181,10 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 
 export function Sidebar(props: SidebarProps) {
+  const t = useT();
   const navRef = useRef<HTMLElement | null>(null);
   const [sections, setSections] = useState<LazySections | null>(null);
+  const actions = useAppActions();
 
   /**
    * The sections that are not the explorer are loaded on demand.
@@ -273,7 +293,7 @@ export function Sidebar(props: SidebarProps) {
     }
 
     if (!sections) {
-      return <p class="section-hint">Loading…</p>;
+      return <p class="section-hint">{t('common.loading')}</p>;
     }
 
     if (props.section === 'calendar') {
@@ -309,6 +329,8 @@ export function Sidebar(props: SidebarProps) {
           onRemove={(path) => props.onRemoveRecent?.(path)}
           recentCollapsed={props.recentCollapsed}
           onToggleRecent={props.onToggleRecent}
+          openPath={props.currentPath || undefined}
+          onRestore={props.onRestoreVersion}
         />
       );
     }
@@ -316,7 +338,24 @@ export function Sidebar(props: SidebarProps) {
   };
 
   return (
-    <nav ref={navRef} class="sidebar" aria-label="Notes">
+    <nav ref={navRef} class="sidebar" aria-label={t('sidebar.notes')}>
+      {/*
+        The storage of the notes can be fixed by the environment. The button of
+        the storage stays where it is, but it cannot open anything: the column
+        says why instead of pretending that the storage can be changed.
+      */}
+      {props.vaultFixed ? (
+        <p class="storage-fixed-note" role="note" data-testid="storage-fixed-note">
+          <span class="storage-fixed-message">{STORAGE_FIXED_MESSAGE}</span>
+          <button
+            type="button"
+            class="text-button"
+            onClick={() => actions.explainFixedStorage()}
+          >
+            {t('sidebar.whyFixed')}
+          </button>
+        </p>
+      ) : null}
       <div class="sidebar-scroll">{renderSection()}</div>
 
       {props.hasPluginItems && props.children ? (
@@ -324,17 +363,28 @@ export function Sidebar(props: SidebarProps) {
       ) : null}
 
       <div class="sidebar-footer">
+        {/*
+          The graph of the activity stands where the banner of the recent
+          activity used to stand: the rhythm of the vault is told by a picture,
+          not by a line of text.
+        */}
+        {props.files && props.files.length > 0 ? <ActivityPanel files={props.files} /> : null}
         {props.noteTotal !== undefined || props.folderTotal !== undefined ? (
           <span class="sidebar-footer-counts">
-            {props.noteTotal ?? 0} {props.noteTotal === 1 ? 'note' : 'notes'} ·{' '}
-            {props.folderTotal ?? 0} {props.folderTotal === 1 ? 'folder' : 'folders'}
+            {props.noteTotal === 1
+              ? t('sidebar.oneNote', { count: props.noteTotal ?? 0 })
+              : t('sidebar.manyNotes', { count: props.noteTotal ?? 0 })}{' '}
+            ·{' '}
+            {props.folderTotal === 1
+              ? t('sidebar.oneFolder', { count: props.folderTotal ?? 0 })
+              : t('sidebar.manyFolders', { count: props.folderTotal ?? 0 })}
           </span>
         ) : null}
         <button
           type="button"
           class="icon-button"
-          title="Import and export"
-          aria-label="Import and export"
+          title={t('sidebar.transfer')}
+          aria-label={t('sidebar.transfer')}
           onClick={props.onOpenTransfer}
         >
           <Icon name="upload" size={15} />
@@ -344,7 +394,7 @@ export function Sidebar(props: SidebarProps) {
       {props.onResizeWidth ? (
         <ColumnResizer
           side="left"
-          label="Resize sidebar"
+          label={t('sidebar.resize')}
           min={MIN_WIDTH}
           max={MAX_WIDTH}
           onResize={props.onResizeWidth}

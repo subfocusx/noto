@@ -22,6 +22,7 @@ import {
   type QueryField,
   type QueryOperator,
 } from './schema';
+import { compileRegex } from './regex';
 import type {
   BoolValue,
   ListValue,
@@ -40,7 +41,7 @@ export class QueryParseError extends Error {
   }
 }
 
-type TokenKind = 'ident' | 'string' | 'number' | 'symbol' | 'eof';
+type TokenKind = 'ident' | 'string' | 'number' | 'symbol' | 'regex' | 'eof';
 
 interface Token {
   readonly kind: TokenKind;
@@ -53,6 +54,11 @@ const DOUBLE_SYMBOLS = ['==', '!=', '>=', '<=', '&&', '||'];
 
 /** The single character symbols. */
 const SINGLE_SYMBOLS = '><!-[](),.~';
+
+/**
+ * The prefix form of the operator of the regular expressions: `match:<expr>`.
+ */
+const MATCH_PREFIX = 'match';
 
 function isIdentStart(ch: string): boolean {
   return /[A-Za-z_\p{L}]/u.test(ch);
@@ -116,6 +122,17 @@ export function tokenize(source: string): Token[] {
       while (j < source.length && isIdentPart(source[j] as string)) j += 1;
       const text = source.slice(i, j);
       i = j;
+      // The prefix form of the regular expression: `match:<expression>`.
+      if (text === MATCH_PREFIX && source[i] === ':') {
+        i += 1;
+        const scanned = scanRegex(source, i);
+        if (scanned.error !== undefined) {
+          throw new QueryParseError(scanned.error);
+        }
+        tokens.push({ kind: 'regex', text: scanned.text });
+        i = scanned.next;
+        continue;
+      }
       tokens.push({ kind: 'ident', text });
       continue;
     }
@@ -138,6 +155,43 @@ export function tokenize(source: string): Token[] {
 
   tokens.push({ kind: 'eof', text: '' });
   return tokens;
+}
+
+/**
+ * Scans the expression of the prefix form `match:`.
+ *
+ * The expression is either a quoted string, or a raw text that ends at the
+ * first space: a raw expression cannot hold a space, and the logical
+ * operators must be separated from it by a space.
+ */
+function scanRegex(source: string, start: number): { text: string; next: number; error?: string } {
+  if (start >= source.length) {
+    return { text: '', next: start, error: 'expected a value' };
+  }
+  const quote = source[start] as string;
+  if (quote === '"' || quote === "'") {
+    let text = '';
+    let i = start + 1;
+    while (i < source.length && source[i] !== quote) {
+      if (source[i] === '\\' && i + 1 < source.length) {
+        text += source[i + 1];
+        i += 2;
+      } else {
+        text += source[i];
+        i += 1;
+      }
+    }
+    if (i >= source.length) {
+      return { text: '', next: start, error: 'unexpected end of query' };
+    }
+    return { text, next: i + 1 };
+  }
+  let i = start;
+  while (i < source.length && !/\s/.test(source[i] as string)) i += 1;
+  if (i === start) {
+    return { text: '', next: start, error: 'expected a value' };
+  }
+  return { text: source.slice(start, i), next: i };
 }
 
 /** The number of seconds of a duration unit. */
@@ -210,6 +264,10 @@ class Parser {
     if (token.kind === 'ident') {
       return this.parseComparison();
     }
+    if (token.kind === 'regex') {
+      this.next();
+      return matchExpr(token.text);
+    }
     if (token.kind === 'eof') {
       throw new QueryParseError('unexpected end of query');
     }
@@ -280,6 +338,15 @@ class Parser {
     }
     if (operator === 'in' && value.k !== 'list') {
       throw new QueryParseError('expected a value');
+    }
+    if (operator === 'matches') {
+      if (value.k !== 'str') {
+        throw new QueryParseError('expected a value');
+      }
+      const compiled = compileRegex(value.v);
+      if (!compiled.ok) {
+        throw new QueryParseError(`invalid regular expression: ${compiled.error}`);
+      }
     }
     return { k: 'cmp', f: field, op: operator, v: value };
   }
@@ -353,6 +420,28 @@ class Parser {
 
     throw new QueryParseError('expected a value');
   }
+}
+
+/**
+ * Builds the expression of the prefix form `match:`.
+ *
+ * The expression is looked for in the title, in the text, in the path and in
+ * the tags of the note: the four fields that hold the text of a note. The
+ * tree is the same as the one of the backend, byte for byte in the canonical
+ * form.
+ */
+export function matchExpr(pattern: string): QueryNode {
+  const compiled = compileRegex(pattern);
+  if (!compiled.ok) {
+    throw new QueryParseError(`invalid regular expression: ${compiled.error}`);
+  }
+  const fields: QueryField[] = ['title', 'content', 'path', 'tag'];
+  let out: QueryNode | null = null;
+  for (const field of fields) {
+    const node: QueryNode = { k: 'cmp', f: field, op: 'matches', v: { k: 'str', v: pattern } };
+    out = out === null ? node : { k: 'or', l: out, r: node };
+  }
+  return out as QueryNode;
 }
 
 /**

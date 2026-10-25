@@ -1,0 +1,68 @@
+/* ==========================================================================
+   The pins of the notes.
+
+   The pinned notes stand at the top of the tree, in the order the user pinned
+   them. The button of the pin lives on the row of the note.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The group of the pinned notes, above the tree. */
+.tree-pinned {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The title of the group. */
+.tree-pinned-title {
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The list of the pinned notes. */
+.tree-pinned-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The button of the pin, on the row of a note. */
+.note-pin-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tree-row:hover .note-pin-button,
+.note-pin-button:focus-visible,
+.note-pin-button.pinned {
+  opacity: 1;
+}
+
+.note-pin-button.pinned {
+  color: var(--accent);
+}
+
+.note-pin-button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.note-pin-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

@@ -11,6 +11,7 @@
 // The values are validated on read: a broken or outdated value falls back to
 // the default instead of breaking the interface.
 import type { RailSection, ViewMode } from '../store/types';
+import type { Language } from '../../i18n/language';
 
 /** The key of the preferences in `localStorage`. */
 export const PREFS_KEY = 'noto-prefs-v1';
@@ -72,6 +73,14 @@ export interface Prefs {
    * value must survive a write that does not carry it.
    */
   autoLockMinutes?: number;
+  /**
+   * The language of the interface.
+   *
+   * The field is optional on purpose: without a choice of the user the
+   * language of the browser decides (see `../../i18n/language.ts`), so the
+   * preference is only written when the user picks a language.
+   */
+  language?: Language;
 }
 
 /** The smallest font size of the editor. */
@@ -228,6 +237,9 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     typeof source.editorFontSize === 'number' && Number.isFinite(source.editorFontSize)
       ? Math.min(EDITOR_FONT_SIZE_MAX, Math.max(EDITOR_FONT_SIZE_MIN, Math.round(source.editorFontSize)))
       : EDITOR_FONT_SIZE_DEFAULT;
+  // The language is only kept when it is a real one: a broken value falls back
+  // to the language of the browser (the choice of the user is not lost).
+  const language = source.language === 'en' || source.language === 'ru' ? source.language : undefined;
   return {
     theme,
     mode,
@@ -249,6 +261,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     recentCollapsed: source.recentCollapsed === true,
     treeShowCounts: source.treeShowCounts !== false,
     autoLockMinutes: clampAutoLockMinutes(source.autoLockMinutes),
+    language,
   };
 }
 
@@ -276,7 +289,7 @@ export function loadPrefs(): Prefs {
  * caller that does not know a field (the store of the application does not know
  * the preferences of the vault) must not erase it.
  */
-export function savePrefs(prefs: Prefs): void {
+export function savePrefs(prefs: Partial<Prefs>): void {
   try {
     if (typeof localStorage === 'undefined') return;
     const merged = { ...loadPrefs(), ...prefs };

@@ -4,8 +4,21 @@
 // matching callback of the shell, which stores the value. The dialog never
 // shows a path or a note: it only shows the settings of the interface and of
 // the editor.
+//
+// The language is the only setting that the dialog owns itself: it is a
+// preference of the user and the shell does not have to know about it. When the
+// shell passes the language and the callback, they are used; otherwise the
+// dialog changes the language of the core of the localisation itself.
 import { Dialog } from './Dialog';
 import { VaultSecuritySection } from './VaultSecuritySection';
+import {
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  getLanguage,
+  setLanguage,
+  type Language,
+} from '../i18n';
+import { useT } from '../i18n/useT';
 
 export interface SettingsDialogProps {
   /** True when the dialog is shown. */
@@ -26,6 +39,8 @@ export interface SettingsDialogProps {
   online: boolean;
   /** The version of the application. */
   version?: string;
+  /** The language of the interface; the dialog reads it when it is missing. */
+  language?: Language;
   /** Called when the theme changes. */
   onTheme(theme: 'light' | 'dark' | 'system'): void;
   /** Called when the width of the sidebar changes. */
@@ -36,6 +51,8 @@ export interface SettingsDialogProps {
   onEditorFontSize(size: number): void;
   /** Called when the line wrapping of the editor changes. */
   onEditorWrap(wrap: boolean): void;
+  /** Called when the language of the interface changes. */
+  onLanguage?(language: Language): void;
   /** Called to open the manager of the plugins. */
   onOpenPlugins(): void;
   /** Called to open the list of the keyboard shortcuts. */
@@ -80,49 +97,81 @@ type LegacySettingsDialogProps = {
 
 /** The settings of the application. */
 export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialogProps) {
+  const t = useT();
+  const language = props.language ?? (getLanguage() as Language);
+
+  /** Changes the language of the interface. */
+  const changeLanguage = (value: string): void => {
+    const next = LANGUAGES.find((item) => item === value);
+    if (!next) return;
+    if (props.onLanguage) props.onLanguage(next);
+    else setLanguage(next);
+  };
+
   return (
     <Dialog
-      title="Settings"
+      title={t('settings.title')}
       open={props.open}
       onClose={props.onClose}
       footer={
         <div class="button-row">
           <button type="button" class="primary-button" onClick={props.onClose}>
-            Close
+            {t('settings.close')}
           </button>
         </div>
       }
     >
       <section class="settings-group">
-        <h3>Appearance</h3>
+        <h3>{t('settings.appearance')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Theme</span>
-            <span>Light, dark or the theme of the system</span>
+            <span>{t('settings.theme')}</span>
+            <span>{t('settings.themeHint')}</span>
           </div>
           <select
-            aria-label="Theme"
+            aria-label={t('settings.theme')}
             value={props.theme}
             onChange={(event) => {
               const value = (event.target as HTMLSelectElement).value;
               if (isTheme(value)) props.onTheme(value);
             }}
           >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">System</option>
+            <option value="light">{t('settings.theme.light')}</option>
+            <option value="dark">{t('settings.theme.dark')}</option>
+            <option value="system">{t('settings.theme.system')}</option>
           </select>
         </div>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Sidebar width</span>
-            <span>The width of the tree of the notes</span>
+            <span>{t('settings.language')}</span>
+            <span>{t('settings.languageHint')}</span>
+          </div>
+          <select
+            aria-label={t('settings.language')}
+            value={language}
+            data-testid="settings-language"
+            onChange={(event) => {
+              changeLanguage((event.target as HTMLSelectElement).value);
+            }}
+          >
+            {LANGUAGES.map((item) => (
+              <option key={item} value={item}>
+                {LANGUAGE_NAMES[item]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>{t('settings.sidebarWidth')}</span>
+            <span>{t('settings.sidebarWidthHint')}</span>
           </div>
           <input
             type="range"
-            aria-label="Sidebar width"
+            aria-label={t('settings.sidebarWidth')}
             min={200}
             max={480}
             step={10}
@@ -133,16 +182,16 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
       </section>
 
       <section class="settings-group">
-        <h3>Editor</h3>
+        <h3>{t('settings.editor')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Font size</span>
-            <span>The size of the text of the note</span>
+            <span>{t('settings.fontSize')}</span>
+            <span>{t('settings.fontSizeHint')}</span>
           </div>
           <input
             type="range"
-            aria-label="Font size"
+            aria-label={t('settings.fontSize')}
             min={13}
             max={18}
             step={1}
@@ -153,90 +202,90 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Wrap the lines</span>
-            <span>Long lines are broken at the width of the editor</span>
+            <span>{t('settings.wrap')}</span>
+            <span>{t('settings.wrapHint')}</span>
           </div>
           <button
             type="button"
             class="switch"
             role="switch"
             aria-checked={props.editorWrap}
-            aria-label="Wrap the lines"
+            aria-label={t('settings.wrap')}
             onClick={() => props.onEditorWrap(!props.editorWrap)}
           />
         </div>
       </section>
 
       <section class="settings-group">
-        <h3>Navigation</h3>
+        <h3>{t('settings.navigation')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Order of the notes</span>
-            <span>How the tree of the notes is sorted</span>
+            <span>{t('settings.order')}</span>
+            <span>{t('settings.orderHint')}</span>
           </div>
           <select
-            aria-label="Order of the notes"
+            aria-label={t('settings.order')}
             value={props.treeSort}
             onChange={(event) => {
               const value = (event.target as HTMLSelectElement).value;
               if (isSort(value)) props.onTreeSort(value);
             }}
           >
-            <option value="name">By name</option>
-            <option value="modified">By last change</option>
+            <option value="name">{t('settings.order.name')}</option>
+            <option value="modified">{t('settings.order.modified')}</option>
           </select>
         </div>
       </section>
 
       <section class="settings-group">
-        <h3>Keyboard shortcuts</h3>
+        <h3>{t('settings.shortcuts')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Keyboard shortcuts</span>
-            <span>The list of every shortcut of the application</span>
+            <span>{t('settings.shortcuts')}</span>
+            <span>{t('settings.shortcutsHint')}</span>
           </div>
           <button type="button" class="text-button" onClick={props.onOpenShortcuts}>
-            Show the shortcuts
+            {t('settings.showShortcuts')}
           </button>
         </div>
       </section>
 
       <section class="settings-group">
-        <h3>Plugins</h3>
+        <h3>{t('settings.plugins')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Plugins</span>
-            <span>Enables, disables and configures the plugins</span>
+            <span>{t('settings.plugins')}</span>
+            <span>{t('settings.pluginsHint')}</span>
           </div>
           <button type="button" class="text-button" onClick={props.onOpenPlugins}>
-            Manage the plugins
+            {t('settings.managePlugins')}
           </button>
         </div>
       </section>
 
       <section class="settings-group">
-        <h3>Data</h3>
+        <h3>{t('settings.data')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Trash</span>
-            <span>The notes that have been deleted</span>
+            <span>{t('settings.trash')}</span>
+            <span>{t('settings.trashHint')}</span>
           </div>
           <button type="button" class="text-button" onClick={props.onOpenTrash}>
-            Open the trash
+            {t('settings.openTrash')}
           </button>
         </div>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Import and export</span>
-            <span>Brings the notes in and out of the application</span>
+            <span>{t('settings.transfer')}</span>
+            <span>{t('settings.transferHint')}</span>
           </div>
           <button type="button" class="text-button" onClick={props.onOpenTransfer}>
-            Import and export
+            {t('settings.transfer')}
           </button>
         </div>
       </section>
@@ -244,14 +293,14 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
       <VaultSecuritySection onSetUpEncrypted={props.onSetUpEncrypted} />
 
       <section class="settings-group">
-        <h3>About</h3>
+        <h3>{t('settings.about')}</h3>
 
         <div class="settings-row">
           <div class="settings-row-label">
-            <span>Version</span>
-            <span>{props.version ?? 'unknown'}</span>
+            <span>{t('settings.version')}</span>
+            <span>{props.version ?? t('common.unknown')}</span>
           </div>
-          <span class="muted">{props.online ? 'Online' : 'Offline'}</span>
+          <span class="muted">{props.online ? t('settings.online') : t('settings.offline')}</span>
         </div>
       </section>
     </Dialog>

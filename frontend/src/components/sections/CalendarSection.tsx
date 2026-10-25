@@ -29,6 +29,8 @@ import {
   type CalendarCell,
 } from '../../core/calendar/dates';
 import { notesByDay, notesOnDay } from '../../core/calendar/notes';
+import { ensureDailyNote, findDailyNote } from '../../core/calendar/dailyNote';
+import { getVaultService } from '../../core/vault/vaultService';
 import { createReminder, formatReminderMoment, isTimeKey } from '../../core/reminders/types';
 import {
   requestSystemNotifications,
@@ -36,14 +38,12 @@ import {
   type SystemNotificationState,
 } from '../../core/reminders/system';
 import { useAppActions, useAppState } from '../../core/store/hooks';
+import { useT, type Translator } from '../../i18n/useT';
 import { Icon } from '../../ui/icons';
 import type { Node } from '../../types';
 
-/** The text of a reminder that the user did not write. */
-const DEFAULT_TITLE = 'Reminder';
-
 /** The name of the button that removes a reminder. */
-const REMOVE_REMINDER = 'Remove the reminder';
+const REMOVE_REMINDER = 'reminder.remove';
 
 /**
  * The message of the panel when the browser does not allow the system
@@ -52,24 +52,23 @@ const REMOVE_REMINDER = 'Remove the reminder';
  * The reminder is still added: the application tells the user about it in the
  * list of the notifications, even when the browser stays silent.
  */
-const SYSTEM_NOTIFICATIONS_OFF =
-  'The system notifications are not allowed: the reminder will only be shown in the application.';
+const SYSTEM_NOTIFICATIONS_OFF = 'reminder.notificationsOff';
 
 /**
  * The message of the panel for the state of the permission of the browser.
  *
  * The line is a hint and not an error: the reminders work without it.
  */
-function permissionNote(state: SystemNotificationState): string | null {
+function permissionNote(state: SystemNotificationState, t: Translator): string | null {
   switch (state) {
     case 'granted':
       return null;
     case 'denied':
-      return SYSTEM_NOTIFICATIONS_OFF;
+      return t('reminder.notificationsOff');
     case 'unsupported':
-      return 'This browser does not know the system notifications: the reminder will only be shown in the application.';
+      return t('reminder.notificationsUnsupported');
     default:
-      return 'The system notifications are not allowed yet: the browser will ask for the permission when you add a reminder.';
+      return t('reminder.notificationsNotAllowed');
   }
 }
 
@@ -91,6 +90,7 @@ export interface CalendarSectionProps {
 }
 
 export function CalendarSection(props: CalendarSectionProps) {
+  const t = useT();
   const { year, month } = parseMonthKey(props.month);
   const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
   const byDay = useMemo(() => notesByDay(props.files), [props.files]);
@@ -101,6 +101,12 @@ export function CalendarSection(props: CalendarSectionProps) {
   const dayNotes = useMemo(
     () => (selectedDay ? notesOnDay(byDay, selectedDay) : []),
     [byDay, selectedDay],
+  );
+
+  /** The daily note of the selected day, when the day already has one. */
+  const dailyNote = useMemo(
+    () => (selectedDay ? findDailyNote(props.files, selectedDay) : null),
+    [props.files, selectedDay],
   );
 
   // The reminders live in the store of the application, so the panel and the
@@ -128,7 +134,7 @@ export function CalendarSection(props: CalendarSectionProps) {
   // note behind, even when the browser keeps the permission at "default".
   const [refused, setRefused] = useState(false);
   const permission = systemNotificationState();
-  const notificationNote = refused ? SYSTEM_NOTIFICATIONS_OFF : permissionNote(permission);
+  const notificationNote = refused ? t(SYSTEM_NOTIFICATIONS_OFF) : permissionNote(permission, t);
 
   /**
    * Adds a reminder of the selected day.
@@ -143,7 +149,7 @@ export function CalendarSection(props: CalendarSectionProps) {
   const addReminder = async (): Promise<void> => {
     const day = selectedDay;
     if (!day || !isTimeKey(time)) return;
-    actions.addReminder(createReminder(day, time, title.trim() || DEFAULT_TITLE));
+    actions.addReminder(createReminder(day, time, title.trim() || t('reminder.defaultTitle')));
     setTime('');
     setTitle('');
     setFormOpen(false);
@@ -157,10 +163,44 @@ export function CalendarSection(props: CalendarSectionProps) {
     setTitle('');
   };
 
+  /**
+   * Creates the daily note of the selected day and opens it.
+   *
+   * The calendar creates the note by itself: the user asks for the note of a
+   * day and the note exists when the editor opens it.
+   */
+  const createDailyNote = async (day: string): Promise<void> => {
+    const result = await ensureDailyNote(day, {
+      files: props.files,
+      create: (parentPath, name) => getVaultService().createFile(parentPath, name),
+    });
+    if (!result.node) return;
+    await actions.refreshTree();
+    props.onOpenNote(result.node.path);
+  };
+
+  /**
+   * Opens the note of the selected day.
+   *
+   * The day that has no note gets one: the calendar creates it and opens it.
+   * The shell is told about the day as well, so that it can show the note it
+   * knows about.
+   */
+  const openDailyNote = (): void => {
+    const day = selectedDay;
+    if (!day) return;
+    if (dailyNote) {
+      props.onOpenNote(dailyNote.path);
+    } else {
+      void createDailyNote(day);
+    }
+    props.onCreateDailyNote(day);
+  };
+
   return (
-    <section class="column-section" aria-label="Calendar">
+    <section class="column-section" aria-label={t('section.calendar')}>
       <header class="column-header section-header">
-        <span class="section-header-title">Calendar</span>
+        <span class="section-header-title">{t('section.calendar')}</span>
       </header>
 
       <div class="column-body">
@@ -168,7 +208,7 @@ export function CalendarSection(props: CalendarSectionProps) {
           <button
             type="button"
             class="calendar-nav"
-            aria-label="Previous month"
+            aria-label={t('calendar.previousMonth')}
             onClick={() => props.onMonthChange(shiftMonth(props.month, -1))}
           >
             ‹
@@ -177,7 +217,7 @@ export function CalendarSection(props: CalendarSectionProps) {
           <button
             type="button"
             class="calendar-nav"
-            aria-label="Next month"
+            aria-label={t('calendar.nextMonth')}
             onClick={() => props.onMonthChange(shiftMonth(props.month, 1))}
           >
             ›
@@ -223,14 +263,19 @@ export function CalendarSection(props: CalendarSectionProps) {
                   <button
                     type="button"
                     class="q9-button calendar-open-note"
-                    onClick={() => props.onCreateDailyNote(selectedDay)}
+                    onClick={openDailyNote}
                   >
                     Open the note
                   </button>
                 </div>
               </div>
+              {dailyNote ? null : (
+                <p class="calendar-daily-hint">
+                  The note of this day does not exist yet: it is created when you open it.
+                </p>
+              )}
               {dayNotes.length === 0 ? (
-                <p class="section-hint">No note on this day.</p>
+                <p class="section-hint">{t('calendar.noNote')}</p>
               ) : (
                 <ul class="calendar-note-list">
                   {dayNotes.map((note) => (
@@ -250,7 +295,7 @@ export function CalendarSection(props: CalendarSectionProps) {
 
               <div class="calendar-reminders">
                 <div class="calendar-reminders-header">
-                  <span class="calendar-reminders-title">Reminders</span>
+                  <span class="calendar-reminders-title">{t('calendar.reminders')}</span>
                   {formOpen ? null : (
                     <button
                       type="button"
@@ -263,7 +308,7 @@ export function CalendarSection(props: CalendarSectionProps) {
                 </div>
 
                 {dayReminders.length === 0 ? (
-                  <p class="calendar-reminder-empty">No reminder on this day.</p>
+                  <p class="calendar-reminder-empty">{t('calendar.noReminder')}</p>
                 ) : (
                   <ul class="calendar-reminder-list">
                     {dayReminders.map((reminder) => (
@@ -275,8 +320,8 @@ export function CalendarSection(props: CalendarSectionProps) {
                         <button
                           type="button"
                           class="icon-button calendar-reminder-remove"
-                          aria-label={REMOVE_REMINDER}
-                          title={REMOVE_REMINDER}
+                          aria-label={t(REMOVE_REMINDER)}
+                          title={t(REMOVE_REMINDER)}
                           onClick={() => actions.removeReminder(reminder.id)}
                         >
                           <Icon name="x" size={13} />
@@ -289,7 +334,7 @@ export function CalendarSection(props: CalendarSectionProps) {
                 {formOpen ? (
                   <form
                     class="calendar-reminder-form"
-                    aria-label="Add a reminder"
+                    aria-label={t('calendar.addReminder')}
                     onSubmit={(event) => {
                       event.preventDefault();
                       void addReminder();
@@ -299,7 +344,7 @@ export function CalendarSection(props: CalendarSectionProps) {
                       <input
                         type="time"
                         class="calendar-reminder-time-input"
-                        aria-label="Time of the reminder"
+                        aria-label={t('calendar.reminderTime')}
                         value={time}
                         onInput={(event) =>
                           setTime((event.currentTarget as HTMLInputElement).value)
@@ -308,8 +353,8 @@ export function CalendarSection(props: CalendarSectionProps) {
                       <input
                         type="text"
                         class="calendar-reminder-text-input"
-                        aria-label="Text of the reminder"
-                        placeholder={DEFAULT_TITLE}
+                        aria-label={t('calendar.reminderText')}
+                        placeholder={t('reminder.defaultTitle')}
                         value={title}
                         onInput={(event) =>
                           setTitle((event.currentTarget as HTMLInputElement).value)
@@ -348,7 +393,7 @@ export function CalendarSection(props: CalendarSectionProps) {
               </div>
             </>
           ) : (
-            <p class="section-hint">Pick a day to see the notes of that day.</p>
+            <p class="section-hint">{t('calendar.hint')}</p>
           )}
         </div>
       </div>

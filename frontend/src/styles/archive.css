@@ -1,0 +1,101 @@
+/* ==========================================================================
+   The archive of the notes.
+
+   The archive lists the notes the tree cannot show: the notes whose folder is
+   not in the vault any more. The section gives them the usual actions: open,
+   rename and delete.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The panel itself. */
+.archive-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+/* The header of the panel. */
+.archive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The hint of the panel: the tree holds every note. */
+.archive-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The list of the archived notes. */
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One archived note: its name, its path and its actions. */
+.archive-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name actions'
+    'path actions';
+  align-items: center;
+  gap: 0 var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+}
+
+.archive-item:hover {
+  background: var(--bg-hover);
+}
+
+/* The name of the note: it opens the note. */
+.archive-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-name:hover {
+  color: var(--fg);
+}
+
+/* The path of the note. */
+.archive-path {
+  grid-area: path;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+/* The actions of the note. */
+.archive-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}

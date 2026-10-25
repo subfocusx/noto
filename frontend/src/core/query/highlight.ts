@@ -7,6 +7,7 @@
  */
 
 import type { QueryNode, QueryValue } from './ir';
+import { compileRegex } from './regex';
 
 /** A range of the text of a note. */
 export interface MatchRange {
@@ -83,6 +84,25 @@ export function matchRanges(
     if (op === '==') {
       if (haystack === lowerNeedle) {
         ranges.push({ from: 0, to: content.length });
+      }
+      return;
+    }
+    if (op === 'matches') {
+      // The ranges of the matches of the expression: the text of the note is
+      // the only thing that is scanned, so the number of the ranges is
+      // bounded by the size of the note.
+      const compiled = compileRegex(needle);
+      if (!compiled.ok || !compiled.regex) return;
+      const regex = new RegExp(compiled.regex.source, 'g');
+      let match = regex.exec(content);
+      while (match !== null) {
+        if (match[0].length > 0) {
+          ranges.push({ from: match.index, to: match.index + match[0].length });
+        } else {
+          // An empty match would loop for ever: the cursor moves by one.
+          regex.lastIndex += 1;
+        }
+        match = regex.exec(content);
       }
     }
   };

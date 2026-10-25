@@ -1,0 +1,71 @@
+/* ==========================================================================
+   Mobile: the editor.
+
+   The editor is the part of the application that must never overflow: the
+   text is written there, and a line that does not fit must be wrapped
+   instead of pushing the shell out of the window. The rules of this file
+   keep the writing surface inside the screen on a narrow one.
+   ========================================================================== */
+
+@media (max-width: 820px) {
+  /* The panes of the editor share the screen one after the other. */
+  .workspace-panes {
+    flex-direction: column;
+  }
+
+  /*
+   * The writing surface keeps the width of the screen: the pane is the only
+   * box that may scroll, and it scrolls vertically.
+   */
+  .pane,
+  .editor-host,
+  .pane-preview {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .pane-preview {
+    padding: var(--space-4) var(--space-4) var(--space-8);
+  }
+
+  /* The editor of CodeMirror wraps the long lines instead of overflowing. */
+  .editor-host .cm-editor {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .editor-host .cm-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /*
+   * The strip of the tabs scrolls sideways: the tabs of a long list do not
+   * push the header of the editor out of the window.
+   */
+  .breadcrumb-strip,
+  .editor-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* The breadcrumb of the note gives up its path: the name is enough. */
+  .breadcrumb-strip .note-breadcrumbs {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The window of the search does not leave the screen. */
+  .find-panel,
+  .find-panel-floating {
+    max-width: calc(100vw - var(--space-4));
+    left: var(--space-2);
+    right: var(--space-2);
+  }
+}

@@ -13,7 +13,9 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useAppActions, useAppState } from '../core/store/hooks';
+import { isPinned, togglePin, usePins } from '../core/pin/pins';
 import type { PluginContextMenuItem } from '../plugins/contract';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 import { PluginContextMenuSlot } from './PluginSlots';
 
@@ -99,6 +101,7 @@ function MenuEntry(props: {
 }
 
 export function TreeContextMenu(props: TreeContextMenuProps) {
+  const t = useT();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const closedRef = useRef(false);
   const [position, setPosition] = useState({ left: props.x, top: props.y });
@@ -107,6 +110,9 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
   const name = nameOf(props.path);
   // Only a note can be a favorite: a folder is not a note.
   const favorite = !props.isFolder && state.ui.favorites.includes(props.path);
+  // A note can also be pinned to the top of the tree.
+  const pins = usePins();
+  const pinned = !props.isFolder && isPinned(pins, props.path);
 
   // The menu is measured after the first render: it is then moved back into
   // the viewport when it would overflow it.
@@ -170,43 +176,51 @@ export function TreeContextMenu(props: TreeContextMenuProps) {
       ref={menuRef}
       class="context-menu"
       role="menu"
-      aria-label={`Actions of ${name}`}
+      aria-label={t('tree.menu.label', { name })}
       style={{ position: 'fixed', left: `${position.left}px`, top: `${position.top}px` }}
     >
-      <MenuEntry label="Rename" onSelect={() => run(props.onRename)}>
+      <MenuEntry label={t('tree.rename')} onSelect={() => run(props.onRename)}>
         <Icon name="pencil" size={16} />
       </MenuEntry>
-      <MenuEntry label="Move" onSelect={() => run(props.onMove)}>
+      <MenuEntry label={t('tree.move')} onSelect={() => run(props.onMove)}>
         <Icon name="move" size={16} />
       </MenuEntry>
       {props.isFolder ? (
         <>
-          <MenuEntry label="New note" onSelect={() => run(props.onCreateFile)}>
+          <MenuEntry label={t('tree.newNote')} onSelect={() => run(props.onCreateFile)}>
             <Icon name="file-plus" size={16} />
           </MenuEntry>
-          <MenuEntry label="New folder" onSelect={() => run(props.onCreateFolder)}>
+          <MenuEntry label={t('tree.newFolder')} onSelect={() => run(props.onCreateFolder)}>
             <Icon name="folder-plus" size={16} />
           </MenuEntry>
         </>
       ) : null}
       {!props.isFolder && props.onDuplicate ? (
-        <MenuEntry label="Duplicate" onSelect={() => run(props.onDuplicate as () => void)}>
+        <MenuEntry label={t('tree.duplicate')} onSelect={() => run(props.onDuplicate as () => void)}>
           <Icon name="copy" size={16} />
         </MenuEntry>
       ) : null}
       {!props.isFolder ? (
         <MenuEntry
-          label={favorite ? 'Remove from favorites' : 'Add to favorites'}
+          label={favorite ? t('tree.removeFavorite') : t('tree.addFavorite')}
           onSelect={() => run(() => actions.toggleFavorite(props.path))}
         >
           <Icon name="star" size={16} />
+        </MenuEntry>
+      ) : null}
+      {!props.isFolder ? (
+        <MenuEntry
+          label={pinned ? t('tree.unpin') : t('tree.pin')}
+          onSelect={() => run(() => void togglePin(props.path))}
+        >
+          <Icon name="bookmark" size={16} />
         </MenuEntry>
       ) : null}
       {props.pluginItems && props.pluginItems.length > 0 ? (
         <PluginContextMenuSlot items={props.pluginItems} path={props.path} />
       ) : null}
       <div class="context-menu-separator" />
-      <MenuEntry label="Delete" danger onSelect={() => run(props.onDelete)}>
+      <MenuEntry label={t('tree.delete')} danger onSelect={() => run(props.onDelete)}>
         <Icon name="trash" size={16} />
       </MenuEntry>
     </div>

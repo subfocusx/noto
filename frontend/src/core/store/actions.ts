@@ -8,6 +8,7 @@ import { ApiError, getVault, setVault } from '../../api/client';
 import { createAutosave, type AutosaveController, type AutosaveStatus } from '../../lib/autosave';
 import { deleteDraft, getDraft, isDraftNewer, putDraft, type Draft } from '../../lib/drafts';
 import { errorMessage } from '../../lib/errors';
+import { publishPendingSync } from './offlineQueue';
 import type { Node, NoteContent } from '../../types';
 import {
   clampRightPanelWidth,
@@ -44,6 +45,18 @@ import type { ConnectionState } from '../connection/types';
 import { connectionMonitor } from '../connection/monitor';
 import { getVaultService } from '../vault/vaultService';
 import { detectVaultMode, getSealedVault, lockVault } from '../vault/session';
+import { storageRegistry } from '../storages/storageRegistry';
+import {
+  applyStorageState,
+  captureStorageState,
+  emptyStorageState,
+  storageKey,
+  type StorageState,
+} from '../storages/storageState';
+import {
+  STORAGE_FIXED_MESSAGE,
+  storageFixedExplanation,
+} from '../storages/fixedStorage';
 import {
   deleteSealedDraft,
   getSealedDraft,
@@ -981,22 +994,204 @@ function scheduleTagsRefresh(): void {
 
 /* ----------------------------------------------------------------- vault */
 
+/**
+ * Remembers the state of the storage that is open now.
+ *
+ * The state of a storage lives in the registry (`../storages/storageRegistry`):
+ * the storage that the user leaves keeps its tree, its note and its folders,
+ * and the user finds them again when he comes back.
+ */
+function captureActiveStorage(): void {
+  const state = getSnapshot();
+  const path = state.ui.vaultPath;
+  if (!path) return;
+  storageRegistry.set(path, captureStorageState(state, { ...refs }, path));
+}
+
+/**
+ * The paths of the storages that are open, the active one first.
+ *
+ * The path of the active storage comes first even when it was opened first:
+ * the list is read as "the storage that is open now, and the others".
+ */
+function openStoragePaths(active: string): string[] {
+  const rest = storageRegistry.paths().filter((path) => storageKey(path) !== storageKey(active));
+  return active ? [active, ...rest] : rest;
+}
+
+/**
+ * Puts the state of a storage back into the state of the store.
+ *
+ * The mirrors of the store go with it: a callback of the old storage must
+ * not see the note of the new one. The text of the note of an encrypted
+ * storage is not restored: the storage is locked after the switch, and the
+ * text is read again when the user unlocks it.
+ */
+function restoreStorage(storage: StorageState): void {
+  const sealed = getVaultService().mode === 'sealed';
+  const note = sealed
+    ? { ...storage.note, content: '', contentPath: null, dirty: false }
+    : storage.note;
+  update((prev) => applyStorageState(prev, { ...storage, note }));
+  refs.currentPath = sealed ? null : storage.mirrors.currentPath;
+  refs.content = sealed ? '' : storage.mirrors.content;
+  refs.revision = note.revision;
+  refs.loadingPath = null;
+}
+
 /** Reads the state of the storage of the notes. */
 export async function loadVault(): Promise<void> {
   try {
     const info = await getVault();
+    const path = info.path ?? '';
     update((prev) => ({
       ...prev,
       ui: {
         ...prev.ui,
         vaultConfigured: info.configured,
-        vaultPath: info.path ?? '',
+        vaultPath: path,
         vaultFixed: info.fixed === true,
+        openStorages: path ? [path] : [],
       },
     }));
+    // The storage of the server is open: it is registered, so the switch away
+    // from it keeps its state.
+    if (path) {
+      storageRegistry.set(path, captureStorageState(getSnapshot(), { ...refs }, path));
+    }
   } catch (err) {
     reportError(err);
   }
+}
+
+/**
+ * Opens another storage of the notes.
+ *
+ * The server switches to the new folder. The storage that is open now keeps
+ * its tree, its note and its folders, and the storage that is opened comes
+ * back with the state it had when the user left it — if it was opened before.
+ * A storage that was never opened is read from the server.
+ */
+export async function switchStorage(path: string): Promise<void> {
+  const target = path.trim();
+  if (!target) return;
+  // The storage that is open is already open: there is nothing to switch.
+  if (storageKey(target) === storageKey(getSnapshot().ui.vaultPath)) return;
+  await openStorage(target);
+}
+
+/**
+ * Opens a storage of the notes on the server.
+ *
+ * The action is the heart of the switch: the server is asked for the new
+ * folder, the state of the storage we leave is remembered, and the state of
+ * the storage we come to is put back.
+ */
+async function openStorage(target: string): Promise<void> {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: true } }));
+  try {
+    const info = await setVault(target);
+    const chosen = info.path ?? target;
+    // The state of the storage we leave is remembered before the new one
+    // takes its place.
+    captureActiveStorage();
+    await lockVault();
+    await detectVaultMode();
+
+    // The storage that is open now is read again: the user asked for it.
+    const same = storageKey(chosen) === storageKey(getSnapshot().ui.vaultPath);
+    const known = same ? undefined : storageRegistry.get(chosen);
+    const storage = known ?? emptyStorageState(chosen);
+    storageRegistry.set(chosen, storage);
+
+    update((prev) => {
+      const next = applyStorageState(prev, storage);
+      return {
+        ...next,
+        ui: {
+          ...next.ui,
+          vaultConfigured: true,
+          vaultPath: chosen,
+          vaultBusy: false,
+          // The server accepted the change: the storage is not fixed any more.
+          vaultFixed: false,
+          vaultRecents: pushVaultRecent(next.ui.vaultRecents, chosen),
+          openStorages: openStoragePaths(chosen),
+        },
+      };
+    });
+    restoreStorage(storage);
+    persistPrefs();
+    // A storage that was opened before keeps the tree it had: the switch does
+    // not read the server again. A new storage is read from the server.
+    if (!known) await refreshTree();
+  } catch (err) {
+    update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: false } }));
+    // A fixed storage is a normal state of the environment, not a failure.
+    if (err instanceof ApiError && err.code === 'vault_fixed') {
+      update((prev) => ({ ...prev, ui: { ...prev.ui, vaultFixed: true } }));
+      showBanner(STORAGE_FIXED_MESSAGE);
+      return;
+    }
+    reportError(err);
+    throw err;
+  }
+}
+
+/**
+ * Chooses the folder with the notes.
+ *
+ * The action is the way into a storage: the server is always asked, even when
+ * the folder is the one that is open already, and a storage that was open
+ * before comes back with the state it had.
+ */
+export async function chooseVault(path: string): Promise<void> {
+  const target = path.trim();
+  if (!target) return;
+  await openStorage(target);
+}
+
+/**
+ * Closes a storage of the notes.
+ *
+ * A closed storage loses its state: its tree, its note and its folders are
+ * gone, and opening it again starts from nothing.
+ */
+export function closeStorage(path: string): void {
+  const target = path.trim();
+  if (!target) return;
+  const state = getSnapshot();
+  const active = storageKey(target) === storageKey(state.ui.vaultPath);
+  storageRegistry.close(target);
+  if (active) {
+    // The storage that is open is closed: the interface shows nothing of it.
+    update((prev) => {
+      const next = applyStorageState(prev, emptyStorageState(target));
+      return { ...next, ui: { ...next.ui, openStorages: openStoragePaths('') } };
+    });
+    refs.currentPath = null;
+    refs.content = '';
+    refs.revision = 0;
+    refs.loadingPath = null;
+  } else {
+    update((prev) => ({
+      ...prev,
+      ui: { ...prev.ui, openStorages: openStoragePaths(prev.ui.vaultPath) },
+    }));
+  }
+  persistPrefs();
+}
+
+/**
+ * Explains that the storage is fixed by the environment.
+ *
+ * The button of the storage stays where it is, but it cannot open anything:
+ * the interface says why instead of pretending that the storage can be
+ * changed.
+ */
+export function explainFixedStorage(): void {
+  const { message, reason } = storageFixedExplanation();
+  showBanner(`${message} ${reason}`);
 }
 
 /**
@@ -1005,43 +1200,6 @@ export async function loadVault(): Promise<void> {
  * The server switches to the new folder; the tree of the notes is read again,
  * so the interface shows the notes of the new storage at once.
  */
-export async function chooseVault(path: string): Promise<void> {
-  update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: true } }));
-  try {
-    const info = await setVault(path);
-    const chosen = info.path ?? path;
-    update((prev) => ({
-      ...prev,
-      ui: {
-        ...prev.ui,
-        vaultConfigured: true,
-        vaultPath: chosen,
-        vaultBusy: false,
-        // The server accepted the change: the storage is not fixed any more.
-        vaultFixed: false,
-        vaultRecents: pushVaultRecent(prev.ui.vaultRecents, chosen),
-      },
-    }));
-    persistPrefs();
-    // The server now holds another folder: the key material of the previous
-    // storage must not survive the change, and the mode of the new storage
-    // must be read again. A storage that is encrypted shows the screen of the
-    // password instead of the notes of the previous one.
-    await lockVault();
-    await detectVaultMode();
-    await refreshTree();
-  } catch (err) {
-    update((prev) => ({ ...prev, ui: { ...prev.ui, vaultBusy: false } }));
-    // A fixed storage is a normal state of the environment, not a failure.
-    if (err instanceof ApiError && err.code === 'vault_fixed') {
-      update((prev) => ({ ...prev, ui: { ...prev.ui, vaultFixed: true } }));
-      showBanner('The storage is fixed by the environment (NOTO_VAULT_FIXED).');
-      return;
-    }
-    reportError(err);
-    throw err;
-  }
-}
 
 /** Adds a note to the list of the recently opened notes. */
 export function addRecent(path: string): void {
@@ -1085,6 +1243,16 @@ export function setConnection(connection: ConnectionState): void {
       ? prev
       : { ...prev, env: { ...prev.env, connection } },
   );
+}
+
+/**
+ * Publishes the number of the writes that wait for the connection.
+ *
+ * The queue of the writes lives in the core (`../sync/offlineQueue.ts`); it
+ * tells the store how many writes wait, and the interface shows it.
+ */
+export function setPendingSync(pending: number): void {
+  publishPendingSync(pending);
 }
 
 /**
@@ -1223,12 +1391,20 @@ export interface AppActions {
   loadTags(): Promise<void>;
   loadVault(): Promise<void>;
   chooseVault(path: string): Promise<void>;
+  /** Opens another storage and keeps the state of the storages apart. */
+  switchStorage(path: string): Promise<void>;
+  /** Closes a storage: it loses its tree, its note and its folders. */
+  closeStorage(path: string): void;
+  /** Explains that the storage is fixed by the environment. */
+  explainFixedStorage(): void;
   duplicateNote(path: string): Promise<void>;
   addRecent(path: string): void;
   removeRecent(path: string): void;
   showBanner(message: string): void;
   dismissBanner(): void;
   setConnection(connection: ConnectionState): void;
+  /** Publishes the number of the writes that wait for the connection. */
+  setPendingSync(pending: number): void;
 }
 
 export const actions: AppActions = {
@@ -1302,10 +1478,14 @@ export const actions: AppActions = {
   loadTags,
   loadVault,
   chooseVault,
+  switchStorage,
+  closeStorage,
+  explainFixedStorage,
   duplicateNote,
   addRecent,
   removeRecent,
   showBanner,
   dismissBanner,
   setConnection,
+  setPendingSync,
 };

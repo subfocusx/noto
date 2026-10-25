@@ -1,0 +1,112 @@
+/* ==========================================================================
+   The templates of the user.
+
+   The panel lists the templates, lets the user write new ones and applies a
+   template to the note that is open.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The panel itself. */
+.template-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+/* The header of the panel. */
+.template-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The hint of the panel: the user wrote no template yet. */
+.template-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The list of the templates. */
+.template-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One template: the button that applies it and the button that removes it. */
+.template-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.template-item:hover {
+  background: var(--bg-hover);
+}
+
+/* The button that applies the template. */
+.template-apply {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-apply:hover {
+  color: var(--fg);
+}
+
+/* The form of a new template. */
+.template-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.template-name-input,
+.template-body-input {
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.template-body-input {
+  min-height: 64px;
+  resize: vertical;
+  font-family: var(--font-mono);
+}
+
+.template-name-input:focus-visible,
+.template-body-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}

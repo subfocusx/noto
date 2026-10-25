@@ -91,6 +91,33 @@ export function allFolderPaths(folders: Node[]): string[] {
 }
 
 /**
+ * Every note of the tree, whatever the folder it lives in.
+ *
+ * The groups are flattened, so that a view of the vault (the graph, the
+ * archive) sees the whole vault and not only the part of it that is open.
+ */
+export function allFiles(filesByParent: Map<string, Node[]>): Node[] {
+  const files: Node[] = [];
+  for (const list of filesByParent.values()) {
+    for (const file of list) files.push(file);
+  }
+  return files.sort((a, b) => compareStrings(a.path, b.path));
+}
+
+/** Every folder of the tree, whatever the folder it lives in. */
+export function allFolderNodes(folders: TreeFolder[]): Node[] {
+  const nodes: Node[] = [];
+  const walk = (list: TreeFolder[]): void => {
+    for (const folder of list) {
+      nodes.push(folder.node);
+      walk(folder.children);
+    }
+  };
+  walk(folders);
+  return nodes.sort((a, b) => compareStrings(a.path, b.path));
+}
+
+/**
  * Keeps only the notes of the filter and the folders that hold them.
  *
  * A folder stays when it holds a matching note, directly or in one of its

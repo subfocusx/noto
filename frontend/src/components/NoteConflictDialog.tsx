@@ -6,6 +6,7 @@
 // three ways out.
 import { Icon } from '../ui/icons';
 import type { NoteConflict } from '../core/store/types';
+import { useT } from '../i18n/useT';
 
 export interface NoteConflictDialogProps {
   /** The conflict of the note (`null` when there is none). */
@@ -29,12 +30,13 @@ export interface NoteConflictDialogProps {
  * decide first, so the autosave of that note waits.
  */
 export function NoteConflictDialog(props: NoteConflictDialogProps) {
+  const t = useT();
   const conflict = props.conflict;
   if (!conflict) return null;
 
   const when = conflict.serverUpdatedAt
     ? new Date(conflict.serverUpdatedAt).toLocaleString()
-    : 'an unknown moment';
+    : t('conflict.unknownMoment');
 
   return (
     <div class="q9-conflict-backdrop" role="presentation">
@@ -47,28 +49,30 @@ export function NoteConflictDialog(props: NoteConflictDialogProps) {
       >
         <h2 id="noto-conflict-title" class="q9-conflict-title">
           <Icon name="refresh-cw" size={16} />
-          The note was changed elsewhere
+          {t('conflict.title')}
         </h2>
         <p class="q9-conflict-text">
-          The version of the server was saved on {when} (revision {conflict.serverRevision}),
-          while the editor holds another version. Nothing is lost yet: choose what to keep.
+          {t('conflict.text', {
+            when,
+            revision: conflict.serverRevision,
+          })}
         </p>
         <div class="q9-conflict-actions">
           <button type="button" class="q9-button" onClick={props.onReload}>
-            Take the version of the server
+            {t('conflict.takeServer')}
           </button>
           <button type="button" class="q9-button" onClick={props.onKeepMine}>
-            Keep my version
+            {t('conflict.keepMine')}
           </button>
           <button type="button" class="q9-button" onClick={props.onCopyMine}>
-            Copy my version
+            {t('conflict.copyMine')}
           </button>
           <button type="button" class="q9-button q9-button-quiet" onClick={props.onDismiss}>
-            Decide later
+            {t('conflict.later')}
           </button>
         </div>
         <details class="q9-conflict-details">
-          <summary>Show the version of the server</summary>
+          <summary>{t('conflict.showServer')}</summary>
           <pre class="q9-conflict-preview">{conflict.serverContent}</pre>
         </details>
       </div>

@@ -151,10 +151,11 @@ export interface UiState {
    */
   calendarDay: string | null;
   /**
-   * The notifications of the session, the newest first.
+   * The notifications of the user, the newest first.
    *
-   * The list lives in the store, so the rail, the section of the notifications
-   * and the plugins always see the same list.
+   * The list lives in the store and in `localStorage`, so the rail, the section
+   * of the notifications and the plugins always see the same list — and the
+   * list survives a reload of the page.
    */
   notifications: Notification[];
   /**
@@ -241,6 +242,14 @@ export interface UiState {
    * the header of the storage.
    */
   vaultRecents: string[];
+  /**
+   * The paths of the storages that are open at the same time.
+   *
+   * The storages keep their own tree and their own open note, so the user can
+   * walk from one storage to another without losing his place. The active
+   * storage comes first.
+   */
+  openStorages: string[];
   /** True when the quick menu of the storage is open. */
   vaultMenuOpen: boolean;
 }
@@ -272,6 +281,13 @@ export interface EnvState {
   theme: ThemePreference;
   /** The theme that is really active. */
   effectiveTheme: 'light' | 'dark';
+  /**
+   * The number of the writes that wait for the connection.
+   *
+   * A write that failed because the server was unreachable goes into the
+   * outbox of the browser and is replayed when the connection comes back.
+   */
+  pendingSync: number;
 }
 
 /** The complete application state. */

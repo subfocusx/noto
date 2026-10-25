@@ -11,14 +11,19 @@
 // favorites.
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useT } from '../i18n/useT';
 import { useAppSelector } from '../core/store/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import type { MoveRefusal } from '../lib/tree';
 import { refusalOfMove } from '../lib/tree';
 import { useOverflowTitle } from '../lib/useOverflowTitle';
+import { formatDate } from '../lib/format';
 import { Icon } from '../ui/icons';
+import { NotePinButton } from './NotePinButton';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
+import '../styles/tree-pins.css';
+import '../styles/tree-dates.css';
 
 /** The width of one indentation step, in pixels. */
 const INDENT_STEP = 16;
@@ -126,15 +131,15 @@ function IndentGuides(props: { depth: number }) {
 /**
  * Checks a new name.
  *
- * Returns the message of the error, or null when the name is valid.
+ * Returns the key of the message of the error, or null when the name is valid.
  */
 function validateName(name: string): string | null {
-  if (name.length === 0) return 'The name cannot be empty.';
+  if (name.length === 0) return 'tree.nameEmpty';
   if (name.includes('/') || name.includes('\\')) {
-    return 'The name cannot contain a slash.';
+    return 'tree.nameSlash';
   }
   if (/[\u0000-\u001f]/.test(name)) {
-    return 'The name cannot contain control characters.';
+    return 'tree.nameControl';
   }
   return null;
 }
@@ -270,6 +275,7 @@ function RowActions(props: {
   node: Node;
   onContextMenu?(payload: TreeContextMenuPayload): void;
 }) {
+  const t = useT();
   const { node } = props;
   if (!props.onContextMenu) return null;
   return (
@@ -277,8 +283,8 @@ function RowActions(props: {
       <button
         type="button"
         class="icon-button"
-        title={`Menu ${node.name}`}
-        aria-label={`Menu ${node.name}`}
+        title={t('tree.menuButton', { name: node.name })}
+        aria-label={t('tree.menuButton', { name: node.name })}
         onClick={(event) => {
           props.onContextMenu?.({
             path: node.path,
@@ -306,6 +312,7 @@ function TreeName(props: { name: string }) {
 
 /** A folder of the tree, with its children. */
 export function TreeFolderRow(props: TreeFolderRowProps) {
+  const t = useT();
   const { folder } = props;
   const node = folder.node;
   const isOpen = props.expanded.has(node.path);
@@ -380,15 +387,15 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             type="button"
             class="tree-toggle"
             aria-expanded={isOpen}
-            aria-label={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            title={isOpen ? `Collapse ${node.name}` : `Expand ${node.name}`}
+            aria-label={isOpen ? t('tree.collapse', { name: node.name }) : t('tree.expand', { name: node.name })}
+            title={isOpen ? t('tree.collapse', { name: node.name }) : t('tree.expand', { name: node.name })}
             onClick={() => props.onToggle(node.path)}
           >
             <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={14} />
           </button>
         </span>
         {rename.renaming ? (
-          <RenameInput rename={rename} label={`Rename ${node.name}`} />
+          <RenameInput rename={rename} label={t('tree.renameLabel', { name: node.name })} />
         ) : (
           <button
             type="button"
@@ -406,7 +413,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
         {over ? (
           <span class={`tree-drop-badge${canDrop ? '' : ' refused'}`}>
             <Icon name={canDrop ? 'move' : 'x'} size={12} />
-            {canDrop ? 'Drop here' : 'Cannot drop here'}
+            {canDrop ? t('tree.dropHere') : t('tree.cannotDropHere')}
           </span>
         ) : null}
         {count > 0 ? <span class="tree-count">{count}</span> : null}
@@ -414,7 +421,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
       </div>
       {rename.error ? (
         <p class="tree-rename-error" role="alert">
-          {rename.error}
+          {t(rename.error)}
         </p>
       ) : null}
       {isOpen ? (
@@ -461,6 +468,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
 
 /** A note of the tree. */
 export function TreeNoteRow(props: TreeNoteRowProps) {
+  const t = useT();
   const { file } = props;
   const selected = file.path === props.currentPath;
   const rename = useInlineRename(file, props.onRenameInline);
@@ -470,6 +478,9 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
   // props of the rows. The subscription is narrow: the row is redrawn when
   // its own star changes, not on every keystroke of the editor.
   const favorite = useAppSelector((state) => state.ui.favorites.includes(file.path));
+  // The moment the note was written: the row shows it when the pointer rests
+  // on it, so that the date does not crowd the tree.
+  const created = formatDate(file.createdAt);
 
   const handleDragStart = (event: DragEvent): void => {
     // The user who renames a node is selecting a text, not dragging a row.
@@ -501,7 +512,7 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
         <IndentGuides depth={props.depth} />
         <span class="tree-rail" style={{ width: `${RAIL_WIDTH}px` }} />
         {rename.renaming ? (
-          <RenameInput rename={rename} label={`Rename ${file.name}`} />
+          <RenameInput rename={rename} label={t('tree.renameLabel', { name: file.name })} />
         ) : (
           <button
             type="button"
@@ -524,11 +535,19 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
             </span>
           </button>
         )}
+        {created ? (
+          <span class="tree-created" title={t('tree.created', { date: created })}>
+            {created}
+          </span>
+        ) : null}
+        <span class="tree-pin">
+          <NotePinButton path={file.path} label={file.name} />
+        </span>
         <RowActions node={file} onContextMenu={props.onContextMenu} />
       </div>
       {rename.error ? (
         <p class="tree-rename-error" role="alert">
-          {rename.error}
+          {t(rename.error)}
         </p>
       ) : null}
     </li>

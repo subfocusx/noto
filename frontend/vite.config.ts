@@ -58,7 +58,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    outDir: 'dist',
+    outDir: 'dist', manifest: true,
     // The vendor chunks are intentionally big; they are cached separately.
     chunkSizeWarningLimit: 800,
     rollupOptions: {

@@ -6,10 +6,15 @@
 // the message is seen even when the window of the application is in the
 // background.
 //
+// The delivery is **local**: the watcher only runs while the application is
+// open. There is no server that pushes the reminders, so a reminder of a
+// closed application fires when the application comes back — it is never lost.
+//
 // The module is loaded on demand: the shell of the application does not need
 // the watcher before the first tick, and a user without reminders never loads
 // it at all.
 import { appStore } from '../store/appStore';
+import { t } from '../../i18n';
 import { formatReminderMoment, isDue } from './types';
 import { showSystemNotification } from './system';
 
@@ -39,7 +44,7 @@ export function startReminderWatcher(): () => void {
       if (fired.has(reminder.id)) continue;
       if (!isDue(reminder, now)) continue;
       fired.add(reminder.id);
-      const title = reminder.title || 'Reminder';
+      const title = reminder.title || t('reminder.defaultTitle');
       const body = formatReminderMoment(reminder);
       appStore.actions.notify({ kind: 'info', title, body, path: reminder.path });
       showSystemNotification(title, body, reminder.id);

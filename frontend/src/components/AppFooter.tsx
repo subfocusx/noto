@@ -1,5 +1,6 @@
 import type { AutosaveStatus } from '../lib/autosave';
 import type { ConnectionState } from '../types';
+import { useT } from '../i18n/useT';
 import { IconButton } from '../ui/tooltip';
 import { ConnectionIndicator } from './ConnectionIndicator';
 
@@ -89,24 +90,25 @@ function group(value: number): string {
  * the column stands next to it.
  */
 export function AppFooter(props: AppFooterProps) {
+  const t = useT();
   return (
     <footer class="app-footer">
-      <div class="app-footer-actions" role="group" aria-label="Global actions">
+      <div class="app-footer-actions" role="group" aria-label={t('footer.globalActions')}>
         <IconButton
-          label="Toggle navigation"
+          label={t('footer.toggleNavigation')}
           icon="menu"
           class="menu-button"
           pressed={props.drawerOpen}
           onClick={() => props.onToggleDrawer?.()}
         />
         <IconButton
-          label="Toggle outline panel"
+          label={t('footer.toggleOutline')}
           icon="panel-right"
           pressed={props.panelVisible}
           onClick={() => props.onTogglePanel?.()}
         />
         <IconButton
-          label="Toggle theme"
+          label={t('footer.toggleTheme')}
           icon={props.theme === 'dark' ? 'sun' : 'moon'}
           onClick={() => props.onToggleTheme?.()}
         />
@@ -123,7 +125,7 @@ export function AppFooter(props: AppFooterProps) {
       ) : null}
       {props.status === 'error' ? (
         <button type="button" class="text-button" onClick={props.onRetrySave}>
-          Retry save
+          {t('footer.retrySave')}
         </button>
       ) : null}
       <ConnectionIndicator connection={props.connection} onRetry={props.onRetryConnection} />
@@ -132,21 +134,19 @@ export function AppFooter(props: AppFooterProps) {
       </span>
       {props.filterQuery ? (
         <span class="filter-chip" data-testid="filter-chip">
-          <span class="filter-chip-name">Filter: {props.filterQuery}</span>
+          <span class="filter-chip-name">{t('footer.filterLabel', { query: props.filterQuery })}</span>
           {props.filterTotal !== undefined ? (
             <span
               class="filter-chip-count"
-              title={
-                props.filterTruncated
-                  ? 'The tree holds the first 50 matches, the counter shows them all'
-                  : undefined
-              }
+              title={props.filterTruncated ? t('footer.filterTruncated') : undefined}
             >
-              {props.filterTotal} {props.filterTotal === 1 ? 'note' : 'notes'}
+              {props.filterTotal === 1
+                ? t('footer.oneNote', { count: props.filterTotal })
+                : t('footer.manyNotes', { count: props.filterTotal })}
             </span>
           ) : null}
           <IconButton
-            label="Clear the active filter"
+            label={t('footer.clearFilter')}
             icon="x"
             size={12}
             class="filter-chip-x"
@@ -157,18 +157,20 @@ export function AppFooter(props: AppFooterProps) {
       <span class="app-footer-spacer" />
       {props.cursor ? (
         <span class="tabular app-footer-cursor">
-          Ln {props.cursor.line}, Col {props.cursor.column}
+          {t('footer.cursor', { line: props.cursor.line, column: props.cursor.column })}
         </span>
       ) : null}
       {props.wordCount !== undefined ? (
-        <span class="tabular">{group(props.wordCount)} words</span>
+        <span class="tabular">{t('footer.words', { count: group(props.wordCount) })}</span>
       ) : null}
       {props.characterCount !== undefined ? (
-        <span class="tabular">{group(props.characterCount)} chars</span>
+        <span class="tabular">{t('footer.chars', { count: group(props.characterCount) })}</span>
       ) : null}
-      <span class="tabular app-footer-format">Markdown</span>
+      <span class="tabular app-footer-format">{t('footer.markdown')}</span>
       <span class="tabular app-footer-format">{props.encoding ?? 'UTF-8'}</span>
-      <span class="tabular">{props.writable === false ? 'Read only' : 'Writable'}</span>
+      <span class="tabular">
+        {props.writable === false ? t('footer.readOnly') : t('footer.writable')}
+      </span>
     </footer>
   );
 }

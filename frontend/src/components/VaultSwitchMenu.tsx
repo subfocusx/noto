@@ -7,6 +7,8 @@
 // The menu is rendered by the header of the explorer, next to the path of the
 // storage, and it closes as soon as the user leaves it.
 import { useEffect, useRef } from 'preact/hooks';
+import { useAppActions, useAppState } from '../core/store/hooks';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface VaultSwitchMenuProps {
@@ -46,6 +48,9 @@ function nameOf(path: string): string {
 export function VaultSwitchMenu(props: VaultSwitchMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const closedRef = useRef(false);
+  const state = useAppState();
+  const actions = useAppActions();
+  const t = useT();
 
   // The first item takes the focus, so the menu can be driven with the
   // keyboard right away.
@@ -92,29 +97,73 @@ export function VaultSwitchMenu(props: VaultSwitchMenuProps) {
     props.onClose();
   };
 
-  // The storage that is open now is not offered again.
-  const others = props.recents.filter((path) => path !== props.currentPath);
+  /**
+   * The storages that are open at the same time.
+   *
+   * The list comes from the store: every storage keeps its own tree and its
+   * own note, and the user walks from one to another without a reload.
+   */
+  const openPaths = state.ui.openStorages.filter((path) => path !== props.currentPath);
+
+  // The storage that is open now is not offered again, and neither is a
+  // storage that is already in the list of the open ones.
+  const others = props.recents.filter(
+    (path) => path !== props.currentPath && !openPaths.includes(path),
+  );
 
   return (
     <div
       ref={menuRef}
       class="vault-menu"
       role="menu"
-      aria-label="Switch the storage of the notes"
+      aria-label={t('vault.switch.label')}
     >
       <div class="vault-menu-title" role="presentation">
-        Storage of the notes
+        {t('vault.switch.title')}
       </div>
       <div class="vault-menu-current" role="presentation" title={props.currentPath}>
         <Icon name="folder" size={14} />
         <span class="vault-menu-current-name">{nameOf(props.currentPath)}</span>
         <span class="vault-menu-current-path">{props.currentPath}</span>
       </div>
+      {openPaths.length > 0 ? (
+        <>
+          <div class="context-menu-separator" role="presentation" />
+          <div class="vault-menu-title" role="presentation">
+            {t('vault.switch.open')}
+          </div>
+          {openPaths.map((path) => (
+            <div class="vault-menu-row" key={path}>
+              <button
+                type="button"
+                class="vault-menu-item"
+                role="menuitem"
+                title={path}
+                onClick={() => run(() => props.onSwitch(path))}
+              >
+                <Icon name="folder" size={14} />
+                <span class="vault-menu-item-name">{nameOf(path)}</span>
+                <span class="vault-menu-item-path">{path}</span>
+              </button>
+              <button
+                type="button"
+                class="icon-button vault-menu-close"
+                role="menuitem"
+                aria-label={t('vault.switch.close', { name: nameOf(path) })}
+                title={t('vault.switch.close', { name: nameOf(path) })}
+                onClick={() => run(() => actions.closeStorage(path))}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          ))}
+        </>
+      ) : null}
       {others.length > 0 ? (
         <>
           <div class="context-menu-separator" role="presentation" />
           <div class="vault-menu-title" role="presentation">
-            Recent
+            {t('vault.switch.recent')}
           </div>
           {others.map((path) => (
             <button
@@ -134,8 +183,9 @@ export function VaultSwitchMenu(props: VaultSwitchMenuProps) {
       ) : null}
       <div class="context-menu-separator" role="presentation" />
       {props.fixed ? (
-        <div class="vault-menu-fixed" role="presentation">
-          The storage is fixed by the environment
+        <div class="vault-menu-fixed" role="presentation" data-testid="vault-menu-fixed">
+          <span class="vault-menu-fixed-message">{t('vault.fixed.title')}</span>
+          <span class="vault-menu-fixed-reason">{t('vault.fixed.reason')}</span>
         </div>
       ) : (
         <button
@@ -145,7 +195,7 @@ export function VaultSwitchMenu(props: VaultSwitchMenuProps) {
           onClick={() => run(props.onBrowse)}
         >
           <Icon name="folder-plus" size={14} />
-          <span class="vault-menu-item-name">Choose another folder…</span>
+          <span class="vault-menu-item-name">{t('vault.switch.choose')}</span>
         </button>
       )}
     </div>

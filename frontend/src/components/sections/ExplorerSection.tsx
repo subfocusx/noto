@@ -10,12 +10,20 @@ import { useMemo, useRef, useState } from 'preact/hooks';
 import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
 import type { MoveRefusal } from '../../lib/tree';
-import { filterTree, refusalOfMove } from '../../lib/tree';
+import { allFiles, allFolderNodes, filterTree, refusalOfMove } from '../../lib/tree';
+import { useAppActions } from '../../core/store/hooks';
+import { pinnedNodes, usePins } from '../../core/pin/pins';
+import { quickNoteName } from '../../core/quicknotes/quickNotes';
+import { getVaultService } from '../../core/vault/vaultService';
+import { useT } from '../../i18n/useT';
 import { Icon } from '../../ui/icons';
 import { IconButton } from '../../ui/tooltip';
 import type { TreeContextMenuPayload } from '../TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from '../TreeRow';
 import { VaultSwitchMenu } from '../VaultSwitchMenu';
+import { ArchivePanel } from './ArchivePanel';
+import { GraphPanel } from './GraphPanel';
+import { QuickNotesSection } from './QuickNotesSection';
 
 export interface ExplorerSectionProps {
   /** The folders of the vault. */
@@ -91,9 +99,17 @@ export interface ExplorerSectionProps {
    * stay visible.
    */
   filterPaths?: Set<string> | null;
-  /** Opens the graph of the vault; the feature is not implemented yet. */
+  /**
+   * Opens the graph of the vault.
+   *
+   * When the shell does not answer, the explorer opens the graph by itself.
+   */
   onOpenGraph?(): void;
-  /** Opens the archive of the vault; the feature is not implemented yet. */
+  /**
+   * Opens the archive of the vault.
+   *
+   * When the shell does not answer, the explorer opens the archive by itself.
+   */
   onOpenArchive?(): void;
   /** Opens the command palette of the application. */
   onOpenPalette?(): void;
@@ -102,9 +118,19 @@ export interface ExplorerSectionProps {
 }
 
 export function ExplorerSection(props: ExplorerSectionProps) {
+  const t = useT();
   const [drag, setDrag] = useState<TreeDragState>({ path: null, isFolder: false });
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [rootOver, setRootOver] = useState(false);
+  /**
+   * The panel that stands in the place of the tree.
+   *
+   * The graph and the archive are opened from the header of the explorer. When
+   * the shell does not answer, the explorer opens them by itself.
+   */
+  const [panel, setPanel] = useState<'graph' | 'archive' | null>(null);
+  const actions = useAppActions();
+  const pins = usePins();
   /**
    * The answer of the current drag.
    *
@@ -139,11 +165,10 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   const lockLabel =
     props.vaultMode === 'sealed'
       ? props.vaultLocked
-        ? 'Unlock the vault'
-        : 'Lock the vault'
-      : 'Set up an encrypted storage';
+        ? t('explorer.unlockVault')
+        : t('explorer.lockVault')
+      : t('explorer.setupEncrypted');
   const lockIcon = props.vaultMode === 'sealed' && props.vaultLocked ? 'lock-open' : 'lock';
-
   /**
    * The tree of the notes, filtered by the query of the user.
    *
@@ -199,15 +224,57 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   }, [props.folders, props.showCounts]);
 
   /**
-   * True when the graph of the vault can be opened.
+   * The notes of the whole vault, whatever the folder they live in.
    *
-   * The feature is not implemented yet: the button stays visible, but it is
-   * marked as unavailable, so the user knows that it exists.
+   * The graph, the archive and the quick notes are views of the vault, not of
+   * the part of it that the filter of the user left visible.
    */
-  const graphReady = props.onOpenGraph !== undefined;
+  const vaultFiles = useMemo(() => allFiles(props.filesByParent), [props.filesByParent]);
+  const vaultFolders = useMemo(() => allFolderNodes(props.folders), [props.folders]);
 
-  /** True when the archive of the vault can be opened. */
-  const archiveReady = props.onOpenArchive !== undefined;
+  /** The notes the user pinned to the top of the tree. */
+  const pinnedFiles = useMemo(() => pinnedNodes(vaultFiles, pins), [vaultFiles, pins]);
+
+  /**
+   * Opens the graph of the vault.
+   *
+   * The shell may want to open the graph in its own window; when it does not
+   * answer, the explorer opens the panel by itself.
+   */
+  const openGraph = (): void => {
+    if (props.onOpenGraph) {
+      props.onOpenGraph();
+      return;
+    }
+    setPanel('graph');
+  };
+
+  /** Opens the archive of the vault. */
+  const openArchive = (): void => {
+    if (props.onOpenArchive) {
+      props.onOpenArchive();
+      return;
+    }
+    setPanel('archive');
+  };
+
+  /**
+   * Creates a quick note: a note without a name and without a folder.
+   *
+   * The note is created at the root of the vault and opened right away: the
+   * user writes first and names the note later.
+   */
+  const createQuickNote = async (): Promise<void> => {
+    const taken = vaultFiles.filter((file) => !file.parentPath).map((file) => file.name);
+    const name = quickNoteName(taken);
+    try {
+      const node = await getVaultService().createFile('', name);
+      await actions.refreshTree();
+      await actions.openNote(node.path);
+    } catch {
+      // The store shows the failure in its banner.
+    }
+  };
 
   /**
    * The message of a refusal.
@@ -217,11 +284,11 @@ export function ExplorerSection(props: ExplorerSectionProps) {
    * be silent.
    */
   const messageOfRefusal = (refusal: MoveRefusal, node: Node | undefined): string => {
-    if (refusal === 'into-itself') return 'A folder cannot be moved into itself.';
+    if (refusal === 'into-itself') return t('explorer.moveIntoItself');
     if (refusal === 'already-there') {
-      return node?.type === 'folder' ? 'The folder is already here.' : 'The note is already here.';
+      return node?.type === 'folder' ? t('explorer.folderAlreadyThere') : t('explorer.noteAlreadyThere');
     }
-    return 'The node was not moved: drop it on a folder.';
+    return t('explorer.notMoved');
   };
 
   /** The start of a drag: the answer of the previous one is forgotten. */
@@ -246,11 +313,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
     setDropHint(null);
     setRootOver(false);
     if (handled || refusal === null) return;
-    setDropHint(
-      refusal === 'nowhere'
-        ? 'The node was not moved: drop it on a folder.'
-        : messageOfRefusal(refusal, node),
-    );
+    setDropHint(refusal === 'nowhere' ? t('explorer.notMoved') : messageOfRefusal(refusal, node));
   };
 
   /**
@@ -283,7 +346,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   const draggingNode = drag.path ? (nodesByPath.get(drag.path) ?? null) : null;
 
   return (
-    <section class="column-section" aria-label="Explorer">
+    <section class="column-section" aria-label={t('section.explorer')}>
       <header class="column-header vault-header">
         <span class="vault-header-icon">
           <Icon name="folder" size={15} />
@@ -296,16 +359,16 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               class="vault-header-path"
               title={
                 props.vaultFixed
-                  ? 'The storage is fixed by the environment (NOTO_VAULT_FIXED)'
+                  ? t('explorer.storageFixed')
                   : props.vaultPath
               }
-              aria-label="Change the storage of the notes"
+              aria-label={t('explorer.changeStorage')}
               aria-disabled={props.vaultFixed ? 'true' : undefined}
               aria-haspopup="menu"
               aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
               onClick={toggleMenu}
             >
-              {props.vaultPath || 'Choose a folder…'}
+              {props.vaultPath || t('explorer.chooseFolder')}
             </button>
           ) : (
             <span class="vault-header-path" title={props.vaultPath}>
@@ -325,8 +388,8 @@ export function ExplorerSection(props: ExplorerSectionProps) {
         <button
           type="button"
           class="icon-button"
-          title="New note"
-          aria-label="New note"
+          title={t('tree.newNote')}
+          aria-label={t('tree.newNote')}
           onClick={() => props.onCreateFile('')}
         >
           <Icon name="file-plus" size={15} />
@@ -334,8 +397,8 @@ export function ExplorerSection(props: ExplorerSectionProps) {
         <button
           type="button"
           class="icon-button"
-          title="New folder"
-          aria-label="New folder"
+          title={t('tree.newFolder')}
+          aria-label={t('tree.newFolder')}
           onClick={() => props.onCreateFolder('')}
         >
           <Icon name="folder-plus" size={15} />
@@ -343,8 +406,8 @@ export function ExplorerSection(props: ExplorerSectionProps) {
         <button
           type="button"
           class="icon-button"
-          title="Refresh"
-          aria-label="Refresh tree"
+          title={t('explorer.refresh')}
+          aria-label={t('explorer.refreshTree')}
           onClick={props.onRefresh}
         >
           <Icon name="refresh-cw" size={15} />
@@ -366,107 +429,159 @@ export function ExplorerSection(props: ExplorerSectionProps) {
         <div class="sidebar-section">
           <div class="sidebar-section-title">
             <span>
-              Explorer
-              {filtered ? <span class="q9-filtered-badge">filtered</span> : null}
+              {t('section.explorer')}
+              {filtered ? (
+                <span class="q9-filtered-badge">{t('explorer.filtered')}</span>
+              ) : null}
             </span>
-            <div class="sidebar-section-actions" role="group" aria-label="Explorer actions">
+            <div class="sidebar-section-actions" role="group" aria-label={t('explorer.actions')}>
               <IconButton
-                label="Expand all folders"
+                label={t('explorer.expandAll')}
                 icon="chevrons-down-up"
                 onClick={() => props.onExpandAll?.()}
               />
               <IconButton
-                label="Collapse all folders"
+                label={t('explorer.collapseAll')}
                 icon="chevrons-up-down"
                 onClick={() => props.onCollapseAll?.()}
               />
               <IconButton
-                label="Graph"
+                label={t('explorer.graph')}
                 icon="network"
-                ariaDisabled={!graphReady}
-                title={graphReady ? 'Graph' : 'Not implemented yet'}
-                onClick={() => props.onOpenGraph?.()}
+                title={t('explorer.graph')}
+                onClick={openGraph}
               />
               <IconButton
-                label="Archive"
+                label={t('explorer.archive')}
                 icon="archive"
-                ariaDisabled={!archiveReady}
-                title={archiveReady ? 'Archive' : 'Not implemented yet'}
-                onClick={() => props.onOpenArchive?.()}
+                title={t('explorer.archive')}
+                onClick={openArchive}
               />
               <IconButton
-                label="Open command palette"
+                label={t('explorer.palette')}
                 icon="command"
-                title="Command palette"
+                title={t('explorer.paletteTitle')}
                 onClick={() => props.onOpenPalette?.()}
               />
-              <IconButton label="Plugins" icon="puzzle" onClick={() => props.onOpenPlugins?.()} />
+              <IconButton label={t('explorer.plugins')} icon="puzzle" onClick={() => props.onOpenPlugins?.()} />
             </div>
           </div>
 
-          {isEmpty ? null : (
-            <p class="explorer-hint">Drag a note onto a folder to move it.</p>
-          )}
+          {panel === 'graph' ? (
+            <GraphPanel
+              files={vaultFiles}
+              onOpenNote={props.onSelect}
+              onClose={() => setPanel(null)}
+            />
+          ) : null}
 
-          <ul
-            class="tree"
-            data-testid="file-tree"
-            onDragOver={(event) => {
-              // The pointer is over the tree itself and not over a row: there
-              // is no target there, so the drop must not look like a move.
-              if (event.target !== event.currentTarget) return;
-              event.preventDefault();
-              if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
-              dragRefusal.current = 'nowhere';
-            }}
-            onDragLeave={(event) => {
-              // The pointer left the tree: there is no target under it any
-              // more, so the drag must end with an answer.
-              const related = event.relatedTarget as Element | null;
-              if (related && event.currentTarget.contains(related)) return;
-              dragRefusal.current = 'nowhere';
-            }}
-          >
-            {view.folders.map((folder) => (
-              <TreeFolderRow
-                key={folder.node.path}
-                folder={folder}
-                filesByParent={view.filesByParent}
-                currentPath={props.currentPath}
-                expanded={props.expanded}
-                depth={0}
-                onToggle={props.onToggle}
-                onSelect={props.onSelect}
-                onContextMenu={props.onContextMenu}
-                onRenameInline={props.onRenameInline}
-                draggingNode={draggingNode}
-                onDragStart={startDrag}
-                onDragEnd={endDrag}
-                onRefuse={(refusal) => {
-                  dragRefusal.current = refusal;
+          {panel === 'archive' ? (
+            <ArchivePanel
+              files={vaultFiles}
+              folders={vaultFolders}
+              onOpenNote={props.onSelect}
+              onRename={props.onRename}
+              onDelete={props.onDelete}
+              onClose={() => setPanel(null)}
+            />
+          ) : null}
+
+          {panel ? null : (
+            <>
+              {isEmpty ? null : (
+                <p class="explorer-hint">{t('explorer.hint')}</p>
+              )}
+
+              <QuickNotesSection
+                files={vaultFiles}
+                onOpenNote={props.onSelect}
+                onRename={props.onRename}
+                onCreate={() => void createQuickNote()}
+              />
+
+              {pinnedFiles.length > 0 ? (
+                <div class="tree-pinned">
+                  <div class="tree-pinned-title">{t('explorer.pinned')}</div>
+                  <ul class="tree-pinned-list">
+                    {pinnedFiles.map((file) => (
+                      <TreeNoteRow
+                        key={`pinned-${file.path}`}
+                        file={file}
+                        currentPath={props.currentPath}
+                        depth={0}
+                        onSelect={props.onSelect}
+                        onContextMenu={props.onContextMenu}
+                        onRenameInline={props.onRenameInline}
+                        draggingNode={draggingNode}
+                        onDragStart={startDrag}
+                        onDragEnd={endDrag}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <ul
+                class="tree"
+                data-testid="file-tree"
+                onDragOver={(event) => {
+                  // The pointer is over the tree itself and not over a row: there
+                  // is no target there, so the drop must not look like a move.
+                  if (event.target !== event.currentTarget) return;
+                  event.preventDefault();
+                  if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+                  dragRefusal.current = 'nowhere';
                 }}
-                onDropOnFolder={(_node, targetParentPath) => dropOn(targetParentPath)}
-                noteCountsByPath={noteCountsByPath}
-              />
-            ))}
-            {rootFiles.map((file) => (
-              <TreeNoteRow
-                key={file.path}
-                file={file}
-                currentPath={props.currentPath}
-                depth={0}
-                onSelect={props.onSelect}
-                onContextMenu={props.onContextMenu}
-                onRenameInline={props.onRenameInline}
-                draggingNode={draggingNode}
-                onDragStart={startDrag}
-                onDragEnd={endDrag}
-              />
-            ))}
-            {!props.loading && isEmpty ? (
-              <li class="tree-empty">No notes yet. Create one with the new note button.</li>
-            ) : null}
-          </ul>
+                onDragLeave={(event) => {
+                  // The pointer left the tree: there is no target under it any
+                  // more, so the drag must end with an answer.
+                  const related = event.relatedTarget as Element | null;
+                  if (related && event.currentTarget.contains(related)) return;
+                  dragRefusal.current = 'nowhere';
+                }}
+              >
+                {view.folders.map((folder) => (
+                  <TreeFolderRow
+                    key={folder.node.path}
+                    folder={folder}
+                    filesByParent={view.filesByParent}
+                    currentPath={props.currentPath}
+                    expanded={props.expanded}
+                    depth={0}
+                    onToggle={props.onToggle}
+                    onSelect={props.onSelect}
+                    onContextMenu={props.onContextMenu}
+                    onRenameInline={props.onRenameInline}
+                    draggingNode={draggingNode}
+                    onDragStart={startDrag}
+                    onDragEnd={endDrag}
+                    onRefuse={(refusal) => {
+                      dragRefusal.current = refusal;
+                    }}
+                    onDropOnFolder={(_node, targetParentPath) => dropOn(targetParentPath)}
+                    noteCountsByPath={noteCountsByPath}
+                  />
+                ))}
+                {rootFiles.map((file) => (
+                  <TreeNoteRow
+                    key={file.path}
+                    file={file}
+                    currentPath={props.currentPath}
+                    depth={0}
+                    onSelect={props.onSelect}
+                    onContextMenu={props.onContextMenu}
+                    onRenameInline={props.onRenameInline}
+                    draggingNode={draggingNode}
+                    onDragStart={startDrag}
+                    onDragEnd={endDrag}
+                  />
+                ))}
+                {!props.loading && isEmpty ? (
+                  <li class="tree-empty">{t('explorer.empty')}</li>
+                ) : null}
+              </ul>
+            </>
+          )}
 
           {/*
             The refusal of a move and the target of the root live *under* the
@@ -484,8 +599,8 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               class={`tree-root-drop${rootOver ? ' drop-target' : ''}`}
               role="button"
               tabIndex={0}
-              aria-label="Move to the root"
-              title="Move to the root"
+              aria-label={t('explorer.moveToRoot')}
+              title={t('explorer.moveToRoot')}
               onDragOver={(event) => {
                 event.preventDefault();
                 if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
@@ -507,7 +622,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               <span class="tree-icon">
                 <Icon name="folder" size={15} />
               </span>
-              <span class="nav-item-label">Move to the root</span>
+              <span class="nav-item-label">{t('explorer.moveToRoot')}</span>
             </div>
           ) : null}
         </div>

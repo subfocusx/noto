@@ -3,6 +3,7 @@
 // The list comes from the single source of truth of the shortcuts, so the
 // help can never document a shortcut that does not exist.
 import { SHORTCUTS } from '../core/commands/shortcuts';
+import { useT } from '../i18n/useT';
 import { Dialog } from './Dialog';
 
 export interface ShortcutHelpProps {
@@ -22,19 +23,24 @@ function displayKeys(keys: string): string {
 
 /** The list of the shortcuts of the application, grouped. */
 export function ShortcutHelp(props: ShortcutHelpProps) {
+  const t = useT();
   // The groups keep the order of the definitions.
   const groups: { name: string; items: { label: string; keys: string }[] }[] = [];
   for (const shortcut of SHORTCUTS) {
-    let group = groups.find((entry) => entry.name === shortcut.group);
+    const name = t(`shortcuts.group.${shortcut.group.toLowerCase()}`);
+    let group = groups.find((entry) => entry.name === name);
     if (!group) {
-      group = { name: shortcut.group, items: [] };
+      group = { name, items: [] };
       groups.push(group);
     }
-    group.items.push({ label: shortcut.label, keys: displayKeys(shortcut.keys) });
+    group.items.push({
+      label: shortcut.labelKey ? t(shortcut.labelKey) : shortcut.label,
+      keys: displayKeys(shortcut.keys),
+    });
   }
 
   return (
-    <Dialog title="Keyboard shortcuts" open={props.open} onClose={props.onClose}>
+    <Dialog title={t('shortcuts.title')} open={props.open} onClose={props.onClose}>
       <div class="shortcut-list">
         {groups.map((group) => (
           <div key={group.name}>

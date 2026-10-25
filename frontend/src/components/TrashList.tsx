@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getTrash } from '../api/client';
 import { appStore } from '../core/store/appStore';
+import { useT } from '../i18n/useT';
 import { errorMessage } from '../lib/errors';
 import type { Node } from '../types';
 import { IconButton } from '../ui/tooltip';
@@ -15,6 +16,7 @@ export interface TrashListProps {
 }
 
 export function TrashList(props: TrashListProps) {
+  const t = useT();
   const [entries, setEntries] = useState<Node[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,12 +49,12 @@ export function TrashList(props: TrashListProps) {
 
   return (
     <>
-      {loading ? <p class="dialog-hint">Loading…</p> : null}
+      {loading ? <p class="dialog-hint">{t('common.loading')}</p> : null}
       {error ? <p class="error-text">{error}</p> : null}
       {/* A refused load does not mean that the trash is empty: the two states
           must never be shown together. */}
       {!loading && !error && entries.length === 0 ? (
-        <p class="dialog-hint">The trash is empty.</p>
+        <p class="dialog-hint">{t('trash.empty')}</p>
       ) : null}
       <ul class="trash-list" data-testid="trash-list">
         {entries.map((entry) => (
@@ -61,7 +63,7 @@ export function TrashList(props: TrashListProps) {
             <span class="trash-path">{entry.path}</span>
             <IconButton
               icon="rotate-ccw"
-              label={`Restore ${entry.name}`}
+              label={t('trash.restore', { name: entry.name })}
               onClick={() => restore(entry)}
             />
           </li>

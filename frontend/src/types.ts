@@ -64,6 +64,18 @@ export interface TreeResponse {
   folderTotal?: number;
 }
 
+/**
+ * One page of the children of a folder.
+ *
+ * The tree is loaded lazily: the interface asks for one page at a time and
+ * follows the cursor of the answer. The cursor is empty when the page is the
+ * last one.
+ */
+export interface NodePage {
+  items: Node[];
+  nextCursor?: string;
+}
+
 export interface TrashResponse {
   entries: Node[];
 }

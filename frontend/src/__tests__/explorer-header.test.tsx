@@ -83,16 +83,16 @@ describe('the header of the explorer', () => {
     expect(row?.querySelector('.tree-count')?.textContent).toBe('3');
   });
 
-  it('marks the graph and the archive as not implemented', () => {
+  it('offers the graph and the archive as real views', () => {
     renderSidebar();
 
     const graph = screen.getByRole('button', { name: 'Graph' });
-    expect(graph.getAttribute('aria-disabled')).toBe('true');
-    expect(graph.getAttribute('title')).toBe('Not implemented yet');
+    expect(graph.getAttribute('aria-disabled')).toBeNull();
+    expect(graph.getAttribute('title')).toBe('Graph');
 
     const archive = screen.getByRole('button', { name: 'Archive' });
-    expect(archive.getAttribute('aria-disabled')).toBe('true');
-    expect(archive.getAttribute('title')).toBe('Not implemented yet');
+    expect(archive.getAttribute('aria-disabled')).toBeNull();
+    expect(archive.getAttribute('title')).toBe('Archive');
   });
 
   it('calls the handlers of the actions', () => {

@@ -15,11 +15,9 @@ import {
   enableRecoveryKey,
 } from '../core/vault/session';
 import { DEFAULT_KDF_PARAMS, LIGHT_KDF_PARAMS, estimateKdfMilliseconds, type KdfParams } from '../core/crypto/kdf';
-import {
-  VAULT_MIN_PASSWORD_LENGTH,
-  VAULT_PASSWORD_MISMATCH,
-  VAULT_PASSWORD_TOO_SHORT,
-} from '../core/vault/password';
+import { VAULT_MIN_PASSWORD_LENGTH } from '../core/vault/password';
+import { t } from '../i18n';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 import { IconButton } from '../ui/tooltip';
 
@@ -42,23 +40,23 @@ export interface VaultSetupDialogProps {
 type SetupStep = 'choice' | 'password' | 'warning' | 'recovery' | 'done';
 
 /** The message of a failed creation. */
-export const VAULT_CREATE_FAILED = 'The encrypted storage could not be created. Try again.';
+export const VAULT_CREATE_FAILED = t('vault.setup.createFailed');
 
 /** The message of a failed recovery key. */
-export const VAULT_RECOVERY_FAILED = 'The recovery key could not be enabled. Try again.';
+export const VAULT_RECOVERY_FAILED = t('vault.setup.recoveryFailed');
 
 /** The message of a missing migration. */
-export const VAULT_MIGRATION_MISSING = 'The migration of the storage is not available here.';
+export const VAULT_MIGRATION_MISSING = t('vault.setup.migrationMissing');
 
 /** The strength of a master password. */
 export type PasswordStrength = 'weak' | 'fair' | 'good' | 'strong';
 
 /** The names of the strengths, in the order of the meter. */
 const STRENGTH_LABELS: Record<PasswordStrength, string> = {
-  weak: 'Weak',
-  fair: 'Fair',
-  good: 'Good',
-  strong: 'Strong',
+  weak: 'vault.setup.strength.weak',
+  fair: 'vault.setup.strength.fair',
+  good: 'vault.setup.strength.good',
+  strong: 'vault.setup.strength.strong',
 };
 
 /**
@@ -97,11 +95,11 @@ export function kdfParamsOf(preset: KdfPreset): KdfParams {
 
 /** The steps of the wizard, in the order they are shown. */
 const STEPS: { id: SetupStep; label: string }[] = [
-  { id: 'choice', label: 'Storage' },
-  { id: 'password', label: 'Password' },
-  { id: 'warning', label: 'Warning' },
-  { id: 'recovery', label: 'Recovery' },
-  { id: 'done', label: 'Ready' },
+  { id: 'choice', label: 'vault.setup.step.storage' },
+  { id: 'password', label: 'vault.setup.step.password' },
+  { id: 'warning', label: 'vault.setup.step.warning' },
+  { id: 'recovery', label: 'vault.setup.step.recovery' },
+  { id: 'done', label: 'vault.setup.step.ready' },
 ];
 
 /**
@@ -111,6 +109,7 @@ const STEPS: { id: SetupStep; label: string }[] = [
  * the user is, and the buttons of the footer move forward and backward.
  */
 export function VaultSetupDialog(props: VaultSetupDialogProps) {
+  const t = useT();
   const [step, setStep] = useState<SetupStep>('choice');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -166,7 +165,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
         if (!cancelled) setRecoveryKey(key);
       })
       .catch(() => {
-        if (!cancelled) setError('The recovery key could not be created. Try again.');
+        if (!cancelled) setError(t('vault.setup.recoveryCreateFailed'));
       });
     return () => {
       cancelled = true;
@@ -186,11 +185,11 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
 
   const checkPassword = () => {
     if (password.length < VAULT_MIN_PASSWORD_LENGTH) {
-      setError(VAULT_PASSWORD_TOO_SHORT);
+      setError(t('vault.password.tooShort', { min: VAULT_MIN_PASSWORD_LENGTH }));
       return;
     }
     if (password !== confirm) {
-      setError(VAULT_PASSWORD_MISMATCH);
+      setError(t('vault.password.mismatch'));
       return;
     }
     setError(null);
@@ -204,7 +203,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
     } catch {
       // The clipboard is not available: the user selects the text by hand.
       setCopied(false);
-      setError('The clipboard is not available. Select the key and copy it by hand.');
+      setError(t('vault.setup.clipboardUnavailable'));
     }
   };
 
@@ -222,7 +221,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
       setConfirm('');
       setStep('done');
     } catch {
-      setError(created ? VAULT_RECOVERY_FAILED : VAULT_CREATE_FAILED);
+      setError(created ? t('vault.setup.recoveryFailed') : t('vault.setup.createFailed'));
     } finally {
       setBusy(false);
     }
@@ -230,7 +229,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
 
   const startMigration = () => {
     if (!props.onMigrate) {
-      setError(VAULT_MIGRATION_MISSING);
+      setError(t('vault.setup.migrationMissing'));
       return;
     }
     props.onMigrate();
@@ -242,7 +241,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
       return (
         <div class="button-row">
           <button type="button" class="button" onClick={props.onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       );
@@ -251,7 +250,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
       return (
         <div class="button-row">
           <button type="button" class="primary-button" onClick={props.onDone}>
-            Open the notes
+            {t('vault.setup.openNotes')}
           </button>
         </div>
       );
@@ -260,12 +259,12 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
       <div class="button-row">
         {step === 'password' ? (
           <button type="button" class="button" onClick={() => setStep('choice')}>
-            Back
+            {t('common.back')}
           </button>
         ) : null}
         {step === 'password' ? (
           <button type="button" class="primary-button" onClick={checkPassword} data-testid="vault-setup-next">
-            Continue
+            {t('vault.setup.continue')}
           </button>
         ) : null}
         {step === 'warning' ? (
@@ -276,7 +275,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
             onClick={() => setStep('recovery')}
             data-testid="vault-setup-next"
           >
-            Continue
+            {t('vault.setup.continue')}
           </button>
         ) : null}
         {step === 'recovery' ? (
@@ -287,7 +286,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
             onClick={() => void create()}
             data-testid="vault-setup-create"
           >
-            {busy ? 'Creating…' : 'Create the encrypted storage'}
+            {busy ? t('vault.setup.creating') : t('vault.setup.create')}
           </button>
         ) : null}
       </div>
@@ -296,13 +295,13 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
 
   return (
     <div class="dialog-backdrop" onClick={(event) => event.target === event.currentTarget && props.onClose()}>
-      <div class="dialog vault-setup" role="dialog" aria-modal="true" aria-label="Encrypted storage" data-testid="vault-setup">
+      <div class="dialog vault-setup" role="dialog" aria-modal="true" aria-label={t('vault.setup.title')} data-testid="vault-setup">
         <header class="dialog-header">
-          <h2>Encrypted storage</h2>
-          <IconButton label="Close dialog" icon="x" onClick={props.onClose} />
+          <h2>{t('vault.setup.title')}</h2>
+          <IconButton label={t('common.closeDialog')} icon="x" onClick={props.onClose} />
         </header>
 
-        <ol class="vault-steps" aria-label="Steps of the wizard">
+        <ol class="vault-steps" aria-label={t('vault.setup.steps')}>
           {STEPS.map((item, index) => (
             <li
               key={item.id}
@@ -310,7 +309,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
               aria-current={item.id === step ? 'step' : undefined}
             >
               <span class="vault-step-index">{index + 1}</span>
-              <span class="vault-step-label">{item.label}</span>
+              <span class="vault-step-label">{t(item.label)}</span>
             </li>
           ))}
         </ol>
@@ -318,23 +317,16 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
         <div class="dialog-body">
           {step === 'choice' ? (
             <div class="vault-choice">
-              <p class="dialog-hint">
-                The notes of Noto can be encrypted in the browser before they reach the server. The
-                server then stores ciphertext only and never learns a title, a body or a path.
-              </p>
+              <p class="dialog-hint">{t('vault.setup.hint')}</p>
 
               <button type="button" class="vault-choice-item" onClick={goToPassword} data-testid="vault-setup-create-new">
-                <span class="vault-choice-title">Create a new encrypted storage</span>
-                <span class="vault-choice-hint">
-                  The current folder becomes an encrypted storage. It must hold no notes yet.
-                </span>
+                <span class="vault-choice-title">{t('vault.setup.createNew')}</span>
+                <span class="vault-choice-hint">{t('vault.setup.createNewHint')}</span>
               </button>
 
               <button type="button" class="vault-choice-item" onClick={startMigration} data-testid="vault-setup-migrate">
-                <span class="vault-choice-title">Migrate the existing storage</span>
-                <span class="vault-choice-hint">
-                  The notes of the folder are encrypted once and the storage becomes sealed.
-                </span>
+                <span class="vault-choice-title">{t('vault.setup.migrate')}</span>
+                <span class="vault-choice-hint">{t('vault.setup.migrateHint')}</span>
               </button>
             </div>
           ) : null}
@@ -342,14 +334,14 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
           {step === 'password' ? (
             <form
               class="vault-form"
-              aria-label="The master password"
+              aria-label={t('vault.setup.formLabel')}
               onSubmit={(event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
                 event.preventDefault();
                 checkPassword();
               }}
             >
               <label class="field vault-field">
-                <span class="field-label">Master password</span>
+                <span class="field-label">{t('vault.setup.masterPassword')}</span>
                 <span class="vault-field-row">
                   <input
                     ref={passwordRef}
@@ -357,36 +349,36 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
                     type={visible ? 'text' : 'password'}
                     value={password}
                     autocomplete="new-password"
-                    aria-label="Master password"
+                    aria-label={t('vault.setup.masterPassword')}
                     onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
                   />
                   <button
                     type="button"
                     class="button"
-                    aria-label={visible ? 'Hide the master password' : 'Show the master password'}
+                    aria-label={visible ? t('vault.setup.hideLabel') : t('vault.setup.showLabel')}
                     aria-pressed={visible}
                     onClick={() => setVisible(!visible)}
                   >
-                    {visible ? 'Hide' : 'Show'}
+                    {visible ? t('vault.setup.hide') : t('vault.setup.show')}
                   </button>
                 </span>
               </label>
 
               <label class="field vault-field">
-                <span class="field-label">Repeat the master password</span>
+                <span class="field-label">{t('vault.setup.repeatPassword')}</span>
                 <input
                   class="input"
                   type={visible ? 'text' : 'password'}
                   value={confirm}
                   autocomplete="new-password"
-                  aria-label="Repeat the master password"
+                  aria-label={t('vault.setup.repeatPassword')}
                   onInput={(event) => setConfirm((event.target as HTMLInputElement).value)}
                 />
               </label>
 
               <div class="vault-strength" data-testid="vault-setup-strength">
-                <span class="vault-strength-label">Strength</span>
-                <span class={`vault-strength-value ${strength}`}>{STRENGTH_LABELS[strength]}</span>
+                <span class="vault-strength-label">{t('vault.setup.strength')}</span>
+                <span class={`vault-strength-value ${strength}`}>{t(STRENGTH_LABELS[strength])}</span>
                 <span class="vault-strength-bar" aria-hidden="true">
                   <span class={`vault-strength-fill ${strength}`} />
                 </span>
@@ -401,15 +393,12 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
                       setPreset((event.target as HTMLInputElement).checked ? 'light' : 'default')
                     }
                   />
-                  <span>Use the light preset of the derivation</span>
+                  <span>{t('vault.setup.lightPreset')}</span>
                 </label>
-                <p class="field-hint">
-                  The derivation of the key takes about {estimate} ms on this device.
-                </p>
+                <p class="field-hint">{t('vault.setup.estimate', { ms: estimate })}</p>
                 {preset === 'light' ? (
                   <p class="vault-warning-text" role="note">
-                    The light preset weakens the derivation: it is much faster to try the passwords
-                    of the vault. Use it only on a slow device.
+                    {t('vault.setup.lightWarning')}
                   </p>
                 ) : null}
               </div>
@@ -419,9 +408,7 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
           {step === 'warning' ? (
             <div class="vault-warning">
               <p class="vault-warning-text" role="note">
-                Without the master password and without the recovery key nobody can open these notes:
-                not the author of the program, not the server, not anyone else. A lost password means
-                lost notes.
+                {t('vault.setup.warningText')}
               </p>
               <label class="vault-switch-row">
                 <input
@@ -429,17 +416,14 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
                   checked={understood}
                   onChange={(event) => setUnderstood((event.target as HTMLInputElement).checked)}
                 />
-                <span>I understand that the password cannot be recovered.</span>
+                <span>{t('vault.setup.understand')}</span>
               </label>
             </div>
           ) : null}
 
           {step === 'recovery' ? (
             <div class="vault-recovery">
-              <p class="dialog-hint">
-                The recovery key opens this storage when the master password is lost. It is shown once
-                and never again: copy it now.
-              </p>
+              <p class="dialog-hint">{t('vault.setup.recoveryHint')}</p>
 
               <code class="vault-recovery-key" data-testid="vault-setup-recovery-key">
                 {recoveryKey || '…'}
@@ -449,18 +433,16 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
                 <button
                   type="button"
                   class="button"
-                  aria-label="Copy the recovery key"
-                  title="Copy the recovery key"
+                  aria-label={t('vault.setup.copyLabel')}
+                  title={t('vault.setup.copyLabel')}
                   disabled={!recoveryKey}
                   onClick={() => void copyRecoveryKey()}
                 >
                   <Icon name="copy" size={14} />
-                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                  <span>{copied ? t('vault.setup.copied') : t('vault.setup.copy')}</span>
                 </button>
               </div>
-              <p class="field-hint">
-                If the clipboard is not available, select the text above and copy it by hand.
-              </p>
+              <p class="field-hint">{t('vault.setup.clipboardHint')}</p>
 
               <label class="vault-switch-row">
                 <input
@@ -468,18 +450,15 @@ export function VaultSetupDialog(props: VaultSetupDialogProps) {
                   checked={recoverySaved}
                   onChange={(event) => setRecoverySaved((event.target as HTMLInputElement).checked)}
                 />
-                <span>I saved the recovery key in a safe place.</span>
+                <span>{t('vault.setup.saved')}</span>
               </label>
             </div>
           ) : null}
 
           {step === 'done' ? (
             <div class="vault-done">
-              <p class="vault-done-title">The encrypted storage is ready.</p>
-              <p class="dialog-hint">
-                The notes are encrypted in this browser from now on. Keep the master password and the
-                recovery key in a safe place.
-              </p>
+              <p class="vault-done-title">{t('vault.setup.doneTitle')}</p>
+              <p class="dialog-hint">{t('vault.setup.doneHint')}</p>
             </div>
           ) : null}
 

@@ -1,18 +1,41 @@
 // Markdown preview rendering: marked -> DOMPurify -> safe HTML.
+//
+// The renderer knows a few things more than the plain markdown: the
+// formulas (`$…$`), the footnotes (`[^1]`) and the highlighted code blocks.
+// Every one of them goes through marked and through DOMPurify, so no raw
+// HTML of the user ever reaches the preview.
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { WIKI_LINK_RE, type WikiResolver } from './wiki';
+import { escapeHtml } from './markdown/escape';
+import { highlightCode } from './markdown/codeHighlight';
+import {
+  collectFootnoteToken,
+  footnoteExtensions,
+  renderFootnotes,
+  startFootnoteCollection,
+  stopFootnoteCollection,
+} from './markdown/footnotes';
+import { mathExtension } from './markdown/math';
 
 marked.setOptions({ gfm: true, breaks: true });
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+marked.use({
+  extensions: [...(mathExtension().extensions ?? []), ...footnoteExtensions()],
+  walkTokens: (token) => {
+    collectFootnoteToken(token as { type?: string; id?: string; text?: string });
+  },
+  renderer: {
+    code(code: string, infostring: string | undefined): string {
+      const language = (infostring ?? '').trim();
+      const highlighted = highlightCode(code, language);
+      const attribute = language ? ` class="language-${escapeHtml(language)}"` : '';
+      return `<pre><code${attribute}>${highlighted}</code></pre>`;
+    },
+  },
+});
+
+export { escapeHtml };
 
 /**
  * Replaces [[Wiki]] links with an anchor when the target resolves,
@@ -35,8 +58,17 @@ export function applyWikiLinks(source: string, resolve: WikiResolver | null): st
  */
 export function renderMarkdown(source: string, resolve?: WikiResolver | null): string {
   const withLinks = applyWikiLinks(source, resolve ?? null);
-  const raw = marked.parse(withLinks, { async: false }) as string;
-  return DOMPurify.sanitize(raw, {
+  const collector = startFootnoteCollection();
+  let raw: string;
+  try {
+    raw = marked.parse(withLinks, { async: false }) as string;
+  } finally {
+    stopFootnoteCollection();
+  }
+  const footnotes = renderFootnotes(collector, (text) =>
+    marked.parseInline(text, { async: false }) as string,
+  );
+  return DOMPurify.sanitize(raw + footnotes, {
     USE_PROFILES: { html: true },
     ADD_ATTR: ['target', 'rel', 'data-noto-path'],
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form'],

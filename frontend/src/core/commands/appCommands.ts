@@ -37,15 +37,27 @@ export type RailGroup = 'notes' | 'storage';
  * There is no letter under the icon: the name of the section lives in the
  * accessible name of the button and in its tooltip, like in Obsidian.
  */
-export const RAIL_SECTIONS: { id: RailSection; title: string; icon: string; group: RailGroup }[] = [
-  { id: 'explorer', title: 'Explorer', icon: 'folder', group: 'notes' },
-  { id: 'favorites', title: 'Favorites', icon: 'star', group: 'notes' },
-  { id: 'calendar', title: 'Calendar', icon: 'calendar', group: 'notes' },
-  { id: 'search', title: 'Search', icon: 'search', group: 'notes' },
-  { id: 'filters', title: 'Filters', icon: 'filter', group: 'notes' },
-  { id: 'history', title: 'History', icon: 'clock', group: 'storage' },
-  { id: 'notifications', title: 'Notifications', icon: 'bell', group: 'storage' },
-  { id: 'trash', title: 'Trash', icon: 'trash', group: 'storage' },
+export const RAIL_SECTIONS: {
+  id: RailSection;
+  title: string;
+  titleKey: string;
+  icon: string;
+  group: RailGroup;
+}[] = [
+  { id: 'explorer', title: 'Explorer', titleKey: 'rail.explorer', icon: 'folder', group: 'notes' },
+  { id: 'favorites', title: 'Favorites', titleKey: 'rail.favorites', icon: 'star', group: 'notes' },
+  { id: 'calendar', title: 'Calendar', titleKey: 'rail.calendar', icon: 'calendar', group: 'notes' },
+  { id: 'search', title: 'Search', titleKey: 'rail.search', icon: 'search', group: 'notes' },
+  { id: 'filters', title: 'Filters', titleKey: 'rail.filters', icon: 'filter', group: 'notes' },
+  { id: 'history', title: 'History', titleKey: 'rail.history', icon: 'clock', group: 'storage' },
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    titleKey: 'rail.notifications',
+    icon: 'bell',
+    group: 'storage',
+  },
+  { id: 'trash', title: 'Trash', titleKey: 'rail.trash', icon: 'trash', group: 'storage' },
 ];
 
 /**
@@ -117,95 +129,127 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
     {
       id: `${APP_COMMAND_PREFIX}new-note`,
       title: 'New note',
+      titleKey: 'command.newNote.title',
       description: 'Create a new Markdown note',
+      descriptionKey: 'command.newNote.description',
       run: () => deps.createNote(),
     },
     {
       id: `${APP_COMMAND_PREFIX}new-folder`,
       title: 'New folder',
+      titleKey: 'command.newFolder.title',
       description: 'Create a new folder in the library',
+      descriptionKey: 'command.newFolder.description',
       run: () => deps.createFolder(),
     },
     {
       id: `${APP_COMMAND_PREFIX}daily-note`,
       title: 'Daily note',
+      titleKey: 'command.dailyNote.title',
       description: 'Open (or create) the note of today, YYYY-MM-DD.md',
+      descriptionKey: 'command.dailyNote.description',
       run: () => deps.dailyNote(),
     },
     {
       id: `${APP_COMMAND_PREFIX}search`,
       title: 'Search notes',
+      titleKey: 'command.search.title',
       description: 'Search across all the notes',
+      descriptionKey: 'command.search.description',
       shortcut: 'Ctrl+Shift+F',
       run: () => deps.openSearch(),
     },
     {
       id: `${APP_COMMAND_PREFIX}toggle-theme`,
       title: 'Toggle theme',
+      titleKey: 'command.toggleTheme.title',
       description: 'Switch between the light and the dark theme',
+      descriptionKey: 'command.toggleTheme.description',
       run: () => deps.toggleTheme(),
     },
     {
       id: `${APP_COMMAND_PREFIX}rename-note`,
       title: 'Rename note',
+      titleKey: 'command.renameNote.title',
       description: 'Rename the note that is open',
+      descriptionKey: 'command.renameNote.description',
       run: () => deps.renameNote(),
     },
     {
       id: `${APP_COMMAND_PREFIX}delete-note`,
       title: 'Delete note',
+      titleKey: 'command.deleteNote.title',
       description: 'Move the note that is open into the trash',
+      descriptionKey: 'command.deleteNote.description',
       run: () => deps.deleteNote(),
     },
     {
       id: `${APP_COMMAND_PREFIX}duplicate-note`,
       title: 'Duplicate note',
+      titleKey: 'command.duplicateNote.title',
       description: 'Copy the note that is open and open the copy',
+      descriptionKey: 'command.duplicateNote.description',
       shortcut: 'Ctrl+D',
       run: () => deps.duplicateNote?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}open-trash`,
       title: 'Open trash',
+      titleKey: 'command.openTrash.title',
       description: 'Show the deleted notes',
+      descriptionKey: 'command.openTrash.description',
       run: () => deps.openTrash(),
     },
     {
       id: `${APP_COMMAND_PREFIX}expand-all-folders`,
       title: 'Expand all folders',
+      titleKey: 'command.expandAll.title',
       description: 'Open every folder of the tree at once',
+      descriptionKey: 'command.expandAll.description',
       run: () => deps.expandAllFolders?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}collapse-all-folders`,
       title: 'Collapse all folders',
+      titleKey: 'command.collapseAll.title',
       description: 'Close every folder of the tree at once',
+      descriptionKey: 'command.collapseAll.description',
       run: () => deps.collapseAllFolders?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}switch-vault`,
       title: 'Switch the storage of the notes',
+      titleKey: 'command.switchVault.title',
       description: 'Open the recent storages and change the storage',
+      descriptionKey: 'command.switchVault.description',
       run: () => deps.switchVault?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}settings`,
       title: 'Settings',
+      titleKey: 'command.settings.title',
       description: 'Theme, view mode, the width of the sidebar and the tree order',
+      descriptionKey: 'command.settings.description',
       shortcut: 'Ctrl+,',
       run: () => deps.openSettings(),
     },
     {
       id: `${APP_COMMAND_PREFIX}shortcuts`,
       title: 'Keyboard shortcuts',
+      titleKey: 'command.shortcuts.title',
       description: 'Show every shortcut of the application',
+      descriptionKey: 'command.shortcuts.description',
       shortcut: 'Ctrl+/',
       run: () => deps.openShortcuts(),
     },
     ...RAIL_SECTIONS.map((section) => ({
       id: `${APP_COMMAND_PREFIX}section-${section.id}`,
       title: `Open the ${section.title.toLowerCase()}`,
+      titleKey: 'command.section.title',
+      titleParams: { section: `$${section.titleKey}` },
       description: `Show the section ${section.title} of the left column`,
+      descriptionKey: 'command.section.description',
+      descriptionParams: { section: `$${section.titleKey}` },
       run: () => deps.openSection(section.id),
     })),
   ];

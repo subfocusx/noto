@@ -76,7 +76,7 @@ describe('lazy preview', () => {
 
     render(<Preview source="# Title" resolve={null} onOpenNote={() => undefined} />);
 
-    await waitFor(() => expect(preview().textContent).toContain('Предпросмотр недоступен'));
+    await waitFor(() => expect(preview().textContent).toContain('Preview unavailable'));
     // No internal details leak into the UI.
     expect(preview().textContent).not.toContain('chunk load failed');
     expect(preview().querySelector('h1')).toBeNull();

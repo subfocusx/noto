@@ -6,6 +6,8 @@
 // the browser.
 import { useEffect, useState } from 'preact/hooks';
 import { browseVault, type VaultBrowse, type VaultDir } from '../api/client';
+import { STORAGE_FIXED_MESSAGE } from '../core/storages/fixedStorage';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface VaultPickerProps {
@@ -36,7 +38,7 @@ export interface VaultPickerProps {
 }
 
 /** The message that explains that the storage cannot be changed. */
-export const VAULT_FIXED_MESSAGE = 'The storage is fixed by the environment (NOTO_VAULT_FIXED).';
+export const VAULT_FIXED_MESSAGE = STORAGE_FIXED_MESSAGE;
 
 /**
  * The dialog of the choice of the folder with the notes.
@@ -46,6 +48,7 @@ export const VAULT_FIXED_MESSAGE = 'The storage is fixed by the environment (NOT
  * Noto must not be picked by accident.
  */
 export function VaultPicker(props: VaultPickerProps) {
+  const t = useT();
   const [listing, setListing] = useState<VaultBrowse | null>(null);
   const [path, setPath] = useState(props.initialPath ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export function VaultPicker(props: VaultPickerProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Could not read the directory');
+        setError(err instanceof Error ? err.message : t('vault.picker.readFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -87,37 +90,34 @@ export function VaultPicker(props: VaultPickerProps) {
         class="dialog vault-picker"
         role="dialog"
         aria-modal="true"
-        aria-label="Choose the storage of the notes"
+        aria-label={t('vault.picker.title')}
         data-testid="vault-picker"
       >
         <header class="dialog-header">
-          <h2>Choose the storage of the notes</h2>
-          <button type="button" class="icon-button" aria-label="Close dialog" onClick={props.onClose}>
+          <h2>{t('vault.picker.title')}</h2>
+          <button type="button" class="icon-button" aria-label={t('common.closeDialog')} onClick={props.onClose}>
             <Icon name="x" size={16} />
           </button>
         </header>
 
         <div class="dialog-body">
-          <p class="dialog-hint">
-            The notes are stored as Markdown files in the folder you choose. The internal data of Noto
-            lives in a hidden <code>.noto</code> subfolder next to them.
-          </p>
+          <p class="dialog-hint">{t('vault.picker.hint')}</p>
 
           <label class="field">
-            <span class="field-label">Folder</span>
+            <span class="field-label">{t('vault.picker.folder')}</span>
             <input
               type="text"
               class="input"
               value={path}
               placeholder="C:\\Users\\me\\Notes"
-              aria-label="Path of the folder"
+              aria-label={t('vault.picker.pathLabel')}
               onInput={(event) => setPath((event.target as HTMLInputElement).value)}
             />
           </label>
 
           {props.fixed ? (
             <p class="vault-fixed-note" role="note" data-testid="vault-fixed-note">
-              {VAULT_FIXED_MESSAGE}
+              {t('vault.fixed.message')}
             </p>
           ) : null}
 
@@ -132,7 +132,7 @@ export function VaultPicker(props: VaultPickerProps) {
               <button
                 type="button"
                 class="icon-button"
-                aria-label="Parent directory"
+                aria-label={t('vault.picker.parent')}
                 disabled={!listing?.parent}
                 onClick={() => listing?.parent && setPath(listing.parent)}
               >
@@ -143,9 +143,9 @@ export function VaultPicker(props: VaultPickerProps) {
               </span>
             </div>
             <ul class="vault-browse-list" role="list">
-              {loading ? <li class="muted">Loading…</li> : null}
+              {loading ? <li class="muted">{t('common.loading')}</li> : null}
               {!loading && listing && listing.dirs.length === 0 ? (
-                <li class="muted">No subdirectories</li>
+                <li class="muted">{t('vault.picker.noDirs')}</li>
               ) : null}
               {(listing?.dirs ?? []).map((dir) => (
                 <li key={dir.path}>
@@ -161,7 +161,7 @@ export function VaultPicker(props: VaultPickerProps) {
 
         <footer class="dialog-footer">
           <button type="button" class="button" onClick={props.onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -169,7 +169,7 @@ export function VaultPicker(props: VaultPickerProps) {
             disabled={!path.trim() || props.fixed === true || props.busy === true}
             aria-disabled={props.fixed === true ? 'true' : undefined}
             aria-busy={props.busy === true ? 'true' : undefined}
-            title={props.fixed === true ? VAULT_FIXED_MESSAGE : undefined}
+            title={props.fixed === true ? t('vault.fixed.message') : undefined}
             data-testid="vault-picker-confirm"
             onClick={() => {
               // A fixed storage is never changed and a busy storage is not
@@ -178,7 +178,7 @@ export function VaultPicker(props: VaultPickerProps) {
               props.onChoose(path.trim());
             }}
           >
-            {props.busy === true ? 'Working…' : 'Use this folder'}
+            {props.busy === true ? t('vault.picker.working') : t('vault.picker.use')}
           </button>
           {props.onCreateEncrypted ? (
             <button
@@ -189,7 +189,7 @@ export function VaultPicker(props: VaultPickerProps) {
                 props.onCreateEncrypted?.();
               }}
             >
-              Set up an encrypted storage
+              {t('vault.picker.encrypt')}
             </button>
           ) : null}
         </footer>

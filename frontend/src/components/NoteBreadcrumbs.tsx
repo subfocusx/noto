@@ -2,6 +2,7 @@
 //
 // The header shows the name of the note; the breadcrumbs show the whole path
 // and allow to jump into a folder of the path.
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface NoteBreadcrumbsProps {
@@ -33,11 +34,12 @@ export function buildBreadcrumbs(path: string): Crumb[] {
 
 /** The path of the note, split into the clickable elements. */
 export function NoteBreadcrumbs(props: NoteBreadcrumbsProps) {
+  const t = useT();
   const crumbs = buildBreadcrumbs(props.path);
   if (crumbs.length === 0) return null;
 
   return (
-    <nav class="app-breadcrumbs" aria-label="Note path">
+    <nav class="app-breadcrumbs" aria-label={t('breadcrumbs.label')}>
       <ol class="breadcrumbs">
         {crumbs.map((crumb, index) => (
           <li key={crumb.path} class="breadcrumb">

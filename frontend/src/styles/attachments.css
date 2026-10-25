@@ -1,0 +1,108 @@
+/* The attachments: the preview of the images, the lightbox and the search. */
+
+.attachments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.attachment-list > li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.attachment-list > li:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}
+
+/* The thumbnail of an image: a fixed square, so the list keeps its rhythm. */
+.attachment-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border-color, rgba(127, 127, 127, 0.3));
+  background: var(--surface-raised, transparent);
+  cursor: zoom-in;
+}
+
+/* The sign of a file that is not an image. */
+.attachment-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border-color, rgba(127, 127, 127, 0.3));
+  background: var(--surface-raised, transparent);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted, #888);
+}
+
+.attachment-name {
+  font-weight: 500;
+}
+
+.attachment-snippet {
+  display: block;
+  font-size: 0.85em;
+  color: var(--text-muted, #888);
+  overflow-wrap: anywhere;
+}
+
+.attachment-search-results {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.attachment-search-results > li {
+  padding: 0.35rem;
+  border: 1px solid var(--border-color, rgba(127, 127, 127, 0.3));
+  border-radius: var(--radius-sm, 4px);
+}
+
+/* The lightbox: the image over the whole window, on a dark ground. */
+.attachment-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.attachment-lightbox img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.attachment-lightbox .muted {
+  color: rgba(255, 255, 255, 0.75);
+}

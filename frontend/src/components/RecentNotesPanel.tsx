@@ -4,6 +4,7 @@
 // the meantime is still listed, but it is marked as missing. The section can be
 // collapsed, so the list takes no room when the user does not need it.
 import type { ComponentChildren } from 'preact';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface RecentNotesPanelProps {
@@ -36,22 +37,23 @@ function Chevron(props: { collapsed: boolean }): ComponentChildren {
 }
 
 export function RecentNotesPanel(props: RecentNotesPanelProps) {
+  const t = useT();
   if (props.paths.length === 0) return null;
 
   const known = new Set(props.knownPaths);
   const collapsed = props.collapsed ?? false;
 
   return (
-    <section class="sidebar-section" aria-label="Recent notes">
+    <section class="sidebar-section" aria-label={t('recent.ariaLabel')}>
       <button
         type="button"
         class="sidebar-section-title sidebar-section-toggle"
         aria-expanded={!collapsed}
-        aria-label={collapsed ? 'Expand recent notes' : 'Collapse recent notes'}
-        title={collapsed ? 'Expand recent notes' : 'Collapse recent notes'}
+        aria-label={collapsed ? t('recent.expand') : t('recent.collapse')}
+        title={collapsed ? t('recent.expand') : t('recent.collapse')}
         onClick={() => props.onToggleCollapsed?.()}
       >
-        <span class="sidebar-section-label">Recent</span>
+        <span class="sidebar-section-label">{t('recent.label')}</span>
         <Chevron collapsed={collapsed} />
       </button>
       {collapsed ? null : (
@@ -80,8 +82,8 @@ export function RecentNotesPanel(props: RecentNotesPanelProps) {
                 <button
                   type="button"
                   class="icon-button"
-                  title={`Remove ${name}`}
-                  aria-label={`Remove ${name}`}
+                  title={t('recent.remove', { name })}
+                  aria-label={t('recent.remove', { name })}
                   onClick={() => props.onRemove(path)}
                 >
                   <Icon name="x" size={14} />

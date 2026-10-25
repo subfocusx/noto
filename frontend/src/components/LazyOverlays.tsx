@@ -8,6 +8,9 @@
 // storage must not pay for them.
 export { CommandPalette } from './CommandPalette';
 export { FindPanel } from './FindPanel';
+// The panel of the attachments is opened in a dialog: it is loaded with the
+// other overlays.
+export { AttachmentsPanel } from './AttachmentsPanel';
 export { VaultPicker, type VaultPickerProps } from './VaultPicker';
 export { VaultSetupDialog } from './VaultSetupDialog';
 export { VaultMigrationDialog } from './VaultMigrationDialog';

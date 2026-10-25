@@ -1,0 +1,78 @@
+/* ==========================================================================
+   The quick notes.
+
+   The section lists the notes the user started without naming them. The
+   section stands at the top of the explorer, above the tree.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The section itself. */
+.quick-notes {
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The header of the section: its name and the button of the new note. */
+.quick-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The hint of the section: the user has no quick note yet. */
+.quick-notes-empty {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+/* The list of the quick notes. */
+.quick-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One quick note: its name and the button that renames it. */
+.quick-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.quick-note:hover {
+  background: var(--bg-hover);
+}
+
+/* The name of the quick note: it opens the note. */
+.quick-note-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-note-name:hover {
+  color: var(--fg);
+}

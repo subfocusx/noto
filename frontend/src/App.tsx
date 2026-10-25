@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
 import { AppFooter } from './components/AppFooter';
-import { AttachmentsPanel } from './components/AttachmentsPanel';
+import type { AttachmentsPanelProps } from './components/AttachmentsPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { ColumnResizer } from './components/ColumnResizer';
 import { Dialog } from './components/Dialog';
@@ -10,6 +10,9 @@ import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
 import { NoteConflictDialog } from './components/NoteConflictDialog';
 import { NoteTags } from './components/NoteTags';
+import type { PreviewProps } from './components/Preview';
+import { createWikiResolver } from './lib/wiki';
+import { useT } from './i18n/useT';
 import { OutlinePanel } from './components/OutlinePanel';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
@@ -58,6 +61,18 @@ import { Icon } from './ui/icons';
 import type { Node } from './types';
 import type { PluginEditor, PluginEventMap, PluginState } from './plugins/contract';
 import { PluginHost } from './plugins/host';
+import {
+  focusModeClass,
+  initialFocusModeState,
+  registerFocusModeCommand,
+  toggleFocusMode as toggleFocusModeState,
+  type FocusModeState,
+} from './core/editor/focusMode';
+import {
+  createUndoDeleteController,
+  type UndoDeleteController,
+  type UndoDeleteOffer,
+} from './core/editor/undoDelete';
 import { builtinPlugins } from './plugins/loader';
 import { PluginRegistry } from './plugins/registry';
 
@@ -212,6 +227,40 @@ export function App() {
   const paletteOpen = ui.paletteOpen;
   const [commandRegistry, setCommandRegistry] = useState<CommandRegistry | null>(null);
 
+  // The texts of the shell follow the language of the user.
+  const t = useT();
+
+  /* ------------------------------------------------ the focus mode and the undo */
+
+  // The focus mode hides the chrome of the application: the state is plain
+  // data, so the command and the shell share it. The refs keep the identity
+  // of the callbacks stable, so the host of the plugins is not rebuilt.
+  const focusStateRef = useRef<FocusModeState>(initialFocusModeState);
+  const [focusMode, setFocusMode] = useState<FocusModeState>(initialFocusModeState);
+  // The preview of the note (the rendered Markdown and the presentations).
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const toggleFocusRef = useRef<() => void>(() => undefined);
+  toggleFocusRef.current = () => {
+    const next = toggleFocusModeState(focusStateRef.current);
+    focusStateRef.current = next;
+    setFocusMode(next);
+  };
+
+  // The undo of a deletion: the offer lives for five seconds after the
+  // deletion, then it disappears on its own.
+  const undoControllerRef = useRef<UndoDeleteController | null>(null);
+  const [undoOffer, setUndoOffer] = useState<UndoDeleteOffer | null>(null);
+  useEffect(() => {
+    const controller = createUndoDeleteController();
+    undoControllerRef.current = controller;
+    const off = controller.subscribe(setUndoOffer);
+    return () => {
+      off();
+      controller.dispose();
+      undoControllerRef.current = null;
+    };
+  }, []);
+
   /** The path of the note that is open; the plugins read it through the editor. */
   const currentPathRef = useRef<string | null>(note.path);
   currentPathRef.current = note.path;
@@ -290,7 +339,7 @@ export function App() {
         const { note, tree } = appStore.getSnapshot();
         const node = tree.files.find((file) => file.path === note.path);
         if (!node) {
-          appStore.actions.showBanner('Open a note first — there is nothing to rename');
+          appStore.actions.showBanner(t('app.banner.renameNothing'));
           return;
         }
         appStore.actions.openDialog({ kind: 'rename', node, value: node.name });
@@ -299,7 +348,7 @@ export function App() {
         const { note, tree } = appStore.getSnapshot();
         const node = tree.files.find((file) => file.path === note.path);
         if (!node) {
-          appStore.actions.showBanner('Open a note first — there is nothing to delete');
+          appStore.actions.showBanner(t('app.banner.deleteNothing'));
           return;
         }
         appStore.actions.openDialog({ kind: 'delete', node });
@@ -319,7 +368,7 @@ export function App() {
       duplicateNote: () => {
         const { note } = appStore.getSnapshot();
         if (!note.path) {
-          appStore.actions.showBanner('Open a note first — there is nothing to duplicate');
+          appStore.actions.showBanner(t('app.banner.duplicateNothing'));
           return;
         }
         void appStore.actions.duplicateNote(note.path);
@@ -334,6 +383,13 @@ export function App() {
       },
     });
 
+    // The focus mode is a command of the application: it hides the chrome
+    // and leaves only the editor.
+    const unregisterFocusMode = registerFocusModeCommand(commands, {
+      isActive: () => focusStateRef.current.active,
+      toggle: () => toggleFocusRef.current(),
+    });
+
     const host = new PluginHost({
       registry,
       bus,
@@ -341,6 +397,10 @@ export function App() {
       settings,
       createApi: () => createPluginApi(),
       getEditor: () => pluginEditor(),
+      // A plugin may open a note (the backlinks of the plugin are buttons).
+      openNote: (path: string) => {
+        void openNote(path);
+      },
       // A plugin may ask whether the storage is encrypted and whether it is
       // locked. It never sees a key: the state is a frozen copy of four
       // fields, published by the application.
@@ -392,6 +452,7 @@ export function App() {
     return () => {
       offState();
       unregisterAppCommands();
+      unregisterFocusMode();
       void host.disposeAll();
       hostRef.current = null;
       registryRef.current = null;
@@ -564,7 +625,12 @@ export function App() {
       const path = parent ? `${parent}/${node.name}` : node.name;
       if (paths.has(path)) host.emit('note.moved', { path, previousPath: node.path });
     } else if (kind === 'delete' && node) {
-      if (!paths.has(node.path)) host.emit('note.deleted', { path: node.path });
+      if (!paths.has(node.path)) {
+        host.emit('note.deleted', { path: node.path });
+        // The deletion can be undone during five seconds: the note is in the
+        // trash and the toast brings it back.
+        undoControllerRef.current?.offer({ path: node.path, name: node.name });
+      }
     }
   };
 
@@ -593,7 +659,7 @@ export function App() {
     if (note.status === 'error' && previousStatus !== 'error') {
       actions.notify({
         kind: 'error',
-        title: 'The note could not be saved',
+        title: t('app.saveErrorTitle'),
         body: note.path ?? undefined,
         path: note.path ?? undefined,
       });
@@ -601,7 +667,7 @@ export function App() {
     if (note.conflict && !previousConflict) {
       actions.notify({
         kind: 'warning',
-        title: 'The note was changed somewhere else',
+        title: t('app.conflictTitle'),
         body: 'Open the note to choose which version to keep.',
         path: note.path ?? undefined,
       });
@@ -741,10 +807,11 @@ export function App() {
     TrashPanel: ComponentType<TrashPanelProps>;
     TransferPanel: ComponentType<TransferPanelProps>;
     PluginManagerPanel: ComponentType<PluginManagerPanelProps>;
+    Preview: ComponentType<PreviewProps>;
   } | null>(null);
 
   const needLazyPanels =
-    pluginsOpen || dialog.kind === 'trash' || dialog.kind === 'transfer';
+    pluginsOpen || dialog.kind === 'trash' || dialog.kind === 'transfer' || previewOpen;
 
   useEffect(() => {
     if (!needLazyPanels || lazyPanels) return;
@@ -755,6 +822,7 @@ export function App() {
         TrashPanel: module.TrashPanel,
         TransferPanel: module.TransferPanel,
         PluginManagerPanel: module.PluginManagerPanel,
+        Preview: module.Preview,
       });
     });
     return () => {
@@ -764,6 +832,7 @@ export function App() {
 
   const [lazyOverlays, setLazyOverlays] = useState<{
     FindPanel: ComponentType<FindPanelProps>;
+    AttachmentsPanel: ComponentType<AttachmentsPanelProps>;
     VaultPicker: ComponentType<VaultPickerProps>;
     VaultSetupDialog: ComponentType<VaultSetupDialogProps>;
     VaultMigrationDialog: ComponentType<VaultMigrationDialogProps>;
@@ -776,6 +845,7 @@ export function App() {
     // not pay for it.
     const needed =
       ui.findOpen ||
+      dialog.kind === 'attachments' ||
       vaultPickerOpen ||
       vaultSetupOpen ||
       vaultMigrationOpen ||
@@ -786,6 +856,7 @@ export function App() {
       if (cancelled) return;
       setLazyOverlays({
         FindPanel: module.FindPanel,
+        AttachmentsPanel: module.AttachmentsPanel,
         VaultPicker: module.VaultPicker,
         VaultSetupDialog: module.VaultSetupDialog,
         VaultMigrationDialog: module.VaultMigrationDialog,
@@ -797,6 +868,7 @@ export function App() {
     };
   }, [
     ui.findOpen,
+    dialog.kind,
     vaultPickerOpen,
     vaultSetupOpen,
     vaultMigrationOpen,
@@ -911,6 +983,9 @@ export function App() {
     [tree.folders],
   );
 
+  // The links of the preview ([[name]]) point at the notes of the vault.
+  const wikiResolver = useMemo(() => createWikiResolver(tree.files), [tree.files]);
+
   /* ---------------------------------------------- the plugin contributions */
 
   const pluginEntries = useMemo<PluginManagerEntry[]>(() => {
@@ -921,6 +996,7 @@ export function App() {
       manifest: entry.plugin.manifest,
       status: toManagerStatus(entry.state),
       error: entry.error ?? null,
+      source: entry.source,
     }));
     // `pluginVersion` changes whenever the state of a plugin changes.
   }, [pluginVersion]);
@@ -962,16 +1038,16 @@ export function App() {
 
   const statusLabel =
     note.status === 'saving'
-      ? 'Saving…'
+      ? t('app.status.saving')
       : note.status === 'saved'
-        ? 'Saved'
+        ? t('app.status.saved')
         : note.status === 'error'
-          ? 'Save failed'
+          ? t('app.status.saveFailed')
           : note.dirty
-            ? 'Unsaved changes'
+            ? t('app.status.unsaved')
             : note.path
-              ? 'Saved'
-              : 'Idle';
+              ? t('app.status.saved')
+              : t('app.status.idle');
 
   const insertAtCursor = (markdown: string) => {
     editorRef.current?.insert(markdown);
@@ -1012,13 +1088,13 @@ export function App() {
       return;
     }
     if (parent === targetParentPath) {
-      actions.showBanner('The note is already here');
+      actions.showBanner(t('app.banner.alreadyHere'));
       return;
     }
     try {
       await actions.moveNode(node, targetParentPath);
     } catch (err) {
-      actions.showBanner(err instanceof Error ? err.message : 'Could not move the note');
+      actions.showBanner(err instanceof Error ? err.message : t('app.banner.cannotMove'));
     }
   };
 
@@ -1028,7 +1104,7 @@ export function App() {
     try {
       await actions.renameNode(node, name);
     } catch (err) {
-      actions.showBanner(err instanceof Error ? err.message : 'Could not rename the note');
+      actions.showBanner(err instanceof Error ? err.message : t('app.banner.cannotRename'));
     }
   };
 
@@ -1047,7 +1123,7 @@ export function App() {
 
   return (
     <div
-      class={`app${ui.drawerOpen ? ' drawer-open' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}`}
+      class={`app${ui.drawerOpen ? ' drawer-open' : ''}${narrow ? '' : ui.rightPanelVisible ? '' : ' panel-hidden'}${narrow && panelOverlayOpen ? ' panel-open' : ''}${focusModeClass(focusMode) ? ` ${focusModeClass(focusMode)}` : ''}`}
       data-vault-mode={vaultSession.mode}
       data-vault-locked={vaultSession.locked ? 'true' : 'false'}
     >
@@ -1063,7 +1139,7 @@ export function App() {
           <button
             type="button"
             class="icon-button"
-            aria-label="Dismiss"
+            aria-label={t('app.dismiss')}
             onClick={actions.dismissBanner}
           >
             ×
@@ -1178,19 +1254,31 @@ export function App() {
         </div>
 
         <main class="workspace">
-          <EditorTabs
-            tabs={tabItems}
-            activePath={note.path}
-            onSelect={(path) => void openNote(path)}
-            onClose={(path) => {
-              actions.closeTab(path);
-              const rest = ui.openPaths.filter((item) => item !== path);
-              if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
-              // The last tab closes the note with it: a closed tab must not
-              // leave the note (and its name) on the screen.
-              if (path === note.path && rest.length === 0) void actions.closeNote();
-            }}
-          />
+          <div class="workspace-header">
+            <EditorTabs
+              tabs={tabItems}
+              activePath={note.path}
+              onSelect={(path) => void openNote(path)}
+              onClose={(path) => {
+                actions.closeTab(path);
+                const rest = ui.openPaths.filter((item) => item !== path);
+                if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
+                // The last tab closes the note with it: a closed tab must not
+                // leave the note (and its name) on the screen.
+                if (path === note.path && rest.length === 0) void actions.closeNote();
+              }}
+            />
+            <button
+              type="button"
+              class="icon-button"
+              aria-label={previewOpen ? t('app.hidePreview') : t('app.showPreview')}
+              title={previewOpen ? t('app.hidePreview') : t('app.showPreview')}
+              aria-pressed={previewOpen ? 'true' : 'false'}
+              onClick={() => setPreviewOpen((open) => !open)}
+            >
+              <Icon name="eye" size={16} />
+            </button>
+          </div>
 
           <div class="breadcrumb-strip">
             <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />
@@ -1207,8 +1295,7 @@ export function App() {
           ) : null}
 
           <div class="workspace-panes">
-          <div class="pane pane-editor">
-            <PluginToolbarSlot items={pluginToolbarItems} />
+          <div class="pane pane-editor">            <PluginToolbarSlot items={pluginToolbarItems} />
             <MarkdownEditor
               value={note.content}
               path={note.path ?? ''}
@@ -1234,17 +1321,26 @@ export function App() {
             {!note.path ? (
               <div class="empty-state" data-testid="empty-state">
                 <Icon name="file-text" size={32} class="empty-state-icon" />
-                <h2>No note selected</h2>
-                <p>Pick a note in the sidebar or create a new one.</p>
+                <h2>{t('app.noNoteSelected')}</h2>
+                <p>{t('app.noNoteSelectedHint')}</p>
               </div>
             ) : null}
           </div>
+          {previewOpen && note.path && lazyPanels ? (
+            <div class="pane pane-preview">
+              <lazyPanels.Preview
+                source={note.content}
+                resolve={wikiResolver}
+                onOpenNote={(path) => void openNote(path)}
+              />
+            </div>
+          ) : null}
           </div>
         </main>
 
         <aside
           class="panel-wrap"
-          aria-label="Outline of the note"
+          aria-label={t('app.outlineLabel')}
           style={{ '--panel-width': `${ui.rightPanelWidth}px` }}
         >
           <OutlinePanel
@@ -1259,7 +1355,7 @@ export function App() {
           {narrow ? null : (
             <ColumnResizer
               side="right"
-              label="Resize outline panel"
+              label={t('app.resizeOutline')}
               min={200}
               max={480}
               onResize={actions.setRightPanelWidth}
@@ -1326,7 +1422,7 @@ export function App() {
         />
       ) : null}
 
-      <Dialog title="Plugins" open={pluginsOpen} onClose={() => setPluginsOpen(false)}>
+      <Dialog title={t('app.pluginsTitle')} open={pluginsOpen} onClose={() => setPluginsOpen(false)}>
         {lazyPanels ? (
           <lazyPanels.PluginManagerPanel
             plugins={pluginEntries}
@@ -1334,18 +1430,19 @@ export function App() {
             onDisable={(id) => void disablePlugin(id)}
             onOpenSettings={(id) => setSettingsPluginId(id)}
             onResetSettings={(id) => void resetPluginSettings(id)}
+            audit={hostRef.current?.auditEntries() ?? []}
           />
         ) : null}
         <PluginCommandSlot commands={pluginCommands} />
       </Dialog>
 
       <Dialog
-        title={settingsPlugin ? `Settings: ${settingsPlugin.manifest.name}` : 'Settings'}
+        title={settingsPlugin ? t('app.pluginSettingsTitle', { name: settingsPlugin.manifest.name }) : t('settings.title')}
         open={settingsPlugin !== null}
         onClose={() => setSettingsPluginId(null)}
       >
         {settingsPlugin?.manifest.settings?.length ? (
-          <ul class="noto-plugin-list" role="list" aria-label="Plugin settings">
+          <ul class="noto-plugin-list" role="list" aria-label={t('app.pluginSettingsLabel')}>
             {settingsPlugin.manifest.settings.map((schema) => (
               <li key={schema.key} class="noto-plugin-list-item">
                 <span class="noto-plugin-name">{schema.label}</span>
@@ -1364,8 +1461,10 @@ export function App() {
         ))}
       </Dialog>
 
-      <Dialog title="Attachments" open={dialog.kind === 'attachments'} onClose={actions.closeDialog}>
-        <AttachmentsPanel notePath={note.path} onInsert={insertAtCursor} />
+      <Dialog title={t('app.attachmentsTitle')} open={dialog.kind === 'attachments'} onClose={actions.closeDialog}>
+        {lazyOverlays ? (
+          <lazyOverlays.AttachmentsPanel notePath={note.path} onInsert={insertAtCursor} />
+        ) : null}
       </Dialog>
 
       <CommandPalette
@@ -1386,6 +1485,14 @@ export function App() {
         onChangeValue={actions.setDialogValue}
         onRestoreDraft={actions.restoreDraft}
         onDiscardDraft={actions.discardDraft}
+        undoOffer={undoOffer}
+        onUndoDelete={() => {
+          const offer = undoControllerRef.current?.undo() ?? null;
+          if (!offer) return;
+          void actions.restoreFromTrash(offer.path);
+        }}
+        onDismissUndo={() => undoControllerRef.current?.dismiss()}
+        onResetDraft={() => actions.discardDraft()}
       />
 
       <NoteConflictDialog
@@ -1506,7 +1613,7 @@ export function App() {
             // default storage, and the banner offers to choose a folder later.
             setVaultPickerOpen(false);
             if (!ui.vaultConfigured) {
-              actions.showBanner('No storage folder chosen — the notes are kept in the default folder');
+              actions.showBanner(t('app.banner.noStorage'));
             }
           }}
           onCreateEncrypted={() => {

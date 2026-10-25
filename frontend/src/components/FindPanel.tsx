@@ -2,21 +2,34 @@
 //
 // The magnifier and the funnel of the rail open one window: the search of the
 // text and the filter of the query language are two modules of the same
-// instrument, not two sections of the column. The window lives over the
+// instrument, not two sections of the column. The window floats over the
 // application — the column of the explorer keeps the tree — and it owns its
 // keyboard: Escape closes it, the arrow keys move the selection, Enter opens
 // the picked note.
+//
+// The window is not a modal window: it has no backdrop and it does not swallow
+// the clicks. The tree behind it stays visible and clickable, and a click
+// outside of the window closes it.
 //
 // The mode is not a state of the window: the rail and the shortcuts say which
 // module the window opens, and the user switches the module with the tabs of
 // the window itself.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { search } from '../api/client';
-import { useAppState } from '../core/store/hooks';
+import {
+  PANEL_MAX_HEIGHT,
+  PANEL_WIDTH,
+  closesOnClickOutside,
+  findPanelRect,
+  type Rect,
+} from '../core/find/panel';
+import { useAppActions, useAppState } from '../core/store/hooks';
 import type { FindMode } from '../core/store/types';
 import { debounce } from '../lib/debounce';
 import { errorMessage } from '../lib/errors';
+import { parseFilterUrl, serializeFilterUrl } from '../lib/editor/filterUrl';
 import type { SearchHit } from '../types';
+import { useT } from '../i18n/useT';
 import { FilterPanel } from './FilterPanel';
 
 export interface FindPanelProps {
@@ -41,6 +54,21 @@ function resultId(index: number): string {
 }
 
 /**
+ * The column of the tree, used as the anchor of the floating window.
+ *
+ * The window floats right of that column: the tree stays visible, and the
+ * clicks that fall outside of the window reach it.
+ */
+function anchorOfTree(): Rect | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const element = document.querySelector('.sidebar-wrap');
+  if (!element) return undefined;
+  const box = element.getBoundingClientRect();
+  if (box.width <= 0 && box.height <= 0) return undefined;
+  return { x: box.left, y: box.top, width: box.width, height: box.height };
+}
+
+/**
  * The window of the search and the filters.
  *
  * The module of the search keeps the behaviour of the old overlay: the request
@@ -50,7 +78,9 @@ function resultId(index: number): string {
  * the notes that matched, so the user does not have to go back to the tree.
  */
 export function FindPanel(props: FindPanelProps) {
+  const t = useT();
   const state = useAppState();
+  const actions = useAppActions();
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +90,8 @@ export function FindPanel(props: FindPanelProps) {
   const card = useRef<HTMLDivElement | null>(null);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  /** The place of the floating window on the screen. */
+  const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
     if (props.open) {
@@ -87,6 +119,63 @@ export function FindPanel(props: FindPanelProps) {
     });
     return () => cancelAnimationFrame(frame);
   }, [props.open, props.mode]);
+
+  /**
+   * The place of the floating window.
+   *
+   * The window floats over the application: it sits right of the column of the
+   * tree, so the tree behind it stays visible and clickable. The place is
+   * measured again when the window is resized.
+   */
+  useEffect(() => {
+    if (!props.open) {
+      setRect(null);
+      return;
+    }
+    const place = (): void => {
+      if (typeof window === 'undefined') return;
+      const box = card.current?.getBoundingClientRect();
+      const width = box && box.width > 0 ? box.width : PANEL_WIDTH;
+      const height = box && box.height > 0 ? box.height : PANEL_MAX_HEIGHT;
+      const anchor = anchorOfTree();
+      setRect(
+        findPanelRect(
+          { width: window.innerWidth, height: window.innerHeight },
+          { x: 0, y: 0, width, height },
+          anchor,
+        ),
+      );
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [props.open]);
+
+  /**
+   * A click outside of the window closes it.
+   *
+   * The window has no backdrop: the click reaches the tree, and the tree
+   * closes the window on its way.
+   */
+  useEffect(() => {
+    if (!props.open) return;
+    const onMouseDown = (event: Event): void => {
+      const target = event.target as Node | null;
+      if (target && card.current?.contains(target)) return;
+      const pointer = event as MouseEvent;
+      if (
+        rect &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        !closesOnClickOutside(rect, { x: pointer.clientX, y: pointer.clientY })
+      ) {
+        return;
+      }
+      props.onClose();
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [props.open, props.onClose, rect]);
 
   const run = useRef(
     debounce((value: string) => {
@@ -122,6 +211,33 @@ export function FindPanel(props: FindPanelProps) {
   ).current;
 
   useEffect(() => () => run.cancel(), [run]);
+
+  /**
+   * The filter and the address bar follow each other.
+   *
+   * A link that carries a query opens the application with the filter of
+   * that query, and every change of the filter is written into the address,
+   * so the address of the window can be copied and shared.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const fromUrl = parseFilterUrl(window.location.search);
+    if (!fromUrl.query) return;
+    if (state.ui.query === fromUrl.query) return;
+    actions.setQuery(fromUrl.query);
+    void actions.runQuery(fromUrl.query);
+    // The address is read once: the filter follows it from then on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const search = serializeFilterUrl({ query: state.ui.query, tag: null, view: null });
+    if (window.location.search === search) return;
+    // The hash holds the route of the application: it must survive.
+    const url = `${window.location.pathname}${search}${window.location.hash}`;
+    window.history.replaceState(null, '', url);
+  }, [state.ui.query]);
 
   const onInput = (event: Event): void => {
     const value = (event.target as HTMLInputElement).value;
@@ -170,18 +286,35 @@ export function FindPanel(props: FindPanelProps) {
 
   return (
     <div
-      class="find-overlay"
+      class="find-overlay find-overlay-floating"
       role="dialog"
-      aria-modal="true"
-      aria-label="Search notes"
-      onClick={(event) => {
-        // A click outside of the window closes it.
-        if (event.target === event.currentTarget) props.onClose();
+      aria-label={t('find.label')}
+      style={{
+        // The window floats: it has no backdrop and it does not swallow the
+        // clicks of the tree behind it.
+        position: 'fixed',
+        inset: 0,
+        zIndex: 'var(--z-palette)',
+        display: 'block',
+        padding: 0,
+        background: 'transparent',
+        pointerEvents: 'none',
       }}
       onKeyDown={onKeyDown}
     >
-      <div class="find-window" ref={card}>
-        <div class="find-tabs" role="tablist" aria-label="Modules of the window">
+      <div
+        class="find-window"
+        ref={card}
+        style={{
+          position: 'absolute',
+          left: rect ? `${rect.x}px` : undefined,
+          top: rect ? `${rect.y}px` : undefined,
+          width: rect ? `${rect.width}px` : undefined,
+          maxHeight: rect ? `${rect.height}px` : undefined,
+          pointerEvents: 'auto',
+        }}
+      >
+        <div class="find-tabs" role="tablist" aria-label={t('find.modules')}>
           <button
             type="button"
             role="tab"
@@ -189,7 +322,7 @@ export function FindPanel(props: FindPanelProps) {
             aria-selected={props.mode === 'search'}
             onClick={() => props.onModeChange('search')}
           >
-            Search
+            {t('find.searchTab')}
           </button>
           <button
             type="button"
@@ -198,26 +331,26 @@ export function FindPanel(props: FindPanelProps) {
             aria-selected={props.mode === 'filters'}
             onClick={() => props.onModeChange('filters')}
           >
-            Filters
+            {t('find.filtersTab')}
           </button>
         </div>
 
         {props.mode === 'search' ? (
-          <div class="find-module" role="tabpanel" aria-label="Search">
+          <div class="find-module" role="tabpanel" aria-label={t('find.searchModule')}>
             <div class="find-field">
               <input
                 ref={input}
                 type="search"
                 class="find-input"
-                placeholder="Search notes…"
-                aria-label="Search query"
+                placeholder={t('find.placeholder')}
+                aria-label={t('find.queryLabel')}
                 aria-controls="noto-find-results"
                 aria-activedescendant={hits.length > 0 ? resultId(selected) : undefined}
                 value={query}
                 onInput={onInput}
                 onKeyDown={onKeyDown}
               />
-              {loading ? <span class="search-status">Searching…</span> : null}
+              {loading ? <span class="search-status">{t('find.searching')}</span> : null}
               {error ? <p class="error-text">{error}</p> : null}
             </div>
             <ul class="search-results" id="noto-find-results" data-testid="search-results">
@@ -238,15 +371,15 @@ export function FindPanel(props: FindPanelProps) {
                 </li>
               ))}
               {!loading && query.trim() && hits.length === 0 && !error ? (
-                <li class="search-empty">No results</li>
+                <li class="search-empty">{t('find.noResults')}</li>
               ) : null}
               {!query.trim() && hits.length === 0 ? (
-                <li class="search-empty">Type to search in the notes of the vault.</li>
+                <li class="search-empty">{t('find.hint')}</li>
               ) : null}
             </ul>
           </div>
         ) : (
-          <div class="find-module" role="tabpanel" aria-label="Filters">
+          <div class="find-module" role="tabpanel" aria-label={t('find.filtersModule')}>
             <FilterPanel />
             {matching.length > 0 ? (
               <ul class="find-results" data-testid="find-results">

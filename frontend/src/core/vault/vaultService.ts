@@ -44,6 +44,13 @@ import type {
 } from '../../types';
 import { baseNameOf, joinPath, parentPathOf } from './paths';
 import { getSealedVault, subscribeVaultSession } from './session';
+import { sealOutboxPayload } from './sealedOutbox';
+import {
+  enqueueOfflineWrite,
+  isReplaying,
+  type OfflineCodecName,
+  type OfflineWriteKind,
+} from '../sync/offlineQueue';
 
 /**
  * The path of the copy of a note that does not exist yet.
@@ -124,34 +131,141 @@ export interface VaultService {
 }
 
 /**
+ * The codec of the payloads of the outbox.
+ *
+ * The payload of a write that waits for the connection is encoded before it
+ * reaches the database of the browser: in the clear for an open storage, sealed
+ * with the key of the vault for an encrypted one.
+ */
+interface OutboxCodec {
+  /** The name of the codec, as it is written into the queue. */
+  name: OfflineCodecName;
+  /** Encodes the payload of a write. */
+  encode(value: unknown): Promise<string>;
+}
+
+/** The codec of an open storage. */
+const jsonOutboxCodec: OutboxCodec = {
+  name: 'json',
+  encode: async (value) => JSON.stringify(value),
+};
+
+/** The codec of an encrypted storage. */
+function sealedOutboxCodec(vault: SealedVaultLike): OutboxCodec {
+  return {
+    name: 'sealed',
+    encode: (value) => sealOutboxPayload(vault, value),
+  };
+}
+
+/** True when the failure is the one of a backend that could not be reached. */
+function isNetworkFailure(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  return (err as { code?: unknown }).code === 'network_error';
+}
+
+/**
+ * Puts a write into the outbox.
+ *
+ * The outbox is a best effort: a storage that refuses the write must not hide
+ * the error of the server, so a failure here is swallowed.
+ */
+async function queueWrite(
+  kind: OfflineWriteKind,
+  path: string,
+  payload: Record<string, unknown>,
+  codec: OutboxCodec,
+): Promise<void> {
+  // A write that fails during a replay is already in the queue: it must not
+  // be put into it a second time.
+  if (isReplaying()) return;
+  try {
+    const encoded = await codec.encode(payload);
+    await enqueueOfflineWrite({ kind, path, payload: encoded, codec: codec.name });
+  } catch {
+    // The database of the browser is not available.
+  }
+}
+
+/**
+ * Wraps the writes of a service so that they wait for the connection.
+ *
+ * A write that fails because the backend could not be reached goes into the
+ * outbox: the error is still thrown (the caller must know that the write did
+ * not happen), but the write is not lost — it waits for the connection.
+ */
+function withOutbox(service: VaultService, codec: OutboxCodec): VaultService {
+  const guard = async <T>(
+    kind: OfflineWriteKind,
+    path: string,
+    payload: Record<string, unknown>,
+    run: () => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await run();
+    } catch (err) {
+      if (isNetworkFailure(err)) await queueWrite(kind, path, payload, codec);
+      throw err;
+    }
+  };
+  return {
+    ...service,
+    saveNote: (path, content, revision) =>
+      guard('saveNote', path, { path, content, revision: revision ?? 0 }, () =>
+        service.saveNote(path, content, revision),
+      ),
+    createFile: (parentPath, name) =>
+      guard('createFile', joinPath(parentPath, name), { parentPath, name }, () =>
+        service.createFile(parentPath, name),
+      ),
+    createFolder: (parentPath, name) =>
+      guard('createFolder', joinPath(parentPath, name), { parentPath, name }, () =>
+        service.createFolder(parentPath, name),
+      ),
+    renameNote: (path, newName) =>
+      guard('renameNote', path, { path, newName }, () => service.renameNote(path, newName)),
+    moveNote: (path, newParentPath) =>
+      guard('moveNote', path, { path, newParentPath }, () =>
+        service.moveNote(path, newParentPath),
+      ),
+    deleteNote: (path) => guard('deleteNote', path, { path }, () => service.deleteNote(path)),
+    duplicateNote: (path) => guard('duplicateNote', path, { path }, () => service.duplicateNote(path)),
+    restoreNote: (path) => guard('restoreNote', path, { path }, () => service.restoreNote(path)),
+  };
+}
+
+/**
  * The service of an open storage.
  *
  * It is a thin adapter over the API of the notes: the behaviour of the open
  * mode must not change, and this adapter is the only place that knows it.
  */
 export function createOpenVaultService(): VaultService {
-  return {
-    mode: 'open',
-    listTree: () => getTreeApi(),
-    readNote: (path) => getNoteApi(path),
-    saveNote: (path, content, revision) => saveNoteApi(path, content, revision ?? 0),
-    createFile: (parentPath, name) => createFileApi(parentPath, name),
-    createFolder: (parentPath, name) => createFolderApi(parentPath, name),
-    renameNote: (path, newName) => renameNoteApi(path, newName),
-    moveNote: (path, newParentPath) => moveNoteApi(path, newParentPath),
-    deleteNote: async (path) => {
-      await deleteNoteApi(path);
+  return withOutbox(
+    {
+      mode: 'open',
+      listTree: () => getTreeApi(),
+      readNote: (path) => getNoteApi(path),
+      saveNote: (path, content, revision) => saveNoteApi(path, content, revision ?? 0),
+      createFile: (parentPath, name) => createFileApi(parentPath, name),
+      createFolder: (parentPath, name) => createFolderApi(parentPath, name),
+      renameNote: (path, newName) => renameNoteApi(path, newName),
+      moveNote: (path, newParentPath) => moveNoteApi(path, newParentPath),
+      deleteNote: async (path) => {
+        await deleteNoteApi(path);
+      },
+      duplicateNote: (path) => duplicateNoteApi(path),
+      listTrash: () => getTrashApi(),
+      restoreNote: (trashPath) => restoreNoteApi(trashPath),
+      search: (query, limit) => searchApi(query, limit ?? 50),
+      listAttachments: () => listAttachmentsApi(),
+      uploadAttachment: (file, notePath) => uploadAttachmentApi(file, notePath),
+      deleteAttachment: async (id) => {
+        await deleteAttachmentApi(id);
+      },
     },
-    duplicateNote: (path) => duplicateNoteApi(path),
-    listTrash: () => getTrashApi(),
-    restoreNote: (trashPath) => restoreNoteApi(trashPath),
-    search: (query, limit) => searchApi(query, limit ?? 50),
-    listAttachments: () => listAttachmentsApi(),
-    uploadAttachment: (file, notePath) => uploadAttachmentApi(file, notePath),
-    deleteAttachment: async (id) => {
-      await deleteAttachmentApi(id);
-    },
-  };
+    jsonOutboxCodec,
+  );
 }
 
 /**
@@ -181,6 +295,10 @@ export interface SealedVaultLike {
     notePath?: string,
   ): Promise<Attachment>;
   deleteAttachment(id: string): Promise<void>;
+  /** Seals the bytes of a payload; the vault owns the key. */
+  sealPayload?(payload: Uint8Array): Promise<Uint8Array>;
+  /** Opens the bytes of a payload. */
+  openPayload?(container: Uint8Array): Promise<Uint8Array>;
 }
 
 /**
@@ -216,7 +334,8 @@ export function createSealedVaultService(vault: SealedVaultLike): VaultService {
   const requireUnlocked = (): void => {
     if (!vault.isUnlocked()) throw new VaultLockedError();
   };
-  return {
+  return withOutbox(
+    {
     mode: 'sealed',
     listTree: async () => {
       requireUnlocked();
@@ -308,7 +427,9 @@ export function createSealedVaultService(vault: SealedVaultLike): VaultService {
       requireUnlocked();
       await vault.deleteAttachment(id);
     },
-  };
+    },
+    sealedOutboxCodec(vault),
+  );
 }
 
 /** The service of the current mode. */

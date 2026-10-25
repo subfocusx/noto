@@ -15,6 +15,7 @@
 import { Fragment } from 'preact';
 import type { FindMode, RailSection } from '../core/store/types';
 import { RAIL_SECTIONS } from '../core/commands/appCommands';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface RailProps {
@@ -48,12 +49,13 @@ export interface RailProps {
  * announces which section of the column is open.
  */
 export function Rail(props: RailProps) {
+  const t = useT();
   const themeLabel =
-    props.theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme';
+    props.theme === 'dark' ? t('rail.themeLight') : t('rail.themeDark');
   const unread = props.unreadCount ?? 0;
 
   return (
-    <nav class="rail" aria-label="Sections">
+    <nav class="rail" aria-label={t('rail.sections')}>
       <ul class="rail-items">
         {RAIL_SECTIONS.map((entry, index) => {
           const previous = RAIL_SECTIONS[index - 1];
@@ -77,8 +79,8 @@ export function Rail(props: RailProps) {
                   type="button"
                   class="rail-item"
                   aria-current={active ? 'page' : undefined}
-                  aria-label={entry.title}
-                  title={entry.title}
+                  aria-label={t(entry.titleKey)}
+                  title={t(entry.titleKey)}
                   data-section={entry.id}
                   data-testid={`rail-${entry.id}`}
                   onClick={() => props.onSelect(entry.id)}
@@ -111,8 +113,8 @@ export function Rail(props: RailProps) {
         <button
           type="button"
           class="rail-item"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t('rail.settings')}
+          title={t('rail.settings')}
           data-testid="rail-settings"
           onClick={props.onOpenSettings}
         >

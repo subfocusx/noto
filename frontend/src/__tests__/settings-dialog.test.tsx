@@ -321,6 +321,8 @@ describe('the shell of the application', () => {
     fireEvent.click(screen.getByTestId('vault-security-setup'));
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull());
-    await waitFor(() => expect(screen.getByTestId('vault-setup')).toBeTruthy());
+    // The wizard is loaded lazily: the chunk arrives a moment later, and the
+    // whole suite may be slow.
+    await waitFor(() => expect(screen.getByTestId('vault-setup')).toBeTruthy(), { timeout: 5000 });
   });
 });

@@ -17,6 +17,13 @@ export interface ShortcutDef {
   keys: string;
   /** What the shortcut does. */
   label: string;
+  /**
+   * The key of the label in the catalogue of the strings.
+   *
+   * The core knows the key, not the text: the help of the shortcuts translates
+   * the key when it draws it.
+   */
+  labelKey?: string;
   /** The group of the help dialog. */
   group: ShortcutGroup;
   /** True when the shortcut only works outside of the editor. */
@@ -39,114 +46,133 @@ export const SHORTCUTS: ShortcutDef[] = [
     id: 'palette',
     keys: 'Ctrl+K',
     label: 'Open the command palette',
+    labelKey: 'shortcut.palette.label',
     group: 'Navigation',
   },
   {
     id: 'palette.secondary',
     keys: 'Ctrl+P',
     label: 'Open the command palette (alternative)',
+    labelKey: 'shortcut.palette.secondary.label',
     group: 'Navigation',
   },
   {
     id: 'search',
     keys: 'Ctrl+Shift+F',
     label: 'Search the notes',
+    labelKey: 'shortcut.search.label',
     group: 'Navigation',
   },
   {
     id: 'shortcutHelp',
     keys: 'Ctrl+/',
     label: 'Show the keyboard shortcuts',
+    labelKey: 'shortcut.shortcutHelp.label',
     group: 'Navigation',
   },
   {
     id: 'settings',
     keys: 'Ctrl+,',
     label: 'Open the settings',
+    labelKey: 'shortcut.settings.label',
     group: 'System',
   },
   {
     id: 'section.explorer',
     keys: 'Ctrl+Alt+E',
     label: 'Open the explorer',
+    labelKey: 'shortcut.section.explorer.label',
     group: 'Navigation',
   },
   {
     id: 'section.favorites',
     keys: 'Ctrl+Alt+B',
     label: 'Open the favorites',
+    labelKey: 'shortcut.section.favorites.label',
     group: 'Navigation',
   },
   {
     id: 'section.calendar',
     keys: 'Ctrl+Alt+C',
     label: 'Open the calendar',
+    labelKey: 'shortcut.section.calendar.label',
     group: 'Navigation',
   },
   {
     id: 'section.search',
     keys: 'Ctrl+Alt+S',
     label: 'Open the search',
+    labelKey: 'shortcut.section.search.label',
     group: 'Navigation',
   },
   {
     id: 'section.filters',
     keys: 'Ctrl+Alt+F',
     label: 'Open the filters',
+    labelKey: 'shortcut.section.filters.label',
     group: 'Navigation',
   },
   {
     id: 'section.history',
     keys: 'Ctrl+Alt+H',
     label: 'Open the history',
+    labelKey: 'shortcut.section.history.label',
     group: 'Navigation',
   },
   {
     id: 'section.trash',
     keys: 'Ctrl+Alt+D',
     label: 'Open the trash',
+    labelKey: 'shortcut.section.trash.label',
     group: 'Navigation',
   },
   {
     id: 'newNote',
     keys: 'Ctrl+Alt+N',
     label: 'Create a note',
+    labelKey: 'shortcut.newNote.label',
     group: 'Files',
   },
   {
     id: 'save',
     keys: 'Ctrl+S',
     label: 'Save the note',
+    labelKey: 'shortcut.save.label',
     group: 'Files',
   },
   {
     id: 'duplicateNote',
     keys: 'Ctrl+D',
     label: 'Duplicate the note',
+    labelKey: 'shortcut.duplicateNote.label',
     group: 'Files',
   },
   {
     id: 'toggleTheme',
     keys: 'Ctrl+Alt+T',
     label: 'Switch the theme',
+    labelKey: 'shortcut.toggleTheme.label',
     group: 'View',
   },
   {
     id: 'editor.bold',
     keys: 'Mod+B',
     label: 'Bold text',
+    labelKey: 'shortcut.editor.bold.label',
     group: 'Editor',
   },
   {
     id: 'editor.italic',
     keys: 'Mod+I',
     label: 'Italic',
+    labelKey: 'shortcut.editor.italic.label',
     group: 'Editor',
   },
   {
     id: 'editor.search',
     keys: 'Mod+F',
     label: 'Search in the text of the note',
+    labelKey: 'shortcut.editor.search.label',
     group: 'Editor',
   },
 ];

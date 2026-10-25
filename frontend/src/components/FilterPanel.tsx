@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useAppActions, useAppState } from '../core/store/hooks';
 import { createView, loadViews, saveViews, type SavedView } from '../core/views/types';
+import { useT } from '../i18n/useT';
 import { debounce } from '../lib/debounce';
 import { Icon } from '../ui/icons';
 
@@ -23,15 +24,6 @@ const QUERY_DELAY = 200;
 /** The example shown when the field is empty. */
 const PLACEHOLDER = 'tag == "work" && !has_task_list';
 
-/** The explanation of the block; it is visible, not only a tooltip. */
-const HINT = 'Shows only the notes that match the condition.';
-
-/** The explanation of the tags; it is the tooltip of the label. */
-const TAGS_HINT = 'A tag is written in the text of a note as #word. Click a tag to filter by it.';
-
-/** The explanation of the saved filters; it is the tooltip of the label. */
-const SAVED_HINT = 'Save the current filter under a name to come back to it later.';
-
 /**
  * The block of the selection.
  *
@@ -39,6 +31,7 @@ const SAVED_HINT = 'Save the current filter under a name to come back to it late
  * see the same one.
  */
 export function FilterPanel() {
+  const t = useT();
   const state = useAppState();
   const actions = useAppActions();
   const [text, setText] = useState(state.ui.query);
@@ -122,9 +115,9 @@ export function FilterPanel() {
   return (
     <div class="q9-filter">
       <div class="q9-filter-header">
-        <span class="q9-filter-title">Filter</span>
-        <span class="q9-filter-hint" title={HINT}>
-          {HINT}
+        <span class="q9-filter-title">{t('filter.title')}</span>
+        <span class="q9-filter-hint" title={t('filter.hint')}>
+          {t('filter.hint')}
         </span>
       </div>
 
@@ -134,7 +127,7 @@ export function FilterPanel() {
           class="q9-query-input"
           value={text}
           placeholder={PLACEHOLDER}
-          aria-label="Filter of the notes"
+          aria-label={t('filter.inputLabel')}
           title={PLACEHOLDER}
           spellcheck={false}
           onInput={onInput}
@@ -150,14 +143,16 @@ export function FilterPanel() {
         <div class="q9-query-status">
           {state.ui.queryError ? null : (
             <span class="q9-query-count" role="status">
-              {state.ui.queryTotal === 1 ? '1 note matches' : `${state.ui.queryTotal} notes match`}
+              {state.ui.queryTotal === 1
+                ? t('filter.oneNote')
+                : t('filter.manyNotes', { count: state.ui.queryTotal })}
             </span>
           )}
           <button
             type="button"
             class="icon-button q9-query-clear"
-            title="Clear the filter"
-            aria-label="Clear the filter"
+            title={t('filter.clear')}
+            aria-label={t('filter.clear')}
             onClick={clear}
           >
             <Icon name="x" size={14} />
@@ -166,7 +161,7 @@ export function FilterPanel() {
       ) : null}
       {state.ui.queryPartial ? (
         <p class="q9-query-warning" role="status">
-          Some notes could not be checked: the answer may be incomplete.
+          {t('filter.partial')}
         </p>
       ) : null}
       {state.ui.queryError ? (
@@ -176,11 +171,11 @@ export function FilterPanel() {
       ) : null}
 
       <div class="q9-filter-row">
-        <span class="q9-filter-label" title={TAGS_HINT}>
-          Tags
+        <span class="q9-filter-label" title={t('filter.tagsHint')}>
+          {t('filter.tags')}
         </span>
         {tags.length === 0 ? (
-          <span class="q9-filter-empty">No tag yet.</span>
+          <span class="q9-filter-empty">{t('filter.noTags')}</span>
         ) : (
           <div class="q9-chips">
             {tags.map((tag) => (
@@ -188,7 +183,7 @@ export function FilterPanel() {
                 key={tag.tag}
                 type="button"
                 class="q9-chip q9-chip-tag"
-                title={`Show the notes tagged ${tag.tag}`}
+                title={t('filter.tagTitle', { tag: tag.tag })}
                 onClick={() => applyQuery(`tag == "${tag.tag}"`)}
               >
                 <span class="q9-chip-name">#{tag.tag}</span>
@@ -200,8 +195,8 @@ export function FilterPanel() {
       </div>
 
       <div class="q9-filter-row">
-        <span class="q9-filter-label" title={SAVED_HINT}>
-          Saved
+        <span class="q9-filter-label" title={t('filter.savedHint')}>
+          {t('filter.saved')}
         </span>
         <div class="q9-chips">
           {views.map((view) => (
@@ -217,8 +212,8 @@ export function FilterPanel() {
               <button
                 type="button"
                 class="q9-chip-x"
-                aria-label={`Delete the filter ${view.title}`}
-                title={`Delete the filter ${view.title}`}
+                aria-label={t('filter.deleteFilter', { name: view.title })}
+                title={t('filter.deleteFilter', { name: view.title })}
                 onClick={() => removeView(view.id)}
               >
                 <Icon name="x" size={11} />
@@ -232,8 +227,8 @@ export function FilterPanel() {
                 type="text"
                 class="q9-chip-input"
                 value={name}
-                placeholder="Name"
-                aria-label="Name of the filter"
+                placeholder={t('filter.namePlaceholder')}
+                aria-label={t('filter.nameLabel')}
                 onInput={(event) => setName((event.target as HTMLInputElement).value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -253,8 +248,8 @@ export function FilterPanel() {
             <button
               type="button"
               class="q9-chip q9-chip-add"
-              title={SAVED_HINT}
-              aria-label="Save the current filter"
+              title={t('filter.savedHint')}
+              aria-label={t('filter.saveCurrent')}
               disabled={!hasQuery}
               onClick={() => setAdding(true)}
             >

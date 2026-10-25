@@ -47,7 +47,9 @@ export class HealthMonitor {
   private readonly intervalMs: number;
   private readonly failureIntervalMs: number;
   private readonly maxFailureIntervalMs: number;
-  private onChange: ((state: ConnectionState) => void) | undefined;  private readonly target: Window | null;
+  private onChange: ((state: ConnectionState) => void) | undefined;
+  private readonly listeners = new Set<(state: ConnectionState) => void>();
+  private readonly target: Window | null;
 
   private state: ConnectionState = 'connecting';
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -82,6 +84,20 @@ export class HealthMonitor {
    */
   setOnChange(listener: ((state: ConnectionState) => void) | undefined): void {
     this.onChange = listener;
+  }
+
+  /**
+   * Adds a listener of the state, and returns the function that removes it.
+   *
+   * The store takes the state with `setOnChange`; the other parts of the core
+   * (the replay of the outbox) need the state as well, and they must not
+   * steal it from the store.
+   */
+  addOnChange(listener: (state: ConnectionState) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   /** Starts the polling and the listeners of the browser. */
@@ -179,5 +195,6 @@ export class HealthMonitor {
     if (state === this.state) return;
     this.state = state;
     this.onChange?.(state);
+    for (const listener of [...this.listeners]) listener(state);
   }
 }

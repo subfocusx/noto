@@ -104,6 +104,53 @@ export async function clearSealedDrafts(): Promise<void> {
   await database.clear(SEALED_STORE);
 }
 
+/* ------------------------------------------------------------ the pure part */
+
+/**
+ * The Markdown reference of a file that was dropped into the editor.
+ *
+ * The reference is the one of an image, so the preview shows the file and
+ * the text stays readable. The name is escaped: a file may carry spaces.
+ */
+export function attachmentReference(name: string, rawUrl: string): string {
+  const label = name.replace(/([()[\]])/g, '\\$1');
+  return `![${label}](${rawUrl})`;
+}
+
+/**
+ * The text with the reference of the file, and the caret after it.
+ *
+ * The reference is inserted at the caret of the editor. A space follows it,
+ * so the user can keep writing right behind the link.
+ */
+export function insertAttachmentReference(
+  text: string,
+  caret: number,
+  reference: string,
+): { text: string; caret: number } {
+  const position = Math.max(0, Math.min(caret, text.length));
+  const before = text.slice(0, position);
+  const after = text.slice(position);
+  const inserted = `${reference} `;
+  return { text: `${before}${inserted}${after}`, caret: position + inserted.length };
+}
+
+/**
+ * The draft that holds the content of the server again.
+ *
+ * The reset throws the local changes away: the draft keeps the path, but its
+ * content is the one of the server and it is a new revision, so the next
+ * save does not fight with the old one.
+ */
+export function resetDraft(draft: Draft, serverContent: string): Draft {
+  return {
+    path: draft.path,
+    content: serverContent,
+    revision: draft.revision + 1,
+    updatedAt: Date.now(),
+  };
+}
+
 /**
  * True when the local draft is newer than the server copy and therefore
  * holds unsaved work worth offering for recovery.

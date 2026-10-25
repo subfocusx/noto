@@ -9,14 +9,9 @@
 // always show the same notifications.
 import { useAppActions, useAppState } from '../../core/store/hooks';
 import { countUnread, type Notification } from '../../core/notifications/types';
-import { formatNotificationTime, NOTIFICATION_LABELS } from '../../core/notifications/format';
+import { formatNotificationTime, NOTIFICATION_LABEL_KEYS } from '../../core/notifications/format';
+import { useT } from '../../i18n/useT';
 import { Icon } from '../../ui/icons';
-
-/** The name of the button that opens the note of a notification. */
-const OPEN_NOTE = 'Open the note';
-
-/** The name of the button that removes a notification from the list. */
-const DISMISS = 'Dismiss';
 
 interface NotificationEntryProps {
   /** The notification the entry shows. */
@@ -37,6 +32,7 @@ interface NotificationEntryProps {
  * the text, so they are never nested inside the button of the entry.
  */
 function NotificationEntry(props: NotificationEntryProps) {
+  const t = useT();
   const { item } = props;
   const path = item.path;
 
@@ -46,7 +42,7 @@ function NotificationEntry(props: NotificationEntryProps) {
         <span
           class={`notification-mark notification-mark-${item.kind}`}
           role="img"
-          aria-label={NOTIFICATION_LABELS[item.kind]}
+          aria-label={t(NOTIFICATION_LABEL_KEYS[item.kind])}
         />
         <span class="notification-text">
           <span class="notification-title">{item.title}</span>
@@ -62,14 +58,14 @@ function NotificationEntry(props: NotificationEntryProps) {
             class="q9-button q9-button-quiet"
             onClick={() => props.onOpen(path)}
           >
-            {OPEN_NOTE}
+            {t('notifications.openNote')}
           </button>
         ) : null}
         <button
           type="button"
           class="icon-button"
-          aria-label={DISMISS}
-          title={DISMISS}
+          aria-label={t('notifications.dismiss')}
+          title={t('notifications.dismiss')}
           onClick={() => props.onDismiss(item.id)}
         >
           <Icon name="x" size={13} />
@@ -87,16 +83,19 @@ function NotificationEntry(props: NotificationEntryProps) {
  * the rail, the plugins) sees the same list.
  */
 export function NotificationsSection() {
+  const t = useT();
   const state = useAppState();
   const actions = useAppActions();
   const list = state.ui.notifications;
   const unread = countUnread(list);
 
   return (
-    <section class="column-section" aria-label="Notifications">
+    <section class="column-section" aria-label={t('notifications.section')}>
       <header class="column-header section-header">
-        <span class="section-header-title">Notifications</span>
-        <span class="section-header-count">{unread} unread</span>
+        <span class="section-header-title">{t('notifications.section')}</span>
+        <span class="section-header-count">
+          {t('notifications.unread', { count: unread })}
+        </span>
       </header>
 
       <div class="column-body">
@@ -107,7 +106,7 @@ export function NotificationsSection() {
             disabled={unread === 0}
             onClick={() => actions.markAllNotificationsRead()}
           >
-            Mark all as read
+            {t('notifications.markAllRead')}
           </button>
           <button
             type="button"
@@ -115,15 +114,12 @@ export function NotificationsSection() {
             disabled={list.length === 0}
             onClick={() => actions.clearNotifications()}
           >
-            Clear all
+            {t('notifications.clearAll')}
           </button>
         </div>
 
         {list.length === 0 ? (
-          <p class="section-hint">
-            No notification yet. The application tells you here when something needs your
-            attention.
-          </p>
+          <p class="section-hint">{t('notifications.empty')}</p>
         ) : (
           <ul class="notifications-list">
             {list.map((item) => (

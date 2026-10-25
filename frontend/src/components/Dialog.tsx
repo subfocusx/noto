@@ -6,6 +6,7 @@
 // when it closes) and of the keyboard (Escape closes, Tab cycles inside).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
+import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface DialogProps {
@@ -42,6 +43,7 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
  * element when it closes. Escape closes the dialog and Tab cycles inside it.
  */
 export function Dialog(props: DialogProps) {
+  const t = useT();
   const ref = useRef<HTMLDivElement | null>(null);
   const previous = useRef<HTMLElement | null>(null);
   // The callback is kept in a ref: the effect must not run again when the
@@ -117,7 +119,7 @@ export function Dialog(props: DialogProps) {
       >
         <header class="dialog-header">
           <h2>{props.title}</h2>
-          <button type="button" class="icon-button" aria-label="Close dialog" onClick={props.onClose}>
+          <button type="button" class="icon-button" aria-label={t('common.closeDialog')} onClick={props.onClose}>
             <Icon name="x" size={16} />
           </button>
         </header>

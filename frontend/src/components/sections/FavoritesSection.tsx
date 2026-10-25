@@ -14,6 +14,7 @@
 // always show the same favorites.
 import { useMemo } from 'preact/hooks';
 import { useAppActions, useAppState } from '../../core/store/hooks';
+import { useT } from '../../i18n/useT';
 import type { Node } from '../../types';
 import { Icon } from '../../ui/icons';
 
@@ -48,6 +49,7 @@ function nameOfPath(path: string): string {
  * actions of the store, so the star of the tree sees the same list.
  */
 export function FavoritesSection(props: FavoritesSectionProps) {
+  const t = useT();
   const state = useAppState();
   const actions = useAppActions();
   const favorites = state.ui.favorites;
@@ -61,17 +63,15 @@ export function FavoritesSection(props: FavoritesSectionProps) {
   }, [props.files]);
 
   return (
-    <section class="column-section" aria-label="Favorites">
+    <section class="column-section" aria-label={t('section.favorites')}>
       <header class="column-header section-header">
-        <span class="section-header-title">Favorites</span>
+        <span class="section-header-title">{t('section.favorites')}</span>
         <span class="section-header-count">{favorites.length}</span>
       </header>
 
       <div class="column-body">
         {favorites.length === 0 ? (
-          <p class="section-hint">
-            No favorite yet. Open the menu of a note in the tree and choose "Add to favorites".
-          </p>
+          <p class="section-hint">{t('favorites.empty')}</p>
         ) : (
           <ul class="favorites-list">
             {favorites.map((path) => {
@@ -92,8 +92,8 @@ export function FavoritesSection(props: FavoritesSectionProps) {
                   <button
                     type="button"
                     class="icon-button favorite-remove"
-                    aria-label={`Remove ${name} from the favorites`}
-                    title={`Remove ${name} from the favorites`}
+                    aria-label={t('favorites.remove', { name })}
+                    title={t('favorites.remove', { name })}
                     onClick={() => actions.toggleFavorite(path)}
                   >
                     <Icon name="x" size={13} />

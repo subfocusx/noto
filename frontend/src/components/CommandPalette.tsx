@@ -7,6 +7,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { CommandRegistry } from '../core/commands/commandRegistry';
+import { useLanguage, useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 
 export interface CommandPaletteProps {
@@ -51,6 +52,8 @@ function matches(item: PaletteItem, query: string): boolean {
 }
 
 export function CommandPalette(props: CommandPaletteProps) {
+  const t = useT();
+  const language = useLanguage();
   const [items, setItems] = useState<PaletteItem[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -61,6 +64,20 @@ export function CommandPalette(props: CommandPaletteProps) {
   // focus must not be taken away from it.
   const skipFocusRestore = useRef(false);
 
+  /**
+   * The parameters of a title or of a description.
+   *
+   * A value that starts with `$` is the key of another string: it is
+   * translated before it is put into the text.
+   */
+  const resolveParams = (params?: Record<string, string>): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [name, value] of Object.entries(params ?? {})) {
+      out[name] = value.startsWith('$') ? t(value.slice(1)) : value;
+    }
+    return out;
+  };
+
   // The commands are read from the registry every time the palette is opened
   // (and every time the host reports a change).
   useEffect(() => {
@@ -70,18 +87,29 @@ export function CommandPalette(props: CommandPaletteProps) {
       list.map((raw) => {
         // A command may carry an icon and a group; the registry only knows the
         // title, the description and the shortcut.
-        const cmd = raw as typeof raw & { icon?: string; group?: string };
+        const cmd = raw as typeof raw & {
+          icon?: string;
+          group?: string;
+          titleKey?: string;
+          descriptionKey?: string;
+          titleParams?: Record<string, string>;
+          descriptionParams?: Record<string, string>;
+        };
         return {
           id: cmd.id,
-          title: cmd.title,
-          description: cmd.description,
+          title: cmd.titleKey
+            ? t(cmd.titleKey, resolveParams(cmd.titleParams))
+            : cmd.title,
+          description: cmd.descriptionKey
+            ? t(cmd.descriptionKey, resolveParams(cmd.descriptionParams))
+            : cmd.description,
           shortcut: cmd.shortcut,
           icon: cmd.icon,
           group: cmd.group,
         };
       }),
     );
-  }, [props.open, props.registry, props.refreshKey]);
+  }, [props.open, props.registry, props.refreshKey, language]);
 
   // The focus moves into the search field on open and returns to the trigger
   // on close.
@@ -127,7 +155,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       props.onClose();
     } catch (err) {
       skipFocusRestore.current = false;
-      const message = err instanceof Error ? err.message : 'The command failed';
+      const message = err instanceof Error ? err.message : t('palette.failed');
       setError(message);
       props.onError?.(message);
       inputRef.current?.focus();
@@ -208,7 +236,7 @@ export function CommandPalette(props: CommandPaletteProps) {
         class="noto-palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t('palette.title')}
         onKeyDown={onKeyDown}
       >
         <input
@@ -216,14 +244,14 @@ export function CommandPalette(props: CommandPaletteProps) {
           class="noto-palette-input"
           type="text"
           role="combobox"
-          aria-label="Search commands"
+          aria-label={t('palette.search')}
           aria-expanded="true"
           aria-controls={LIST_ID}
           aria-activedescendant={current >= 0 ? optionId(current) : undefined}
           aria-autocomplete="list"
           autocomplete="off"
           spellcheck={false}
-          placeholder="Type a command…"
+          placeholder={t('palette.placeholder')}
           value={query}
           onInput={(event) => {
             setQuery((event.currentTarget as HTMLInputElement).value);
@@ -237,12 +265,12 @@ export function CommandPalette(props: CommandPaletteProps) {
           </p>
         ) : null}
 
-        <ul class="noto-palette-list" id={LIST_ID} role="listbox" aria-label="Commands">
+        <ul class="noto-palette-list" id={LIST_ID} role="listbox" aria-label={t('palette.commands')}>
           {options}
         </ul>
 
         {filtered.length === 0 ? (
-          <p class="noto-palette-empty">No matching command</p>
+          <p class="noto-palette-empty">{t('palette.empty')}</p>
         ) : null}
       </div>
     </div>

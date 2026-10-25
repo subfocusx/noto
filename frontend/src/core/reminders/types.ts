@@ -8,6 +8,12 @@
 // The list lives in `localStorage` under its own key: a reminder belongs to
 // the user and not to the vault, and it must survive a reload of the page.
 //
+// The delivery is **local**: there is no server that pushes the reminders. A
+// reminder is kept here and it fires when the application is open and the
+// watcher of the reminders (see `./watcher.ts`) looks at it. An application
+// that is closed misses nothing permanently — the reminder is still there when
+// it comes back — but it announces nothing while it is closed.
+//
 // Every moment is a **local** moment: the user reads the calendar in the time
 // of the machine, so a reminder of the "24th at 18:00" must not depend on the
 // time zone of the server. The parts of the moment are therefore read one by

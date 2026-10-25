@@ -6,6 +6,7 @@
  */
 
 import type { QueryNode, QueryValue } from './ir';
+import { compileRegex } from './regex';
 import type { QueryField } from './schema';
 
 /** The data of a note the predicate works with. */
@@ -125,10 +126,47 @@ function timestampOf(note: QueryNote, field: QueryField): number {
 }
 
 /**
+ * Compiles every regular expression of the query, once.
+ *
+ * The patterns are the keys of the map: the same expression is compiled once,
+ * even when it is used by several comparisons.
+ */
+function compileRegexes(ast: QueryNode): Map<string, RegExp> {
+  const out = new Map<string, RegExp>();
+  const walk = (node: QueryNode): void => {
+    switch (node.k) {
+      case 'and':
+      case 'or':
+        walk(node.l);
+        walk(node.r);
+        return;
+      case 'not':
+        walk(node.e);
+        return;
+      case 'cmp': {
+        if (node.op !== 'matches' || node.v.k !== 'str') return;
+        if (out.has(node.v.v)) return;
+        const compiled = compileRegex(node.v.v);
+        if (compiled.ok && compiled.regex) out.set(node.v.v, compiled.regex);
+        return;
+      }
+      default:
+        return;
+    }
+  };
+  walk(ast);
+  return out;
+}
+
+/**
  * Compiles the IR into a predicate.
  *
  * The moment of the execution is frozen for the whole query: it is given
  * once, at the compilation, and never changes.
+ *
+ * The regular expressions are compiled once too: an expression that the
+ * engine refuses makes the predicate answer false, instead of throwing at
+ * every note.
  */
 export function compilePredicate(
   ast: QueryNode | null,
@@ -137,6 +175,8 @@ export function compilePredicate(
   if (ast === null) {
     return () => false;
   }
+
+  const regexes = compileRegexes(ast);
 
   const evaluate = (node: QueryNode, note: QueryNote): boolean => {
     switch (node.k) {
@@ -160,6 +200,12 @@ export function compilePredicate(
 
     if (f === 'tag') {
       const tags = note.tags.map(lower);
+      if (op === 'matches') {
+        if (v.k !== 'str') return false;
+        const regex = regexes.get(v.v);
+        if (!regex) return false;
+        return tags.some((tag) => regex.test(tag));
+      }
       if (op === 'in') {
         const items = v.k === 'list' ? v.items : [];
         return items.some((item) => item.k === 'str' && tags.includes(lower(item.v)));
@@ -206,6 +252,14 @@ export function compilePredicate(
 
     // The string fields.
     const actual = textOf(note, f);
+    if (op === 'matches') {
+      if (v.k !== 'str') return false;
+      const regex = regexes.get(v.v);
+      if (!regex) return false;
+      // The expression is case sensitive: it is written by the user, who
+      // knows the text of the notes.
+      return regex.test(actual);
+    }
     if (op === 'contains' || op === 'startsWith' || op === 'endsWith') {
       if (v.k !== 'str') return false;
       const haystack = lower(actual);

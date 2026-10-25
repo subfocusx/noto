@@ -70,7 +70,8 @@ export function createInitialState(): AppState {
     ui: {
       mode: prefs.mode,
       expanded: new Set<string>(prefs.expandedFolders),
-      searchOpen: false,
+      findOpen: false,
+      findMode: 'search',
       paletteOpen: false,
       drawerOpen: false,
       railSection: prefs.railSection,

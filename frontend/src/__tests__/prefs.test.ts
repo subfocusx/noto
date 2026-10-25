@@ -33,7 +33,7 @@ describe('preferences', () => {
       JSON.stringify({
         theme: 'light',
         mode: 'editor',
-        railSection: 'search',
+        railSection: 'calendar',
         sidebarWidth: 320,
         treeSort: 'modified',
         editorFontSize: 16,
@@ -45,7 +45,7 @@ describe('preferences', () => {
     const prefs = loadPrefs();
     expect(prefs.theme).toBe('light');
     expect(prefs.mode).toBe('editor');
-    expect(prefs.railSection).toBe('search');
+    expect(prefs.railSection).toBe('calendar');
     expect(prefs.sidebarWidth).toBe(320);
     expect(prefs.treeSort).toBe('modified');
     expect(prefs.editorFontSize).toBe(16);
@@ -85,6 +85,13 @@ describe('preferences', () => {
   it('repairs a broken section of the rail', () => {
     expect(normalizePrefs({ railSection: 'nonsense' }).railSection).toBe('explorer');
     expect(normalizePrefs({ railSection: 'trash' }).railSection).toBe('trash');
+  });
+
+  it('falls back to the explorer for the search and the filters', () => {
+    // The search and the filters are not sections of the column any more:
+    // they live in one window over the application.
+    expect(normalizePrefs({ railSection: 'search' }).railSection).toBe('explorer');
+    expect(normalizePrefs({ railSection: 'filters' }).railSection).toBe('explorer');
   });
 
   it('clamps the width of the right column', () => {

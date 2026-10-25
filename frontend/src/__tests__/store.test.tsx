@@ -83,6 +83,35 @@ describe('app store', () => {
     view.unmount();
   });
 
+  it('closes the note and empties the editor', async () => {
+    const view = render(<App />);
+    await appStore.actions.openNote('a.md');
+    await waitFor(() => expect(appStore.getSnapshot().note.content).toBe('# hello'));
+
+    await appStore.actions.closeNote();
+
+    // The note is not in the editor any more: the closing of the last tab
+    // must not leave the name of the note on the screen.
+    expect(appStore.getSnapshot().note.path).toBeNull();
+    expect(appStore.getSnapshot().note.content).toBe('');
+    expect(appStore.getSnapshot().note.dirty).toBe(false);
+    view.unmount();
+  });
+
+  it('saves the pending changes before the note leaves the screen', async () => {
+    const view = render(<App />);
+    await appStore.actions.openNote('a.md');
+    await waitFor(() => expect(appStore.getSnapshot().note.content).toBe('# hello'));
+
+    appStore.actions.editContent('# changed');
+    await appStore.actions.closeNote();
+
+    // The changes reached the disk: nothing is lost by closing the note.
+    await waitFor(() => expect(vi.mocked(saveNote)).toHaveBeenCalled());
+    expect(appStore.getSnapshot().note.path).toBeNull();
+    view.unmount();
+  });
+
   it('resets the state when the app is unmounted', async () => {
     const view = render(<App />);
     await appStore.actions.openNote('a.md');

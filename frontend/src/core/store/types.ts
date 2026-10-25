@@ -28,6 +28,14 @@ export type RailSection =
   | 'notifications'
   | 'trash';
 
+/**
+ * The module of the window of the search.
+ *
+ * The window has two modules: the search of the text and the filter of the
+ * query language. The mode says which one the window shows.
+ */
+export type FindMode = 'search' | 'filters';
+
 export type DialogKind =
   | null
   | 'create-folder'
@@ -109,7 +117,16 @@ export interface NoteState {
 export interface UiState {
   mode: ViewMode;
   expanded: Set<string>;
-  searchOpen: boolean;
+  /**
+   * True when the window of the search and the filters is open.
+   *
+   * The window lives over the application: the column of the explorer keeps the
+   * tree, and the window answers the question "which note do I look for?" in
+   * two modes.
+   */
+  findOpen: boolean;
+  /** The module of the window that is open. */
+  findMode: FindMode;
   /** True when the command palette is open. */
   paletteOpen: boolean;
   drawerOpen: boolean;

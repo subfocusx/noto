@@ -145,14 +145,16 @@ function stringList(value: unknown): string[] {
  *
  * A value that is not one of the sections of the rail falls back to the
  * explorer: the column must always show something.
+ *
+ * The search and the filters are not sections of the column any more: they
+ * live in a window over the application, so a saved choice of one of them
+ * falls back to the explorer as well.
  */
 export function normalizeRailSection(value: unknown): RailSection {
   if (
     value === 'explorer' ||
     value === 'favorites' ||
     value === 'calendar' ||
-    value === 'search' ||
-    value === 'filters' ||
     value === 'history' ||
     value === 'notifications' ||
     value === 'trash'

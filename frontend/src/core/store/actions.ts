@@ -18,7 +18,7 @@ import {
   type TreeSort,
 } from '../settings/prefs';
 import { getSnapshot, patchNote, refs, resolveTheme, update } from './state';
-import type { ContextMenuState, DialogState, RailSection, ViewMode } from './types';
+import type { ContextMenuState, DialogState, FindMode, RailSection, ViewMode } from './types';
 import { asksForName } from './types';
 import {
   clearNotifications as clearNotificationList,
@@ -299,6 +299,40 @@ export function closeTab(path: string): void {
     ...prev,
     ui: { ...prev.ui, openPaths: prev.ui.openPaths.filter((item) => item !== path) },
   }));
+}
+
+/**
+ * Closes the open note.
+ *
+ * The note is not deleted: the tree keeps it, and the editor becomes empty.
+ * This is what the closing of the last tab does — a closed tab must not leave
+ * the note on the screen.
+ *
+ * The pending changes reach the disk before the note leaves the screen: the
+ * autosave is flushed, like it is flushed when another note is opened.
+ */
+export async function closeNote(): Promise<void> {
+  const path = refs.currentPath;
+  if (!path) return;
+  if (autosave.dirty()) {
+    await autosave.flush();
+    // The note may have changed while the save was running.
+    if (refs.currentPath !== path) return;
+  }
+  autosave.cancel();
+  autosave.setActivePath(null);
+  refs.currentPath = null;
+  refs.content = '';
+  refs.loadingPath = null;
+  patchNote({
+    path: null,
+    content: '',
+    contentPath: null,
+    status: 'idle',
+    saveError: null,
+    dirty: false,
+    conflict: null,
+  });
 }
 
 export function editContent(text: string): void {
@@ -589,8 +623,14 @@ export function setMode(mode: ViewMode): void {
   persistPrefs();
 }
 
-export function setSearchOpen(open: boolean): void {
-  update((prev) => ({ ...prev, ui: { ...prev.ui, searchOpen: open } }));
+/** Opens or closes the window of the search and the filters. */
+export function setFindOpen(open: boolean): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, findOpen: open } }));
+}
+
+/** Switches the module of the window of the search. */
+export function setFindMode(mode: FindMode): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, findMode: mode } }));
 }
 
 /** Opens or closes the command palette. */
@@ -1093,7 +1133,9 @@ export interface AppActions {
   restoreDraft(): void;
   discardDraft(): void;
   setMode(mode: ViewMode): void;
-  setSearchOpen(open: boolean): void;
+  setFindOpen(open: boolean): void;
+  setFindMode(mode: FindMode): void;
+  closeNote(): Promise<void>;
   setPaletteOpen(open: boolean): void;
   togglePalette(): void;
   toggleDrawer(): void;
@@ -1167,7 +1209,9 @@ export const actions: AppActions = {
   restoreDraft,
   discardDraft,
   setMode,
-  setSearchOpen,
+  setFindOpen,
+  setFindMode,
+  closeNote,
   setPaletteOpen,
   togglePalette,
   toggleDrawer,

@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { gotoApp, openSidebarIfNeeded } from '../helpers/app';
+import { gotoApp } from '../helpers/app';
 
 /**
  * The state of the connection with the backend.
  *
  * The application used to show a red banner ("Noto is offline: the server
  * could not be reached.") as soon as a request failed. A lost connection is a
- * state, not an error: the indicator of the explorer shows it, and the banner
+ * state, not an error: the indicator of the status bar shows it, and the banner
  * stays for the real errors.
  *
  * The service worker is blocked in these tests: it answers the requests of the
@@ -18,7 +18,6 @@ test.describe('the connection with the backend', () => {
 
   test('the indicator is green while the backend answers', async ({ page }) => {
     await gotoApp(page);
-    await openSidebarIfNeeded(page);
 
     const indicator = page.getByRole('status', { name: 'Backend connected' });
     await expect(indicator).toBeVisible();
@@ -27,7 +26,6 @@ test.describe('the connection with the backend', () => {
 
   test('the indicator turns red when the backend stops answering', async ({ page }) => {
     await gotoApp(page);
-    await openSidebarIfNeeded(page);
 
     const connected = page.getByRole('status', { name: 'Backend connected' });
     await expect(connected).toBeVisible();
@@ -51,7 +49,6 @@ test.describe('the connection with the backend', () => {
 
   test('the indicator can be retried with a click', async ({ page }) => {
     await gotoApp(page);
-    await openSidebarIfNeeded(page);
 
     let blocked = true;
     await page.route('**/api/health', async (route) => {

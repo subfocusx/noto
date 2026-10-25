@@ -24,6 +24,7 @@ test.describe('the rail of the sections', () => {
 
     for (const name of [
       'Explorer',
+      'Favorites',
       'Calendar',
       'Search',
       'Filters',
@@ -61,13 +62,39 @@ test.describe('the rail of the sections', () => {
       'page',
     );
 
-    await page.getByRole('button', { name: 'Filters', exact: true }).click();
-    await expect(page.locator('.column-section[aria-label="Filters"]')).toBeVisible();
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await expect(page.locator('.column-section[aria-label="History"]')).toBeVisible();
     await expect(page.locator('.column-section[aria-label="Explorer"]')).toHaveCount(0);
 
     // Exactly one section is open at a time.
     await expect(page.locator('.column-section')).toHaveCount(1);
     await expect(page.locator('.rail-item[aria-current="page"]')).toHaveCount(1);
+  });
+
+  test('the search and the filters open one window over the explorer', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    // The magnifier opens the window with the search.
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Search' })).toHaveAttribute('aria-selected', 'true');
+    // The column of the explorer keeps the tree: the window does not replace it.
+    await expect(page.locator('.column-section[aria-label="Explorer"]')).toBeVisible();
+
+    // The funnel opens the same window in the other module.
+    await page.getByRole('tab', { name: 'Filters' }).click();
+    await expect(page.getByRole('tab', { name: 'Filters' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page.getByLabel('Filter of the notes')).toBeVisible();
+    await expect(page.locator('.column-section[aria-label="Explorer"]')).toBeVisible();
+
+    // Escape closes the window, and the column is still the explorer.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Search notes' })).toHaveCount(0);
+    await expect(page.locator('.column-section[aria-label="Explorer"]')).toBeVisible();
   });
 
   test('the column of the notes cannot be hidden', async ({ page }) => {

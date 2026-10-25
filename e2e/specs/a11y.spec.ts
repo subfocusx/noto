@@ -44,12 +44,13 @@ test.describe('the keyboard operation', () => {
     const search = page.getByRole('button', { name: 'Search', exact: true });
     await search.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('.column-section[aria-label="Search"]')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Search' })).toHaveAttribute('aria-selected', 'true');
 
     const filters = page.getByRole('button', { name: 'Filters', exact: true });
     await filters.focus();
     await page.keyboard.press('Enter');
-    await expect(page.locator('.column-section[aria-label="Filters"]')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Filters' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('every interactive element has an accessible name', async ({ page }) => {

@@ -69,14 +69,32 @@ test.describe('the shell of the application', () => {
     await expect(archive).toHaveAttribute('title', 'Not implemented yet');
   });
 
-  test('the search is a section of the rail', async ({ page }) => {
+  test('the search opens a window over the application', async ({ page }) => {
     await gotoApp(page);
 
-    // The search is a section of the rail: the column shows the field of the
-    // search and its results.
+    // The search is a window over the application: the magnifier of the rail
+    // opens it, and the column of the explorer keeps the tree.
     await page.getByRole('button', { name: 'Search', exact: true }).click();
-    await expect(page.locator('.column-section[aria-label="Search"]')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Search notes' })).toBeVisible();
     await expect(page.getByLabel('Search query').first()).toBeVisible();
+    await expect(page.locator('.column-section[aria-label="Explorer"]')).toBeVisible();
+  });
+
+  test('the last tab closes the note with it', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    // A note is opened from the tree.
+    const file = page.locator('button.tree-file-button').first();
+    await file.click();
+    await expect(page.locator('.tab-strip .tab')).toHaveCount(1);
+
+    // Closing the tab closes the note: the strip is gone and the editor is
+    // empty. The name of the note must not hang in the breadcrumbs.
+    await page.getByRole('button', { name: /^Close / }).first().click();
+    await expect(page.locator('.tab-strip')).toHaveCount(0);
+    await expect(page.getByText('Pick a note in the sidebar or create a new one.')).toBeVisible();
+    await expect(page.locator('.app-breadcrumbs')).toHaveCount(0);
   });
 
   test('the command palette opens from its own icon', async ({ page }) => {

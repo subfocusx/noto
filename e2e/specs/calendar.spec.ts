@@ -4,7 +4,8 @@
  * The section shows a month of the vault: the day of the machine carries a
  * dot, the days that carry notes are tinted, and the notes of the day the user
  * picked are listed under the grid. The data comes from the tree — a note
- * belongs to the day it was written on and to the day it was changed on.
+ * belongs to the day it was written on and to the day it was changed on, and a
+ * daily note (a note whose name is a day) belongs to the day of its name.
  */
 import { expect, test } from '@playwright/test';
 import { gotoApp, openSidebarIfNeeded } from '../helpers/app';
@@ -69,6 +70,47 @@ test.describe('the calendar of the vault', () => {
     await expect(section.locator('.calendar-day-selected')).toHaveCount(1);
     await expect(section.locator('.calendar-note-list')).toBeVisible();
     await expect(section.locator('.calendar-note-name').filter({ hasText: note })).toHaveCount(1);
+  });
+
+  test('a daily note belongs to the day of its name', async ({ page }) => {
+    await gotoApp(page);
+    await openSidebarIfNeeded(page);
+
+    // A note named after a day three days ahead: it belongs to that day and
+    // not to the day it was written on.
+    const target = new Date(Date.now() + 3 * 86_400_000);
+    const monthLabel = target.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const dayNumber = String(target.getDate());
+    const name = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${dayNumber}.md`;
+    await page.evaluate(async (fileName) => {
+      await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: '', name: fileName }),
+      });
+    }, name);
+    await page.reload();
+    await openSidebarIfNeeded(page);
+
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+    const section = page.locator('.column-section[aria-label="Calendar"]');
+    await expect(section).toBeVisible();
+
+    // The day of the note is at most one month ahead.
+    const label = section.locator('.calendar-month');
+    for (let step = 0; step < 3; step += 1) {
+      if ((await label.innerText()) === monthLabel) break;
+      await section.getByRole('button', { name: 'Next month' }).click();
+      await page.waitForTimeout(150);
+    }
+    await expect(label).toHaveText(monthLabel);
+
+    // The day of the name is tinted: the note belongs to that day and not to
+    // the day it was written on.
+    const marked = section.locator('.calendar-day-has-notes').filter({
+      hasText: new RegExp(`^${dayNumber}$`),
+    });
+    await expect(marked).toHaveCount(1);
   });
 
   test('a reminder of the picked day can be added and removed', async ({ page }) => {

@@ -176,14 +176,20 @@ test.describe('the buttons of the shell', () => {
     }
 
     // The filter of the tree: only the tagged note stays. The constructor of
-    // the selection lives in the section of the filters, the tree lives in the
-    // section of the explorer: the rail switches between them.
+    // the selection lives in the window of the filters, the tree lives in the
+    // section of the explorer.
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
     const field = page.getByLabel('Filter of the notes');
     await field.fill(`tag == '${tagged}'`);
     await expect(page.getByText('1 note matches')).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole('button', { name: 'Explorer', exact: true }).click();
+    // The notes that matched are listed in the window itself.
+    await expect(page.getByTestId('find-results').locator('.find-result-name')).toHaveText(
+      `${tagged}.md`,
+    );
+
+    // The tree behind keeps only the matching note.
+    await page.keyboard.press('Escape');
     await expect(treeFile(page, `${tagged}.md`)).toBeVisible({ timeout: 10_000 });
     await expect(treeFile(page, `${plain}.md`)).toHaveCount(0);
 
@@ -193,7 +199,7 @@ test.describe('the buttons of the shell', () => {
     // The clear of the filter brings the whole tree back.
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await page.getByRole('button', { name: 'Clear the filter' }).click();
-    await page.getByRole('button', { name: 'Explorer', exact: true }).click();
+    await page.keyboard.press('Escape');
     await expect(treeFile(page, `${plain}.md`)).toBeVisible();
   });
 
@@ -209,7 +215,7 @@ test.describe('the buttons of the shell', () => {
     await page.keyboard.insertText(`#${note}\n`);
     await waitForSaved(page);
 
-    // The chips of the tags of the vault live in the section of the filters.
+    // The chips of the tags of the vault live in the module of the filters.
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
     const chip = page.locator('.q9-chip-tag').filter({ hasText: `#${note}` });
     await expect(chip).toBeVisible();

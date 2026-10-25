@@ -125,12 +125,12 @@ describe('app store', () => {
   it('notifies the subscribers on every state change', async () => {
     const listener = vi.fn();
     const unsubscribe = appStore.subscribe(listener);
-    appStore.actions.setMode('preview');
-    expect(appStore.getSnapshot().ui.mode).toBe('preview');
+    appStore.actions.setMode('view');
+    expect(appStore.getSnapshot().ui.mode).toBe('view');
     expect(listener).toHaveBeenCalled();
     unsubscribe();
     listener.mockClear();
-    appStore.actions.setMode('editor');
+    appStore.actions.setMode('edit');
     expect(listener).not.toHaveBeenCalled();
     appStore.reset();
   });

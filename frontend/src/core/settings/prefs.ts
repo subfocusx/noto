@@ -137,7 +137,7 @@ export const AUTO_LOCK_MINUTES_MAX = 120;
 /** The defaults of the preferences. */
 export const DEFAULT_PREFS: Prefs = {
   theme: 'dark',
-  mode: 'split',
+  mode: 'edit',
   railSection: 'explorer',
   sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
   treeSort: 'name',
@@ -226,9 +226,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
       ? source.theme
       : (fallbackTheme ?? DEFAULT_PREFS.theme);
   const mode: ViewMode =
-    source.mode === 'editor' || source.mode === 'split' || source.mode === 'preview'
-      ? source.mode
-      : DEFAULT_PREFS.mode;
+    source.mode === 'edit' || source.mode === 'view' ? source.mode : DEFAULT_PREFS.mode;
   const treeSort: TreeSort =
     source.treeSort === 'modified' || source.treeSort === 'name'
       ? source.treeSort

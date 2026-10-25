@@ -658,8 +658,22 @@ export async function confirmDialog(): Promise<void> {
 
 /* --------------------------------------------------------------------- ui */
 
+/** Puts the note in the given mode (the editor or the reading of the note). */
 export function setMode(mode: ViewMode): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, mode } }));
+  persistPrefs();
+}
+
+/**
+ * Switches the note between the editing and the reading mode.
+ *
+ * The pencil of the strip of the tabs calls it: one element, two modes.
+ */
+export function toggleMode(): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, mode: prev.ui.mode === 'edit' ? 'view' : 'edit' },
+  }));
   persistPrefs();
 }
 
@@ -1346,6 +1360,7 @@ export interface AppActions {
   restoreDraft(): void;
   discardDraft(): void;
   setMode(mode: ViewMode): void;
+  toggleMode(): void;
   setFindOpen(open: boolean): void;
   setFindMode(mode: FindMode): void;
   closeNote(): Promise<void>;
@@ -1433,6 +1448,7 @@ export const actions: AppActions = {
   restoreDraft,
   discardDraft,
   setMode,
+  toggleMode,
   setFindOpen,
   setFindMode,
   closeNote,

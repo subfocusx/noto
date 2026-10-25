@@ -31,16 +31,20 @@ export interface EditorTabsProps {
   /** Opens an empty tab; the button is not shown when it is missing. */
   onNewTab?(): void;
   /**
-   * The toggle of the preview of the note.
+   * The switch between the editing and the reading of the note.
    *
-   * It stands in the strip of the tabs, at its right end.
+   * It stands in the strip of the tabs, at its right end. One element, two
+   * modes: the pencil is the same in both of them, it is pressed while the
+   * note is edited.
    */
-  onTogglePreview?: {
-    /** The label of the button (the text of the interface). */
+  onToggleMode?: {
+    /** The name of the current mode (the label of the button). */
     label: string;
-    /** True when the preview is on the screen. */
+    /** The action of the button (the tooltip). */
+    title: string;
+    /** True when the note is edited (the pencil is pressed). */
     pressed: boolean;
-    /** Opens or closes the preview. */
+    /** Switches the mode of the note. */
     onClick(): void;
   };
 }
@@ -156,20 +160,22 @@ export function EditorTabs(props: EditorTabsProps) {
         </button>
       ) : null}
       {/*
-        The toggle of the preview stands in the strip of the tabs: the strip is
-        the header of the column of the editor, and a button beside it (outside
-        the strip) would break the line of the headers of the interface.
+        The pencil stands in the strip of the tabs: the strip is the header of
+        the column of the editor, and a button beside it (outside the strip)
+        would break the line of the headers of the interface. One button, two
+        modes: the note is either edited or read, never both at once.
       */}
-      {props.onTogglePreview ? (
+      {props.onToggleMode ? (
         <button
           type="button"
-          class="icon-button tab-preview"
-          aria-label={props.onTogglePreview.label}
-          title={props.onTogglePreview.label}
-          aria-pressed={props.onTogglePreview.pressed ? 'true' : 'false'}
-          onClick={() => props.onTogglePreview?.onClick()}
+          class="icon-button tab-mode"
+          aria-label={props.onToggleMode.label}
+          title={props.onToggleMode.title}
+          aria-pressed={props.onToggleMode.pressed ? 'true' : 'false'}
+          data-testid="tab-mode"
+          onClick={() => props.onToggleMode?.onClick()}
         >
-          <Icon name="eye" size={14} />
+          <Icon name="pencil" size={14} />
         </button>
       ) : null}
     </div>

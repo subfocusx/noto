@@ -790,6 +790,17 @@ every chip of the sound at once. The `play()` was not broken: the test note
 referred to a file of eight bytes, and the browser answered `NotSupportedError`
 — the chips work with a real recording.
 
+### The one pencil of the note (card P17-6)
+
+The note was shown in two windows at once: the editor of the text and the
+preview of the rendered Markdown beside it. Two windows for one note are one
+window too many — the user asked for one element that switches the note
+between the editing and the reading, the way Obsidian does it.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P17-6 | **One pencil, two modes.** The eye of the strip of the tabs is gone: the pencil takes its place and switches the pane of the note between the editor and the reading. The mode is the state of the store (`ui.mode`), it goes into the preferences and survives a reload. The modes `editor`, `split` and `preview` of the earlier releases are gone — a stored value that is not a mode any more falls back to the editing | done | `frontend/src/components/EditorTabs.tsx`, `frontend/src/App.tsx`, `frontend/src/core/store/{types,actions}.ts`, `frontend/src/core/settings/prefs.ts`, `frontend/src/__tests__/{app,editorTabs,prefs,store}.test.*`, `e2e/specs/editor.spec.ts` |
+
 ---
 
 ## Closed phases

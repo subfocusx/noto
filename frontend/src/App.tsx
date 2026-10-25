@@ -238,8 +238,9 @@ export function App() {
   // of the callbacks stable, so the host of the plugins is not rebuilt.
   const focusStateRef = useRef<FocusModeState>(initialFocusModeState);
   const [focusMode, setFocusMode] = useState<FocusModeState>(initialFocusModeState);
-  // The preview of the note (the rendered Markdown and the presentations).
-  const [previewOpen, setPreviewOpen] = useState(false);
+  // The mode of the note: it is either edited or read. The pencil of the
+  // strip of the tabs switches between the two.
+  const viewMode = state.ui.mode;
   const toggleFocusRef = useRef<() => void>(() => undefined);
   toggleFocusRef.current = () => {
     const next = toggleFocusModeState(focusStateRef.current);
@@ -815,7 +816,7 @@ export function App() {
   } | null>(null);
 
   const needLazyPanels =
-    pluginsOpen || dialog.kind === 'trash' || dialog.kind === 'transfer' || previewOpen;
+    pluginsOpen || dialog.kind === 'trash' || dialog.kind === 'transfer' || viewMode === 'view';
 
   useEffect(() => {
     if (!needLazyPanels || lazyPanels) return;
@@ -1270,10 +1271,11 @@ export function App() {
               // leave the note (and its name) on the screen.
               if (path === note.path && rest.length === 0) void actions.closeNote();
             }}
-            onTogglePreview={{
-              label: previewOpen ? t('app.hidePreview') : t('app.showPreview'),
-              pressed: previewOpen,
-              onClick: () => setPreviewOpen((open) => !open),
+            onToggleMode={{
+              label: viewMode === 'edit' ? t('app.editMode') : t('app.viewMode'),
+              title: viewMode === 'edit' ? t('app.switchToView') : t('app.switchToEdit'),
+              pressed: viewMode === 'edit',
+              onClick: () => actions.toggleMode(),
             }}
           />
 
@@ -1292,48 +1294,55 @@ export function App() {
           ) : null}
 
           <div class="workspace-panes">
-          <div class="pane pane-editor">            <PluginToolbarSlot items={pluginToolbarItems} />
-            <EditorToolbar handle={editorHandle} />
-            <MarkdownEditor
-              value={note.content}
-              path={note.path ?? ''}
-              contentPath={note.contentPath}
-              fontSize={ui.editorFontSize}
-              wrap={ui.editorWrap}
-              onChange={actions.editContent}
-              onSave={actions.explicitSave}
-              onHandle={(handle) => {
-                editorRef.current = handle;
-                setEditorHandle(handle);
-                // The position of the cursor is shown in the status bar and
-                // marks the active heading of the outline.
-                const unsubscribe = handle.onSelectionChange((range) => {
-                  const text = handle.getText();
-                  const upTo = text.slice(0, range.from);
-                  const line = upTo.split('\n').length;
-                  const column = range.from - (upTo.lastIndexOf('\n') + 1) + 1;
-                  setCursor({ line, column });
-                });
-                cursorUnsubscribe.current = unsubscribe;
-              }}
-            />
-            {!note.path ? (
-              <div class="empty-state" data-testid="empty-state">
-                <Icon name="file-text" size={32} class="empty-state-icon" />
-                <h2>{t('app.noNoteSelected')}</h2>
-                <p>{t('app.noNoteSelectedHint')}</p>
+            {/*
+              One window, two states: the note is either edited or read. The
+              editor and the preview do not stand side by side — the pencil of
+              the strip of the tabs switches between them.
+            */}
+            {viewMode === 'view' && note.path && lazyPanels ? (
+              <div class="pane pane-preview only-preview">
+                <lazyPanels.Preview
+                  source={note.content}
+                  resolve={wikiResolver}
+                  onOpenNote={(path) => void openNote(path)}
+                />
               </div>
-            ) : null}
-          </div>
-          {previewOpen && note.path && lazyPanels ? (
-            <div class="pane pane-preview">
-              <lazyPanels.Preview
-                source={note.content}
-                resolve={wikiResolver}
-                onOpenNote={(path) => void openNote(path)}
-              />
-            </div>
-          ) : null}
+            ) : (
+              <div class="pane pane-editor">
+                <PluginToolbarSlot items={pluginToolbarItems} />
+                <EditorToolbar handle={editorHandle} />
+                <MarkdownEditor
+                  value={note.content}
+                  path={note.path ?? ''}
+                  contentPath={note.contentPath}
+                  fontSize={ui.editorFontSize}
+                  wrap={ui.editorWrap}
+                  onChange={actions.editContent}
+                  onSave={actions.explicitSave}
+                  onHandle={(handle) => {
+                    editorRef.current = handle;
+                    setEditorHandle(handle);
+                    // The position of the cursor is shown in the status bar and
+                    // marks the active heading of the outline.
+                    const unsubscribe = handle.onSelectionChange((range) => {
+                      const text = handle.getText();
+                      const upTo = text.slice(0, range.from);
+                      const line = upTo.split('\n').length;
+                      const column = range.from - (upTo.lastIndexOf('\n') + 1) + 1;
+                      setCursor({ line, column });
+                    });
+                    cursorUnsubscribe.current = unsubscribe;
+                  }}
+                />
+                {!note.path ? (
+                  <div class="empty-state" data-testid="empty-state">
+                    <Icon name="file-text" size={32} class="empty-state-icon" />
+                    <h2>{t('app.noNoteSelected')}</h2>
+                    <p>{t('app.noNoteSelectedHint')}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         </main>
 

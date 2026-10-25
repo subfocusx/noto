@@ -151,4 +151,39 @@ test.describe('editor', () => {
     const injected = await page.evaluate(() => (window as unknown as { __x?: number }).__x);
     expect(injected).toBeUndefined();
   });
+
+  /**
+   * One pencil, two modes.
+   *
+   * The note is either edited or read: the pencil of the strip of the tabs
+   * switches between the two, there is no second window beside the editor.
+   */
+  test('the pencil switches the note between the editing and the reading', async ({ page }) => {
+    await gotoApp(page);
+
+    const folder = 'E2E Pencil Folder';
+    const note = 'pencil-note.md';
+
+    await createFolder(page, folder);
+    await createNote(page, folder, note);
+    await typeInEditor(page, MARKDOWN);
+    await waitForSaved(page);
+
+    const pencil = page.getByTestId('tab-mode');
+    // The note is edited: the pencil is pressed.
+    await expect(pencil).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('markdown-editor')).toBeVisible();
+
+    // One click: the editor gives its place to the reading of the note.
+    await pencil.click();
+    await expect(page.getByTestId('preview')).toBeVisible();
+    await expect(page.getByTestId('markdown-editor')).toHaveCount(0);
+    await expect(pencil).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('preview')).toContainText('E2E Заголовок');
+
+    // The same pencil brings the editor back.
+    await pencil.click();
+    await expect(page.getByTestId('markdown-editor')).toBeVisible();
+    await expect(page.getByTestId('preview')).toHaveCount(0);
+  });
 });

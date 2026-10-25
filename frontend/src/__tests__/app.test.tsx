@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/preact';
 import { App } from '../App';
 import { setVault } from '../api/client';
+import { appStore } from '../core/store/appStore';
 
 vi.mock('../api/client', () => ({
   ApiError: class ApiError extends Error {},
@@ -67,7 +68,17 @@ vi.mock('../api/client', () => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // The store is a singleton: every test starts from a clean state.
+  appStore.reset();
 });
+
+/** Opens the folder of the tree and the note that is inside it. */
+async function openNoteInTheTree(view: ReturnType<typeof render>): Promise<void> {
+  const expand = view.queryByLabelText('Expand journal');
+  if (expand) fireEvent.click(expand);
+  fireEvent.click(view.getByText('a.md'));
+  await waitFor(() => expect(view.getByTestId('markdown-editor')).toBeTruthy());
+}
 
 describe('app shell', () => {
   it('renders the tree, the status indicator and the empty state', async () => {
@@ -86,10 +97,37 @@ describe('app shell', () => {
     expect(view.queryByTestId('empty-state')).toBeNull();
   });
 
-  it('has no view mode control', async () => {
+  it('has one control of the mode: the pencil of the strip of the tabs', async () => {
     const view = render(<App />);
+    await waitFor(() => expect(view.getByTestId('file-tree')).toBeTruthy());
+    await openNoteInTheTree(view);
+
+    // One button, two modes: there is no separate selector of the mode.
+    expect(view.getByTestId('tab-mode')).toBeTruthy();
     expect(view.queryByLabelText('View mode')).toBeNull();
     expect(view.queryByText('View mode')).toBeNull();
+  });
+
+  it('switches the note between the editing and the reading with that pencil', async () => {
+    const view = render(<App />);
+    await waitFor(() => expect(view.getByTestId('file-tree')).toBeTruthy());
+    await openNoteInTheTree(view);
+
+    // The note is edited: the pencil is pressed.
+    const pencil = view.getByTestId('tab-mode');
+    expect(pencil.getAttribute('aria-pressed')).toBe('true');
+
+    // One click: the editor gives its place to the reading of the note.
+    // The renderer of the Markdown lives in its own chunk: it takes a moment.
+    fireEvent.click(pencil);
+    await waitFor(() => expect(view.getByTestId('preview')).toBeTruthy(), { timeout: 5000 });
+    expect(view.queryByTestId('markdown-editor')).toBeNull();
+    expect(view.getByTestId('tab-mode').getAttribute('aria-pressed')).toBe('false');
+
+    // The same pencil brings the editor back.
+    fireEvent.click(view.getByTestId('tab-mode'));
+    await waitFor(() => expect(view.getByTestId('markdown-editor')).toBeTruthy());
+    expect(view.queryByTestId('preview')).toBeNull();
   });
 
   it('keeps the dialog of the storage open when the switch fails', async () => {

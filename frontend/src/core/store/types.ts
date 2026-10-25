@@ -10,7 +10,14 @@ import type { ConnectionState } from '../connection/types';
 import type { Notification } from '../notifications/types';
 import type { Reminder } from '../reminders/types';
 
-export type ViewMode = 'editor' | 'split' | 'preview';
+/**
+ * The mode of the note that is open.
+ *
+ * The note is either edited or read: the pane of the editor shows one of the
+ * two, and the pencil of the strip of the tabs switches between them. There is
+ * no third mode: two windows for one note were one window too many.
+ */
+export type ViewMode = 'edit' | 'view';
 
 /**
  * The section of the left column that the rail shows.

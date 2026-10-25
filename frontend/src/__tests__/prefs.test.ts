@@ -35,7 +35,7 @@ describe('preferences', () => {
       PREFS_KEY,
       JSON.stringify({
         theme: 'light',
-        mode: 'editor',
+        mode: 'view',
         railSection: 'calendar',
         sidebarWidth: 320,
         treeSort: 'modified',
@@ -47,7 +47,7 @@ describe('preferences', () => {
     );
     const prefs = loadPrefs();
     expect(prefs.theme).toBe('light');
-    expect(prefs.mode).toBe('editor');
+    expect(prefs.mode).toBe('view');
     expect(prefs.railSection).toBe('calendar');
     expect(prefs.sidebarWidth).toBe(320);
     expect(prefs.treeSort).toBe('modified');
@@ -66,7 +66,8 @@ describe('preferences', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: 'neon', mode: 'split', sidebarWidth: 9999 }));
     const prefs = loadPrefs();
     expect(prefs.theme).toBe(DEFAULT_PREFS.theme);
-    expect(prefs.mode).toBe('split');
+    // The old modes are gone: a broken value falls back to the editing.
+    expect(prefs.mode).toBe(DEFAULT_PREFS.mode);
     expect(prefs.sidebarWidth).toBe(SIDEBAR_WIDTH_MAX);
   });
 
@@ -121,7 +122,8 @@ describe('preferences', () => {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ theme: 'light', mode: 'split' }));
     const prefs = loadPrefs();
     expect(prefs.theme).toBe('light');
-    expect(prefs.mode).toBe('split');
+    // The mode of the earlier releases is gone: the editing is the default.
+    expect(prefs.mode).toBe(DEFAULT_PREFS.mode);
     expect(prefs.rightPanelWidth).toBe(RIGHT_PANEL_WIDTH_DEFAULT);
     expect(prefs.recentCollapsed).toBe(false);
     expect(prefs.treeShowCounts).toBe(true);
@@ -139,11 +141,11 @@ describe('preferences', () => {
   });
 
   it('writes the preferences back', () => {
-    savePrefs({ ...DEFAULT_PREFS, theme: 'light', mode: 'preview' });
+    savePrefs({ ...DEFAULT_PREFS, theme: 'light', mode: 'view' });
     const raw = localStorage.getItem(PREFS_KEY);
     expect(raw).toBeTruthy();
     expect(loadPrefs().theme).toBe('light');
-    expect(loadPrefs().mode).toBe('preview');
+    expect(loadPrefs().mode).toBe('view');
   });
 
   it('writes the new preferences back', () => {

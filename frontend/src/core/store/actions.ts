@@ -1017,6 +1017,8 @@ export async function chooseVault(path: string): Promise<void> {
         vaultConfigured: true,
         vaultPath: chosen,
         vaultBusy: false,
+        // The server accepted the change: the storage is not fixed any more.
+        vaultFixed: false,
         vaultRecents: pushVaultRecent(prev.ui.vaultRecents, chosen),
       },
     }));

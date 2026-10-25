@@ -1149,6 +1149,14 @@ export function App() {
             vaultMenuOpen={ui.vaultMenuOpen}
             onVaultMenuToggle={actions.setVaultMenuOpen}
             onSwitchVault={(path) => void actions.chooseVault(path)}
+            vaultMode={vaultSession.mode}
+            vaultLocked={vaultSession.locked}
+            onVaultLock={() => {
+              // An encrypted storage is locked; an open one has no key to
+              // forget, so the same button opens the wizard of the encryption.
+              if (vaultSession.mode === 'sealed') void lockVault();
+              else setVaultSetupOpen(true);
+            }}
             sidebarWidth={ui.sidebarWidth}
             onResizeWidth={actions.setSidebarWidth}
             recentCollapsed={ui.recentCollapsed}
@@ -1460,6 +1468,10 @@ export function App() {
         onOpenTransfer={() => {
           actions.setSettingsOpen(false);
           actions.openDialog({ kind: 'transfer' });
+        }}
+        onSetUpEncrypted={() => {
+          actions.setSettingsOpen(false);
+          setVaultSetupOpen(true);
         }}
         />
       ) : null}

@@ -198,6 +198,60 @@ describe('the header of the storage', () => {
   });
 });
 
+describe('the lock of the storage in the header', () => {
+  /** Renders the sidebar of the explorer with the given mode of the storage. */
+  function renderStorage(mode: 'open' | 'sealed', locked = false, onVaultLock = vi.fn()) {
+    const { roots, filesByParent } = buildTree([folder('journal', 'journal')], []);
+    render(
+      <Sidebar
+        section="explorer"
+        folders={roots}
+        filesByParent={filesByParent}
+        currentPath=""
+        expanded={new Set<string>()}
+        onToggle={() => undefined}
+        onSelect={() => undefined}
+        onCreateFolder={() => undefined}
+        onCreateFile={() => undefined}
+        onRename={() => undefined}
+        onMove={() => undefined}
+        onDelete={() => undefined}
+        onOpenTransfer={() => undefined}
+        onRefresh={() => undefined}
+        loading={false}
+        vaultPath="C:\\notes"
+        vaultMode={mode}
+        vaultLocked={locked}
+        onVaultLock={onVaultLock}
+        onChooseVault={() => undefined}
+      />,
+    );
+    return onVaultLock;
+  }
+
+  it('locks an encrypted storage', () => {
+    const onVaultLock = renderStorage('sealed');
+
+    const button = screen.getByRole('button', { name: 'Lock the vault' });
+    fireEvent.click(button);
+    expect(onVaultLock).toHaveBeenCalled();
+  });
+
+  it('offers the wizard of the encryption for an open storage', () => {
+    const onVaultLock = renderStorage('open');
+
+    const button = screen.getByRole('button', { name: 'Set up an encrypted storage' });
+    fireEvent.click(button);
+    expect(onVaultLock).toHaveBeenCalled();
+  });
+
+  it('offers the unlocking of a locked storage', () => {
+    renderStorage('sealed', true);
+
+    expect(screen.getByRole('button', { name: 'Unlock the vault' })).toBeTruthy();
+  });
+});
+
 describe('the session of the storage', () => {
   it('keeps the mode of an open storage when it is locked', async () => {
     const before = getVaultSessionState();

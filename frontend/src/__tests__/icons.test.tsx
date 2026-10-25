@@ -50,6 +50,8 @@ describe('the icon registry', () => {
       'hash',
       'image',
       'link',
+      'lock',
+      'lock-open',
       'menu',
       'moon',
       'more-horizontal',

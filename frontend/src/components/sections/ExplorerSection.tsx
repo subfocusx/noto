@@ -63,6 +63,17 @@ export interface ExplorerSectionProps {
   vaultRecents?: string[];
   /** True when the quick menu of the storage is open. */
   vaultMenuOpen?: boolean;
+  /** The mode of the storage of the notes. */
+  vaultMode?: 'open' | 'sealed';
+  /** True when the storage is encrypted and locked. */
+  vaultLocked?: boolean;
+  /**
+   * Called when the user presses the lock of the storage.
+   *
+   * The action depends on the mode: an encrypted storage is locked, an open
+   * one is offered the wizard of the encryption.
+   */
+  onVaultLock?(): void;
   /** Called when the user opens or closes the quick menu of the storage. */
   onVaultMenuToggle?(open: boolean): void;
   /** Called when the user chooses a storage from the menu. */
@@ -113,6 +124,20 @@ export function ExplorerSection(props: ExplorerSectionProps) {
     if (props.vaultFixed) return;
     props.onVaultMenuToggle?.(!props.vaultMenuOpen);
   };
+
+  /**
+   * The action of the lock of the storage.
+   *
+   * An encrypted storage has a key that can be forgotten; an open storage has
+   * none, so the same slot offers the wizard of the encryption instead.
+   */
+  const lockLabel =
+    props.vaultMode === 'sealed'
+      ? props.vaultLocked
+        ? 'Unlock the vault'
+        : 'Lock the vault'
+      : 'Set up an encrypted storage';
+  const lockIcon = props.vaultMode === 'sealed' && props.vaultLocked ? 'lock-open' : 'lock';
 
   /**
    * The tree of the notes, filtered by the query of the user.
@@ -259,6 +284,15 @@ export function ExplorerSection(props: ExplorerSectionProps) {
             </button>
           ) : null}
         </span>
+        <button
+          type="button"
+          class="icon-button"
+          title={lockLabel}
+          aria-label={lockLabel}
+          onClick={() => props.onVaultLock?.()}
+        >
+          <Icon name={lockIcon} size={15} />
+        </button>
         <button
           type="button"
           class="icon-button"

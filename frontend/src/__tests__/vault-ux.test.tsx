@@ -15,7 +15,7 @@ const session = vi.hoisted(() => ({
   refreshVaultStatus: vi.fn(async () => ({ mode: 'sealed', format: 1, objectCount: 0, generations: [] })),
   getStorageName: vi.fn(async () => 'Notes'),
   getVaultSessionState: vi.fn(() => ({
-    mode: 'sealed' as const,
+    mode: 'sealed' as 'open' | 'sealed',
     locked: false,
     detecting: false,
     formatVersion: 1,
@@ -243,6 +243,49 @@ describe('the section of the security in the settings', () => {
     await waitFor(() => expect(screen.getByTestId('vault-security-check-result')).not.toBeNull());
     expect(screen.getByTestId('vault-security-check-result').textContent).toContain('12');
     expect(screen.getByTestId('vault-security-broken').textContent).toContain('abc123');
+  });
+});
+
+describe('the settings of an open storage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    session.getVaultSessionState.mockReturnValue({
+      mode: 'open',
+      locked: false,
+      detecting: false,
+      formatVersion: 0,
+    });
+    session.subscribeVaultSession.mockReturnValue(() => undefined);
+  });
+
+  it('offers no action of an encrypted storage', () => {
+    render(<VaultSecuritySection />);
+
+    // An open storage has no key, no password and no sealed objects: the
+    // actions of an encrypted storage have no meaning here.
+    expect(screen.queryByTestId('vault-security-lock')).toBeNull();
+    expect(screen.queryByTestId('vault-security-change-password')).toBeNull();
+    expect(screen.queryByTestId('vault-security-auto-lock')).toBeNull();
+    expect(screen.queryByTestId('vault-security-check')).toBeNull();
+    expect(screen.queryByTestId('vault-security-recovery')).toBeNull();
+    expect(screen.queryByTestId('vault-security-format')).toBeNull();
+  });
+
+  it('shows the state of the storage and the wizard of the encryption', () => {
+    const onSetUpEncrypted = vi.fn();
+    render(<VaultSecuritySection onSetUpEncrypted={onSetUpEncrypted} />);
+
+    expect(screen.getByTestId('vault-security-mode').textContent).toBe('Plain (not encrypted)');
+
+    fireEvent.click(screen.getByTestId('vault-security-setup'));
+    expect(onSetUpEncrypted).toHaveBeenCalled();
+  });
+
+  it('does not even ask the backend about the format', () => {
+    render(<VaultSecuritySection />);
+
+    expect(session.refreshVaultStatus).not.toHaveBeenCalled();
+    expect(session.hasRecoveryKey).not.toHaveBeenCalled();
   });
 });
 

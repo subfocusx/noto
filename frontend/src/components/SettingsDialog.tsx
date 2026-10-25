@@ -44,6 +44,8 @@ export interface SettingsDialogProps {
   onOpenTrash(): void;
   /** Called to open the import and export panel. */
   onOpenTransfer(): void;
+  /** Called when the user asks to encrypt the storage of the notes. */
+  onSetUpEncrypted?(): void;
 }
 
 /** The themes of the application. */
@@ -239,7 +241,7 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
         </div>
       </section>
 
-      <VaultSecuritySection />
+      <VaultSecuritySection onSetUpEncrypted={props.onSetUpEncrypted} />
 
       <section class="settings-group">
         <h3>About</h3>

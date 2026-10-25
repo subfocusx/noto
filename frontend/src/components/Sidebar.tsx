@@ -91,6 +91,12 @@ export interface SidebarProps {
   vaultRecents?: string[];
   /** True when the quick menu of the storage is open. */
   vaultMenuOpen?: boolean;
+  /** The mode of the storage of the notes. */
+  vaultMode?: 'open' | 'sealed';
+  /** True when the storage is encrypted and locked. */
+  vaultLocked?: boolean;
+  /** Called when the user presses the lock of the storage. */
+  onVaultLock?(): void;
   /** Called when the user opens or closes the quick menu of the storage. */
   onVaultMenuToggle?(open: boolean): void;
   /** Called when the user chooses a storage from the menu. */
@@ -251,6 +257,9 @@ export function Sidebar(props: SidebarProps) {
           onChooseVault={props.onChooseVault}
           vaultRecents={props.vaultRecents}
           vaultMenuOpen={props.vaultMenuOpen}
+          vaultMode={props.vaultMode}
+          vaultLocked={props.vaultLocked}
+          onVaultLock={props.onVaultLock}
           onVaultMenuToggle={props.onVaultMenuToggle}
           onSwitchVault={props.onSwitchVault}
           showCounts={props.showCounts}

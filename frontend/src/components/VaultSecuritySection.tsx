@@ -34,6 +34,18 @@ export const SECURITY_CHECK_FAILED = 'The integrity check could not be run.';
 /** The message of a failed recovery key. */
 export const SECURITY_RECOVERY_FAILED = 'The recovery key was not enabled. Check the password.';
 
+/**
+ * The props of the section.
+ *
+ * The section itself is a view over the session of the vault; the only thing it
+ * asks from the shell is the wizard of the encrypted storage, which lives
+ * outside of the dialog of the settings.
+ */
+export interface VaultSecuritySectionProps {
+  /** Called when the user asks to encrypt the storage. */
+  onSetUpEncrypted?(): void;
+}
+
 /** The modes of the storage, as the interface names them. */
 const MODE_LABELS: Record<VaultSessionState['mode'], string> = {
   open: 'Plain (not encrypted)',
@@ -43,9 +55,11 @@ const MODE_LABELS: Record<VaultSessionState['mode'], string> = {
 /**
  * The section of the settings of the encrypted storage.
  *
- * The component has no props: everything it shows comes from the session.
+ * The section follows the mode of the storage: an open storage has no key, no
+ * password and no sealed objects, so the actions that belong to an encrypted
+ * storage are not offered at all. An open storage offers the wizard instead.
  */
-export function VaultSecuritySection() {
+export function VaultSecuritySection(props: VaultSecuritySectionProps) {
   const [session, setSession] = useState<VaultSessionState>(() => getVaultSessionState());
   const [lockMinutes, setLockMinutes] = useState<number>(
     () => loadPrefs().autoLockMinutes ?? AUTO_LOCK_MINUTES_DEFAULT,
@@ -70,13 +84,19 @@ export function VaultSecuritySection() {
   // The section follows the state of the session.
   useEffect(() => subscribeVaultSession(setSession), []);
 
+  // Only an encrypted storage has a format, a keystore and sealed objects: an
+  // open storage must not even load the crypto core.
+  const sealed = session.mode === 'sealed';
+
   // The version of the format of the storage comes from the backend.
   useEffect(() => {
+    if (!sealed) return;
     void refreshVaultStatus().catch(() => undefined);
-  }, []);
+  }, [sealed]);
 
   // The recovery key of the keystore is asked once.
   useEffect(() => {
+    if (!sealed) return;
     let cancelled = false;
     void hasRecoveryKey().then((enabled) => {
       if (!cancelled) setRecoveryEnabled(enabled);
@@ -84,7 +104,7 @@ export function VaultSecuritySection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sealed]);
 
   const lockNow = () => {
     void lockVault();
@@ -161,46 +181,52 @@ export function VaultSecuritySection() {
         <span data-testid="vault-security-mode">{MODE_LABELS[session.mode]}</span>
       </div>
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Format version</span>
-          <span>The version of the format of the encrypted storage</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Format version</span>
+            <span>The version of the format of the encrypted storage</span>
+          </div>
+          <span data-testid="vault-security-format">
+            {session.formatVersion > 0 ? session.formatVersion : 'unknown'}
+          </span>
         </div>
-        <span data-testid="vault-security-format">
-          {session.formatVersion > 0 ? session.formatVersion : 'unknown'}
-        </span>
-      </div>
+      ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Lock now</span>
-          <span>Forgets the key of the storage in this tab</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Lock now</span>
+            <span>Forgets the key of the storage in this tab</span>
+          </div>
+          <button type="button" class="text-button" onClick={lockNow} data-testid="vault-security-lock">
+            Lock now
+          </button>
         </div>
-        <button type="button" class="text-button" onClick={lockNow} data-testid="vault-security-lock">
-          Lock now
-        </button>
-      </div>
+      ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Change the password</span>
-          <span>The notes stay encrypted with the same key</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Change the password</span>
+            <span>The notes stay encrypted with the same key</span>
+          </div>
+          <button
+            type="button"
+            class="text-button"
+            onClick={() => {
+              setShowPasswordForm(!showPasswordForm);
+              setPasswordError(null);
+              setPasswordDone(false);
+            }}
+            data-testid="vault-security-change-password"
+          >
+            {showPasswordForm ? 'Cancel' : 'Change the password'}
+          </button>
         </div>
-        <button
-          type="button"
-          class="text-button"
-          onClick={() => {
-            setShowPasswordForm(!showPasswordForm);
-            setPasswordError(null);
-            setPasswordDone(false);
-          }}
-          data-testid="vault-security-change-password"
-        >
-          {showPasswordForm ? 'Cancel' : 'Change the password'}
-        </button>
-      </div>
+      ) : null}
 
-      {showPasswordForm ? (
+      {sealed && showPasswordForm ? (
         <form
           class="vault-inline-form"
           aria-label="Change the master password"
@@ -259,54 +285,58 @@ export function VaultSecuritySection() {
         </form>
       ) : null}
 
-      {passwordDone ? (
+      {sealed && passwordDone ? (
         <p class="vault-ok-text" role="status">
           The master password was changed.
         </p>
       ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Auto-lock</span>
-          <span>Locks the storage after this many minutes without activity</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Auto-lock</span>
+            <span>Locks the storage after this many minutes without activity</span>
+          </div>
+          <select
+            aria-label="Auto-lock after N minutes"
+            value={String(lockMinutes)}
+            onChange={(event) => onAutoLockChange(Number((event.target as HTMLSelectElement).value))}
+            data-testid="vault-security-auto-lock"
+          >
+            {AUTO_LOCK_CHOICES.map((minutes) => (
+              <option key={minutes} value={String(minutes)}>
+                {minutes} {minutes === 1 ? 'minute' : 'minutes'}
+              </option>
+            ))}
+          </select>
         </div>
-        <select
-          aria-label="Auto-lock after N minutes"
-          value={String(lockMinutes)}
-          onChange={(event) => onAutoLockChange(Number((event.target as HTMLSelectElement).value))}
-          data-testid="vault-security-auto-lock"
-        >
-          {AUTO_LOCK_CHOICES.map((minutes) => (
-            <option key={minutes} value={String(minutes)}>
-              {minutes} {minutes === 1 ? 'minute' : 'minutes'}
-            </option>
-          ))}
-        </select>
-      </div>
+      ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Check the integrity</span>
-          <span>Opens every sealed object and reports the broken ones</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Check the integrity</span>
+            <span>Opens every sealed object and reports the broken ones</span>
+          </div>
+          <button
+            type="button"
+            class="text-button"
+            onClick={() => void runCheck()}
+            disabled={checkBusy}
+            data-testid="vault-security-check"
+          >
+            {checkBusy ? 'Checking…' : 'Check the integrity'}
+          </button>
         </div>
-        <button
-          type="button"
-          class="text-button"
-          onClick={() => void runCheck()}
-          disabled={checkBusy}
-          data-testid="vault-security-check"
-        >
-          {checkBusy ? 'Checking…' : 'Check the integrity'}
-        </button>
-      </div>
+      ) : null}
 
-      {checkResult ? (
+      {sealed && checkResult ? (
         <p class="vault-ok-text" role="status" data-testid="vault-security-check-result">
           {checkResult.checked} objects checked, {checkResult.broken.length} broken.
         </p>
       ) : null}
 
-      {checkResult && checkResult.broken.length > 0 ? (
+      {sealed && checkResult && checkResult.broken.length > 0 ? (
         <ul class="vault-broken-list" aria-label="The broken objects" data-testid="vault-security-broken">
           {checkResult.broken.map((id) => (
             <li key={id}>
@@ -316,38 +346,42 @@ export function VaultSecuritySection() {
         </ul>
       ) : null}
 
-      {checkError ? (
+      {sealed && checkError ? (
         <p class="error-text" role="alert" data-testid="vault-security-check-error">
           {checkError}
         </p>
       ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>Recovery key</span>
-          <span>The key that opens the storage when the password is lost</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Recovery key</span>
+            <span>The key that opens the storage when the password is lost</span>
+          </div>
+          <span data-testid="vault-security-recovery">
+            {recoveryEnabled === null ? 'unknown' : recoveryEnabled ? 'enabled' : 'not enabled'}
+          </span>
         </div>
-        <span data-testid="vault-security-recovery">
-          {recoveryEnabled === null ? 'unknown' : recoveryEnabled ? 'enabled' : 'not enabled'}
-        </span>
-      </div>
+      ) : null}
 
-      <div class="settings-row">
-        <div class="settings-row-label">
-          <span>New recovery key</span>
-          <span>The old key stops working at once</span>
+      {sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>New recovery key</span>
+            <span>The old key stops working at once</span>
+          </div>
+          <button
+            type="button"
+            class="text-button"
+            onClick={() => void generateRecoveryKey()}
+            data-testid="vault-security-new-recovery"
+          >
+            Generate a new recovery key
+          </button>
         </div>
-        <button
-          type="button"
-          class="text-button"
-          onClick={() => void generateRecoveryKey()}
-          data-testid="vault-security-new-recovery"
-        >
-          Generate a new recovery key
-        </button>
-      </div>
+      ) : null}
 
-      {recoveryKey ? (
+      {sealed && recoveryKey ? (
         <div class="vault-recovery">
           <code class="vault-recovery-key" data-testid="vault-security-recovery-key">
             {recoveryKey}
@@ -374,10 +408,27 @@ export function VaultSecuritySection() {
         </div>
       ) : null}
 
-      {recoveryError ? (
+      {sealed && recoveryError ? (
         <p class="error-text" role="alert" data-testid="vault-security-recovery-error">
           {recoveryError}
         </p>
+      ) : null}
+
+      {!sealed ? (
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>Encrypted storage</span>
+            <span>The notes are kept as plain files, and the password has no meaning yet</span>
+          </div>
+          <button
+            type="button"
+            class="text-button"
+            onClick={() => props.onSetUpEncrypted?.()}
+            data-testid="vault-security-setup"
+          >
+            Set up an encrypted storage
+          </button>
+        </div>
       ) : null}
 
       <p class="vault-security-note">

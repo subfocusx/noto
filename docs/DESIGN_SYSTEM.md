@@ -205,11 +205,12 @@ archive  bell       bookmark     calendar      chevron-down
 chevron-right  chevron-up  chevrons-down-up  chevrons-up-down
 circle   clock     command      copy          dots-vertical
 file-plus  file-text  filter     folder        folder-open
-folder-plus  hash    image      link          menu
-moon     more-horizontal  move  network       panel-left
-panel-right  pencil  plus       puzzle        refresh-cw
-rotate-ccw  search  settings    star         sun
-tags      trash      upload     x
+folder-plus  hash    image      link          lock
+lock-open  menu     moon        more-horizontal  move
+network  panel-left  panel-right  pencil       plus
+puzzle   refresh-cw  rotate-ccw  search       settings
+star     sun        tags        trash        upload
+x
 ```
 
 Чтобы добавить иконку, внесите её в `frontend/src/ui/icons.tsx` — реестр
@@ -274,6 +275,12 @@ tags      trash      upload     x
 * **Действие хранилища живёт в шапке раздела, к которому оно относится.**
   Поиск, Graph, Archive, палитра команд, менеджер плагинов и создание
   заметки/папки — в шапке EXPLORER и в шапке хранилища.
+* **Замок хранилища живёт в шапке хранилища.** Блокировка — это действие
+  хранилища, и она не должна прятаться в меню настроек. Смысл кнопки зависит
+  от режима: зашифрованное хранилище блокируется, открытое — предлагает мастер
+  шифрования (у него нет ключа, который можно забыть). Пункты настроек, что
+  относятся к ключу (блокировка, смена пароля, автоблокировка, ключ
+  восстановления), у открытого хранилища не показываются вовсе.
 * **Действие представления живёт рядом с тем, что оно меняет.** Раскрыть все
   папки и схлопнуть все папки — в группе действий EXPLORER, рядом с деревом:
   это действия над видом дерева, а не над хранилищем.

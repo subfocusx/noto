@@ -36,6 +36,7 @@ import {
 
 const WORD_COUNT = 'Word Count';
 const INSERT_TEMPLATE = 'Insert Template';
+const TAGS = 'Tags';
 
 /** A unique suffix so that every test works on its own note/folder. */
 function unique(prefix: string): string {
@@ -105,6 +106,54 @@ test.describe('plugin platform', () => {
 
     await deleteNote(page, note);
     await deleteFolder(page, folder);
+  });
+
+  test('the tags of the vault are chips with a border of their own', async ({ page }) => {
+    const tag = unique('e2e-chip-tag');
+    const note = `${unique('e2e-plugin')}.md`;
+
+    // A note that carries a tag.
+    await page.getByRole('button', { name: 'New note', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'New note' });
+    await dialog.getByLabel('Name', { exact: true }).fill(note);
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(activeTabName(page)).toHaveText(note);
+    await typeInEditor(page, `#${tag}\n`);
+    await waitForSaved(page);
+
+    // The panel of the plugin is a tab of the panel area: switch to it first.
+    await selectPluginPanel(page, TAGS);
+
+    // The chip of the tag lives in the panel of the plugin.
+    const chip = page
+      .locator('[data-plugin="tags"] .noto-tags-button')
+      .filter({ hasText: `#${tag}` });
+    await expect(chip).toBeVisible();
+
+    // The style is read without hovering the chip: the hover paints it.
+    const style = await chip.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      const probe = document.createElement('div');
+      probe.style.background = 'var(--bg-surface)';
+      document.body.appendChild(probe);
+      const surface = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return {
+        borderWidth: cs.borderTopWidth,
+        borderStyle: cs.borderTopStyle,
+        background: cs.backgroundColor,
+        surface,
+      };
+    });
+
+    // A thin border of its own and no grey fill: the chip carries the colour
+    // of the surface, like the other chips of the interface.
+    expect(style.borderWidth).toBe('1px');
+    expect(style.borderStyle).toBe('solid');
+    expect(style.background).toBe(style.surface);
+    expect(style.background).not.toBe('rgba(0, 0, 0, 0)');
+
+    await deleteNote(page, note);
   });
 
   test('disabling word count removes the counter, re-enabling shows it once again', async ({

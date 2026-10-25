@@ -5,6 +5,9 @@
    on Monday, the day of today marked with a dot, the days that carry records
    tinted, and the notes of the day the user picked under the grid.
 
+   The two marks do not share a colour: the dot of today is painted in the
+   colour of the text, the tint of the records stays violet.
+
    Every colour, size and duration comes from the tokens of the design system:
    the calendar knows nothing about the palette.
    ========================================================================== */
@@ -157,8 +160,10 @@
 }
 
 /* The mark of the day of today: the dot. The number of the day of today is a
-   little stronger too, so that the day is found at a glance — the dot and the
-   tint of the records stay two different signs. */
+   little stronger too, so that the day is found at a glance. The dot is
+   painted in the colour of the text and not in the accent, so that it stays
+   visible on the plain cell and on the tinted one — the tint of the records
+   stays a violet sign of its own. */
 .calendar-day-today .calendar-day-number {
   font-weight: var(--weight-semibold);
 }
@@ -171,7 +176,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--fg);
 }
 
 /* ----------------------------------------------------------- the notes of the day */

@@ -116,6 +116,40 @@ describe('the calendar section', () => {
     expect(withoutNotes.classList.contains('calendar-day-has-notes')).toBe(false);
   });
 
+  it('marks the day of a daily note and not the days of its life', () => {
+    // The note of the 29th was written on the 20th and changed on the 25th:
+    // the calendar shows the day of the name.
+    renderCalendar({
+      files: [
+        note('2026-10-29.md', 'notes/2026-10-29.md', '2026-10-20T10:00:00', '2026-10-25T10:00:00'),
+      ],
+      month: '2026-10',
+      selectedDay: null,
+    });
+
+    const daily = screen.getByRole('button', { name: '29, 1 note' });
+    expect(daily.classList.contains('calendar-day-has-notes')).toBe(true);
+    expect(screen.getByRole('button', { name: '20' }).classList.contains('calendar-day-has-notes')).toBe(
+      false,
+    );
+    expect(screen.getByRole('button', { name: '25' }).classList.contains('calendar-day-has-notes')).toBe(
+      false,
+    );
+  });
+
+  it('shows the daily note in the list of the notes of its day', () => {
+    renderCalendar({
+      files: [
+        note('2026-10-29.md', 'notes/2026-10-29.md', '2026-10-20T10:00:00', '2026-10-25T10:00:00'),
+      ],
+      month: '2026-10',
+      selectedDay: '2026-10-29',
+    });
+
+    expect(screen.getByText('2026-10-29.md')).toBeTruthy();
+    expect(screen.getByText('notes/2026-10-29.md')).toBeTruthy();
+  });
+
   it('marks the day of today with the class of today and with a dot', () => {
     const today = dayKey(new Date());
     const month = today.slice(0, 7);

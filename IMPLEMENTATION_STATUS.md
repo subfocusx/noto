@@ -706,7 +706,7 @@ list of the gaps was reconciled with the code on the same day
 | P16-1 | **The history of the versions of a note.** Every write appends an immutable version; the API answers the list, the line diff and the restore of a revision | done | `backend/internal/notes/{versions,diff}.go`, `backend/internal/sqlitestore/store_versions.go`, `backend/internal/api/handlers_versions.go`, `frontend/src/api/versions.ts`, `frontend/src/core/views/diff.ts` |
 | P16-2 | **The moment of the creation.** The column `created_at` is written once by the server and never changed; the migration of the schema fills it for the notes that were written before it existed | done | `backend/internal/sqlitestore/store_schema.go` (version 3), `backend/internal/notes/created_at_test.go`, `frontend/src/styles/tree-dates.css` |
 | P16-3 | **The cache of the derived properties with the flag `stale`.** The recalculation is a separate, explicit step; a note that changed is marked instead of being recomputed on the write | done | `backend/internal/notes/derived.go`, `backend/internal/sqlitestore/store_derived.go` |
-| P16-4 | **The paged listing of the tree.** The domain and the store answer one page of the children of a folder with a cursor. The route does not exist yet: the interface still asks for the whole tree | partial | `backend/internal/notes/paged.go`, `backend/internal/port/port.go` (`ListChildrenPaged`) |
+| P16-4 | **The paged listing of the tree.** The domain and the store answer one page of the children of a folder with a cursor, and the route `GET /api/tree/children` answers it. The interface still asks for the whole tree | partial | `backend/internal/notes/paged.go`, `backend/internal/port/port.go` (`ListChildrenPaged`), `backend/internal/api/handlers_notes.go` (`handleTreePage`) |
 | P16-5 | **The search over the attachments, the preview of an image and the content of an attachment.** The text of a text file is indexed at the upload; the panel of the attachments searches it and opens the images in a lightbox | done | `backend/internal/notes/{attachsearch,attachment_search,attachment_preview}.go`, `backend/internal/api/handlers_attachments.go`, `frontend/src/components/AttachmentsPanel.tsx` |
 | P16-6 | **The regular expressions in the query language.** The operator `matches`, the method form and the prefix `match:`; RE2 in the backend, the `RegExp` of JavaScript in the browser, and the vectors that bind them | done | `backend/internal/query/regex.go`, `frontend/src/core/query/regex.ts`, `shared/vectors/regex.json` |
 | P16-7 | **The streaming export.** The archive is written to a temporary file and served from it: the memory of the server no longer grows with the size of the storage | done | `backend/internal/api/handlers_importexport.go` |
@@ -728,19 +728,39 @@ list of the gaps was reconciled with the code on the same day
 
 | What | Phase 15 | The batch of 2026-10-25 |
 |---|---|---|
-| Frontend unit tests | 940 passed (72 files) | **1365 passed / 1367 (131 files)** — two tests fail, see below |
+| Frontend unit tests | 940 passed (72 files) | **1367 passed (131 files)** |
 | Backend tests | the packages of the phases 1–15 | **all the packages ok** (`go test ./... -count=1`: 23 packages, 18 of them with tests) |
 | Schema of SQLite | `user_version = 2` | **`user_version = 3`** (the versions of the notes, the cache of the properties with its flag, the column `created_at`) |
-| Files of the frontend (TypeScript) | — | **335** (202 without the tests) |
+| Files of the frontend (TypeScript) | — | **350** (202 without the tests) |
 | The gaps of `docs/NOT_IMPLEMENTED.md` | 37 points of group (A) and 20 of group (B) | **3 points of group (A) and 14 of group (B)** |
 
-Two unit tests fail after the batch, and both fail for the same reason: they
-still expect the Russian strings of the old interface («Предпросмотр
-недоступен», «Ошибка плагина»), and the interface answers in English since the
-localisation was introduced
+### The entry chunk of the bundle: the budget is not met
+
+The entry chunk of the bundle is **62,27 kB gzip** — the budget of the phases
+was 46 kB. The batch grew it from 43,68 kB. The growth was measured module by
+module (`vite build` with a temporary plugin that prints the size of every
+module of the entry chunk):
+
+| What was done | Effect |
+|---|---|
+| The catalogue of the localisation (670 keys in two languages, ~100 kB of source) left the entry chunk: the catalogue of the current language is loaded with a dynamic import before the first render (`frontend/src/i18n/catalogue.ts`, `frontend/src/main.tsx`) | **−22 kB gzip** (84,31 → 62,27) |
+| The panel of the attachments and the preview of a note (with the presentations) left the entry chunk: they live in the lazy chunks of `LazyOverlays` and `LazyPanels` | **−3 kB gzip** |
+
+What is left in the entry chunk is the shell itself: `App.tsx` (48 kB of the
+rendered source), the actions of the store (27 kB), the host of the plugins
+(23 kB), the editor (21 kB), the explorer and the tree (27 kB) and the grammar
+of the query language (10 kB). Reaching 46 kB therefore means splitting the
+shell itself — the store, the host of the plugins and the grammar of the query
+language out of the entry — and not moving another dialog. That work is not
+done: the number above is the truth, not a promise.
+
+### The two tests that failed after the batch
+
+They were fixed in the same batch: the tests of the old interface expected the
+Russian strings («Предпросмотр недоступен», «Ошибка плагина»), and the
+interface answers in English since the localisation was introduced
 (`frontend/src/__tests__/preview-lazy.test.tsx`,
-`frontend/src/__tests__/plugin-ui.test.tsx`). The defect is in the tests, not
-in the features; the writer of the tests owns the fix.
+`frontend/src/__tests__/plugin-ui.test.tsx`). The whole suite is green.
 
 ---
 

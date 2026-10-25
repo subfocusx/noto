@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useAppSelector } from '../core/store/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
-import { canMoveInto } from '../lib/tree';
+import type { MoveRefusal } from '../lib/tree';
+import { refusalOfMove } from '../lib/tree';
 import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { Icon } from '../ui/icons';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
@@ -56,6 +57,11 @@ export interface TreeFolderRowProps {
   onDragEnd?(): void;
   /** Called when a node is dropped on a folder. */
   onDropOnFolder?(node: Node, targetParentPath: string): void;
+  /**
+   * Called when the pointer is over the row, with the reason the drop would
+   * be refused (and null when the row accepts the node).
+   */
+  onRefuse?(refusal: MoveRefusal | null): void;
   /** The number of notes inside the folder, counted recursively. */
   noteCount?: number;
   /** The number of notes of every folder, by path. */
@@ -310,7 +316,8 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   const count = props.noteCountsByPath?.get(node.path) ?? props.noteCount ?? 0;
   // The drop is only possible when the move is not refused: the row tells the
   // user so before the drop, instead of refusing it afterwards.
-  const canDrop = props.draggingNode ? canMoveInto(props.draggingNode, node.path) : true;
+  const refusal = props.draggingNode ? refusalOfMove(props.draggingNode, node.path) : null;
+  const canDrop = refusal === null;
 
   // The highlight of a drop target disappears with the drag itself.
   useEffect(() => {
@@ -334,6 +341,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
     event.preventDefault();
     // The cursor tells the truth: a refused target does not look like a
     // target.
+    props.onRefuse?.(refusal);
     if (event.dataTransfer) event.dataTransfer.dropEffect = canDrop ? 'move' : 'none';
     setOver(true);
   };

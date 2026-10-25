@@ -9,6 +9,7 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
 import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
+import type { MoveRefusal } from '../../lib/tree';
 import { filterTree, refusalOfMove } from '../../lib/tree';
 import { Icon } from '../../ui/icons';
 import { IconButton } from '../../ui/tooltip';
@@ -105,6 +106,16 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   const [dropHint, setDropHint] = useState<string | null>(null);
   const [rootOver, setRootOver] = useState(false);
   /**
+   * The answer of the current drag.
+   *
+   * `dropHandled` says that the drag ended with a drop that the explorer
+   * knows. `dragRefusal` says why the target under the pointer would refuse
+   * the move (or that the pointer was over no target at all). Both are reset
+   * when the next drag starts.
+   */
+  const dropHandled = useRef(false);
+  const dragRefusal = useRef<MoveRefusal | 'nowhere' | null>(null);
+  /**
    * The buttons that open the quick menu of the storage.
    *
    * The menu closes itself when the user clicks outside of it. The buttons that
@@ -198,11 +209,48 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   /** True when the archive of the vault can be opened. */
   const archiveReady = props.onOpenArchive !== undefined;
 
-  /** The end of a drag: every highlight disappears. */
+  /**
+   * The message of a refusal.
+   *
+   * Every drag ends with an answer: either the node moved, or the user is
+   * told why it did not. A drag that ends nowhere is the case that used to
+   * be silent.
+   */
+  const messageOfRefusal = (refusal: MoveRefusal, node: Node | undefined): string => {
+    if (refusal === 'into-itself') return 'A folder cannot be moved into itself.';
+    if (refusal === 'already-there') {
+      return node?.type === 'folder' ? 'The folder is already here.' : 'The note is already here.';
+    }
+    return 'The node was not moved: drop it on a folder.';
+  };
+
+  /** The start of a drag: the answer of the previous one is forgotten. */
+  const startDrag = (state: TreeDragState): void => {
+    dropHandled.current = false;
+    dragRefusal.current = null;
+    setDrag(state);
+  };
+
+  /**
+   * The end of a drag: every highlight disappears.
+   *
+   * A drag that ended without a drop is answered: the user is told that the
+   * node stayed where it was, and why.
+   */
   const endDrag = (): void => {
+    const path = drag.path;
+    const node = path ? nodesByPath.get(path) : undefined;
+    const refusal = dragRefusal.current;
+    const handled = dropHandled.current;
     setDrag({ path: null, isFolder: false });
     setDropHint(null);
     setRootOver(false);
+    if (handled || refusal === null) return;
+    setDropHint(
+      refusal === 'nowhere'
+        ? 'The node was not moved: drop it on a folder.'
+        : messageOfRefusal(refusal, node),
+    );
   };
 
   /**
@@ -215,20 +263,16 @@ export function ExplorerSection(props: ExplorerSectionProps) {
    */
   const dropOn = (targetParentPath: string): void => {
     const path = drag.path;
+    const node = path ? nodesByPath.get(path) : undefined;
+    // The drop is answered: the end of the drag must not complain about a
+    // move that did happen.
+    dropHandled.current = true;
+    const refusal = node ? refusalOfMove(node, targetParentPath) : null;
     endDrag();
-    if (!path) return;
-    const node = nodesByPath.get(path);
     if (!node) return;
 
-    const refusal = refusalOfMove(node, targetParentPath);
-    if (refusal === 'into-itself') {
-      setDropHint('A folder cannot be moved into itself.');
-      return;
-    }
-    if (refusal === 'already-there') {
-      setDropHint(
-        node.type === 'folder' ? 'The folder is already here.' : 'The note is already here.',
-      );
+    if (refusal) {
+      setDropHint(messageOfRefusal(refusal, node));
       return;
     }
     setDropHint(null);
@@ -364,7 +408,18 @@ export function ExplorerSection(props: ExplorerSectionProps) {
             <p class="explorer-hint">Drag a note onto a folder to move it.</p>
           )}
 
-          <ul class="tree" data-testid="file-tree">
+          <ul
+            class="tree"
+            data-testid="file-tree"
+            onDragOver={(event) => {
+              // The pointer is over the tree itself and not over a row: there
+              // is no target there, so the drop must not look like a move.
+              if (event.target !== event.currentTarget) return;
+              event.preventDefault();
+              if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+              dragRefusal.current = 'nowhere';
+            }}
+          >
             {view.folders.map((folder) => (
               <TreeFolderRow
                 key={folder.node.path}
@@ -378,8 +433,11 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 onContextMenu={props.onContextMenu}
                 onRenameInline={props.onRenameInline}
                 draggingNode={draggingNode}
-                onDragStart={setDrag}
+                onDragStart={startDrag}
                 onDragEnd={endDrag}
+                onRefuse={(refusal) => {
+                  dragRefusal.current = refusal;
+                }}
                 onDropOnFolder={(_node, targetParentPath) => dropOn(targetParentPath)}
                 noteCountsByPath={noteCountsByPath}
               />
@@ -394,7 +452,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 onContextMenu={props.onContextMenu}
                 onRenameInline={props.onRenameInline}
                 draggingNode={draggingNode}
-                onDragStart={setDrag}
+                onDragStart={startDrag}
                 onDragEnd={endDrag}
               />
             ))}

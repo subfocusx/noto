@@ -597,4 +597,55 @@ describe('the drag and the drop of the explorer', () => {
       tree.compareDocumentPosition(root) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('answers a drag that ended nowhere', async () => {
+    const view = renderExplorer();
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragStart(row, { dataTransfer: dataTransferMock() });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    // The pointer is over the tree and not over a row: there is no target.
+    const tree = view.getByTestId('file-tree');
+    fireEvent.dragOver(tree, { dataTransfer: dataTransferMock() });
+    fireEvent.dragEnd(row, { dataTransfer: dataTransferMock() });
+
+    await waitFor(() =>
+      expect(view.getByText('The node was not moved: drop it on a folder.')).toBeTruthy(),
+    );
+  });
+
+  it('explains why a refused target refuses the drop', async () => {
+    const view = renderExplorer();
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragStart(row, { dataTransfer: dataTransferMock() });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    // The pointer is over the folder that cannot land inside itself.
+    fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
+    fireEvent.dragEnd(row, { dataTransfer: dataTransferMock() });
+
+    await waitFor(() =>
+      expect(view.getByText('A folder cannot be moved into itself.')).toBeTruthy(),
+    );
+  });
+
+  it('says nothing when the node was moved', async () => {
+    const onMoveNode = vi.fn();
+    const view = renderExplorer(onMoveNode);
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragStart(row, { dataTransfer: dataTransferMock() });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    fireEvent.drop(view.getByText('archive').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+    fireEvent.dragEnd(row, { dataTransfer: dataTransferMock() });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledTimes(1));
+    expect(view.queryByText('The node was not moved: drop it on a folder.')).toBeNull();
+    expect(view.queryByText('A folder cannot be moved into itself.')).toBeNull();
+  });
 });

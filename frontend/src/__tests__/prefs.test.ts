@@ -3,6 +3,7 @@ import {
   DEFAULT_PREFS,
   EDITOR_FONT_SIZE_MAX,
   EDITOR_FONT_SIZE_MIN,
+  EXPANDED_FOLDERS_LIMIT,
   LEGACY_THEME_KEY,
   PREFS_KEY,
   RECENT_LIMIT,
@@ -11,9 +12,11 @@ import {
   RIGHT_PANEL_WIDTH_MIN,
   SIDEBAR_WIDTH_MAX,
   SIDEBAR_WIDTH_MIN,
+  VAULT_RECENTS_LIMIT,
   loadPrefs,
   normalizePrefs,
   pushRecent,
+  pushVaultRecent,
   removeRecent,
   savePrefs,
 } from '../core/settings/prefs';
@@ -168,5 +171,53 @@ describe('preferences', () => {
 
   it('removes a note from the list of the recent notes', () => {
     expect(removeRecent(['a.md', 'b.md'], 'a.md')).toEqual(['b.md']);
+  });
+
+  it('keeps the most recent storages first and without duplicates', () => {
+    let paths: string[] = [];
+    paths = pushVaultRecent(paths, 'C:\\notes');
+    paths = pushVaultRecent(paths, 'D:\\work');
+    paths = pushVaultRecent(paths, 'C:\\notes');
+    expect(paths).toEqual(['C:\\notes', 'D:\\work']);
+  });
+
+  it('ignores an empty storage', () => {
+    expect(pushVaultRecent(['C:\\notes'], '')).toEqual(['C:\\notes']);
+  });
+
+  it('limits the list of the recent storages', () => {
+    let paths: string[] = [];
+    for (let i = 0; i < VAULT_RECENTS_LIMIT + 10; i += 1) {
+      paths = pushVaultRecent(paths, `C:\\vault-${i}`);
+    }
+    expect(paths).toHaveLength(VAULT_RECENTS_LIMIT);
+    expect(paths[0]).toBe(`C:\\vault-${VAULT_RECENTS_LIMIT + 9}`);
+  });
+
+  it('cuts the list of the open folders', () => {
+    // The list is written into the storage of the browser: a vault with more
+    // folders than that keeps the tree of the last reload.
+    const folders = Array.from({ length: EXPANDED_FOLDERS_LIMIT + 10 }, (_, i) => `folder-${i}`);
+    expect(normalizePrefs({ expandedFolders: folders }).expandedFolders).toHaveLength(
+      EXPANDED_FOLDERS_LIMIT,
+    );
+  });
+
+  it('cuts the list of the recent storages that comes from the storage', () => {
+    const recents = Array.from({ length: VAULT_RECENTS_LIMIT + 3 }, (_, i) => `C:\\vault-${i}`);
+    expect(normalizePrefs({ vaultRecents: recents }).vaultRecents).toHaveLength(VAULT_RECENTS_LIMIT);
+  });
+
+  it('drops the values of the lists that are not paths', () => {
+    const prefs = normalizePrefs({
+      vaultRecents: ['C:\\notes', 42, null],
+      expandedFolders: [1, 'journal'],
+    });
+    expect(prefs.vaultRecents).toEqual(['C:\\notes']);
+    expect(prefs.expandedFolders).toEqual(['journal']);
+  });
+
+  it('knows no recent storage by default', () => {
+    expect(loadPrefs().vaultRecents).toEqual([]);
   });
 });

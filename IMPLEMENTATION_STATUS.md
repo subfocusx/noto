@@ -736,14 +736,14 @@ list of the gaps was reconciled with the code on the same day
 
 ### The entry chunk of the bundle: the budget is not met
 
-The entry chunk of the bundle is **62,27 kB gzip** — the budget of the phases
+The entry chunk of the bundle is **62,36 kB gzip** — the budget of the phases
 was 46 kB. The batch grew it from 43,68 kB. The growth was measured module by
 module (`vite build` with a temporary plugin that prints the size of every
 module of the entry chunk):
 
 | What was done | Effect |
 |---|---|
-| The catalogue of the localisation (670 keys in two languages, ~100 kB of source) left the entry chunk: the catalogue of the current language is loaded with a dynamic import before the first render (`frontend/src/i18n/catalogue.ts`, `frontend/src/main.tsx`) | **−22 kB gzip** (84,31 → 62,27) |
+| The catalogue of the localisation (670 keys in two languages, ~100 kB of source) left the entry chunk: the catalogue of the current language is loaded with a dynamic import before the first render (`frontend/src/i18n/catalogue.ts`, `frontend/src/main.tsx`) | **−22 kB gzip** (84,31 → 62,36) |
 | The panel of the attachments and the preview of a note (with the presentations) left the entry chunk: they live in the lazy chunks of `LazyOverlays` and `LazyPanels` | **−3 kB gzip** |
 
 What is left in the entry chunk is the shell itself: `App.tsx` (48 kB of the

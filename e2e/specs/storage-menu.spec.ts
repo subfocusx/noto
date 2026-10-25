@@ -66,6 +66,43 @@ test.describe('the menu of the storage', () => {
     await expect(menu.getByRole('menuitem', { name: 'Choose another folder…' })).toBeVisible();
   });
 
+  test('a recent storage really becomes the storage of the notes', async ({ page, request }) => {
+    const stamp = Date.now().toString(36);
+    const recent = path.join(os.tmpdir(), `noto-e2e-switch-a-${stamp}`);
+    const current = path.join(os.tmpdir(), `noto-e2e-switch-b-${stamp}`);
+    fs.mkdirSync(recent, { recursive: true });
+    fs.mkdirSync(current, { recursive: true });
+
+    // The second storage is the one that is open.
+    const set = await request.post(`${SWITCH_URL}/api/vault`, { data: { path: current } });
+    expect(set.status()).toBe(200);
+
+    await page.addInitScript(
+      ([a, b]: string[]) => {
+        localStorage.setItem('noto-prefs-v1', JSON.stringify({ vaultRecents: [a, b] }));
+      },
+      [recent, current],
+    );
+
+    await page.goto(SWITCH_URL);
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+    await openSidebarIfNeeded(page);
+
+    // The header shows the storage that is open.
+    const header = page.locator('.vault-header');
+    await expect(header).toContainText(path.basename(current));
+
+    // The recent storage is offered: one click makes it the storage of the notes.
+    await header.getByRole('button', { name: 'Change the storage of the notes' }).click();
+    const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
+    await expect(menu).toBeVisible();
+    await menu.locator('.vault-menu-item-path').filter({ hasText: recent }).click();
+
+    // The menu is closed and the header shows the new storage.
+    await expect(menu).toHaveCount(0);
+    await expect(header).toContainText(path.basename(recent));
+  });
+
   test('the lock of the header of an open storage opens the wizard', async ({ page }) => {
     await gotoApp(page);
     await openSidebarIfNeeded(page);

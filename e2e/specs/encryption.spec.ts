@@ -294,6 +294,24 @@ test.describe('the encrypted storage of the notes', () => {
     await expect(page.locator('.cm-content')).toContainText(marker, { timeout: 30_000 });
   });
 
+  test('the lock of the header locks the encrypted storage', async () => {
+    // The lock of the header is the way to lock the storage without opening
+    // the menu of the settings.
+    const lock = page.locator('.vault-header').getByRole('button', { name: 'Lock the vault' });
+    await expect(lock).toBeVisible({ timeout: 30_000 });
+    await lock.click();
+
+    // The screen of the password opens, and the notes are not visible.
+    await expect(page.getByTestId('vault-unlock')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('file-tree')).toHaveCount(0);
+
+    // The password opens the storage again.
+    await page.getByRole('textbox', { name: 'Master password', exact: true }).fill(PASSWORD);
+    await page.getByRole('button', { name: 'Unlock' }).click();
+    await expect(page.getByTestId('file-tree')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('vault-unlock')).toHaveCount(0);
+  });
+
   /**
    * The environment of the encrypted storage.
    *

@@ -601,13 +601,37 @@ left its line on a narrow screen. A sticky element is a positioned one, so the
 menu keeps its place without the rule, and the header sticks again
 (`frontend/src/styles/components.css`).
 
+The coverage of the phase was then widened: the actions of the store, the menu of
+the storage, the commands of the palette, the states of the trash, the icons of
+the registry, the section of the security, the dialog of the settings and the
+edges of the bulk actions of the tree got their tests (923 instead of 805). The
+new tests found five more defects, all fixed:
+
+* **the flag of the fixed storage was never cleared** after a switch that
+  succeeded (`frontend/src/core/store/actions.ts`);
+* **the name of a folder was cut at the slash only**, so on Windows the whole
+  path was the name and the menu showed it twice
+  (`frontend/src/components/VaultSwitchMenu.tsx`);
+* **a refused load of the trash showed the error and the words about the empty
+  trash at the same time** (`frontend/src/components/TrashList.tsx`);
+* **the panel of the tags did not follow the saved notes**: a tag that was
+  written appeared only after the note was opened once again
+  (`frontend/src/plugins/builtin/tags/index.ts`);
+* **the change of the master password accepted any password**, while the wizard
+  of the encrypted storage refuses everything shorter than ten characters; the
+  rules now live in one place (`frontend/src/core/vault/password.ts`).
+
+One helper of the end-to-end suite was wrong as well: it read the text of the
+editor of a closed tab, which is mounted but hidden
+(`e2e/helpers/app.ts`).
+
 ### The measured effect of the phase 14
 
 | What | Phase 13 | Phase 14 |
 |---|---|---|
-| Entry chunk of the bundle | 43,58 kB gzip | **45,06 kB gzip** (the budget is 46 kB) |
-| Frontend unit tests | 773 passed (63 files) | **805 passed (67 files)** |
-| End-to-end tests | 152 passed, 46 skipped | **152 passed, 46 skipped, 0 failed** |
+| Entry chunk of the bundle | 43,58 kB gzip | **45,09 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 773 passed (63 files) | **923 passed (71 files)** |
+| End-to-end tests | 152 passed, 46 skipped | **160 passed, 54 skipped, 0 failed** |
 | Icons of the registry | 41 | **45** (`rotate-ccw`, `chevrons-down-up`, `chevrons-up-down`, `lock`, `lock-open`) |
 | The sections of the column | 6 | **6** (unchanged) |
 

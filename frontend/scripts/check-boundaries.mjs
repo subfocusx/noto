@@ -1,12 +1,31 @@
 // Architectural boundary checks for the frontend source tree.
-// Usage: node scripts/check-boundaries.mjs
+// Usage: node scripts/check-boundaries.mjs [--root <dir>]
 // Pure Node.js (no dependencies, no network). Exits 1 on any violation.
+//
+// `--root <dir>` points the checker at another tree (the tests use it with a
+// fixture): the paths of the rules are relative to that root.
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const FRONTEND_ROOT = resolve(here, '..');
+
+/**
+ * The root of the tree that is checked.
+ *
+ * By default it is the directory of the frontend (the parent of `scripts/`).
+ * The tests pass another root with `--root`, so that the rules can be tried
+ * on a fixture.
+ */
+function resolveRoot() {
+  const index = process.argv.indexOf('--root');
+  if (index >= 0 && process.argv[index + 1]) {
+    return resolve(process.cwd(), process.argv[index + 1]);
+  }
+  return resolve(here, '..');
+}
+
+const FRONTEND_ROOT = resolveRoot();
 const SRC_ROOT = resolve(FRONTEND_ROOT, 'src');
 
 // ---------------------------------------------------------------------------
@@ -46,8 +65,68 @@ const ALLOWED_COMPONENT_PLUGIN_IMPORTS = [
 /** The only modules `src/plugins/builtin/**` may import from `src/plugins/`. */
 const ALLOWED_BUILTIN_PLUGIN_IMPORTS = [PLUGIN_CONTRACT];
 
+/**
+ * The modules that own the key material of the encrypted storage.
+ *
+ * The key hierarchy (the master password, the wrapping key and the data key)
+ * lives in `src/core/crypto/**`. Only the core itself may use it: the user
+ * interface must never handle a key, and a plugin must never be able to reach
+ * one. This is the boundary that makes the "no key material for plugins"
+ * promise enforceable instead of decorative.
+ */
+const KEY_MATERIAL_MODULES = ['src/core/crypto/keys', 'src/core/crypto/sealed'];
+
+/** The layers that are allowed to use the key material. */
+const KEY_MATERIAL_CONSUMERS = ['src/core/crypto/', 'src/core/vault/'];
+
+/**
+ * The modules of the platform of the plugins.
+ *
+ * They are the only modules of `src/plugins/**` that may use the core: the
+ * host owns the registrations, the registry owns the states, the loader
+ * knows the built-in plugins and the manifest validates them. Every other
+ * module of `src/plugins/**` is a plugin and may not reach into the core
+ * (rule R15).
+ */
+const PLATFORM_PLUGIN_MODULES = [
+  PLUGIN_CONTRACT,
+  'src/plugins/host',
+  'src/plugins/registry',
+  'src/plugins/loader',
+  'src/plugins/manifest',
+];
+
+/**
+ * The implementation of the query and of the metadata.
+ *
+ * The contract declares the SHAPE of the query capability, never its
+ * implementation: a plugin must not be able to compile a query itself with
+ * the internals of the application (rule R16).
+ */
+const CONTRACT_FORBIDDEN_MODULES = [
+  'src/core/query/',
+  'src/core/metadata/',
+  'src/core/crypto/',
+];
+
 /** Source extensions scanned by the checker. */
 const SCAN_EXTENSIONS = ['.ts', '.tsx'];
+
+/**
+ * The constructs a sandboxed plugin may not use in its source (rule R17).
+ *
+ * A sandboxed plugin runs inside an iframe with a strict CSP. The CSP forbids
+ * the network and the evaluation of the code, so a source that uses them is
+ * either broken or hostile: the checker refuses it before it ever runs.
+ */
+const SANDBOX_FORBIDDEN = [
+  { pattern: /\beval\s*\(/, name: 'eval' },
+  { pattern: /new\s+Function\s*\(/, name: 'new Function' },
+  { pattern: /\bimport\s*\(/, name: 'a dynamic import' },
+  { pattern: /\bfetch\s*\(/, name: 'fetch' },
+  { pattern: /XMLHttpRequest/, name: 'XMLHttpRequest' },
+  { pattern: /WebSocket/, name: 'WebSocket' },
+];
 
 // ---------------------------------------------------------------------------
 // Filesystem helpers
@@ -303,11 +382,177 @@ function checkImport(fileKey, imp, target) {
       `src/plugins/builtin/** must not import src/api/client.ts directly; use the public facade`,
     );
   }
+
+  // R9: the core must not depend on the user interface.
+  if (inLayer(fileKey, LAYERS.core) && inLayer(target, LAYERS.components)) {
+    report(
+      'R9',
+      fileKey,
+      imp.line,
+      `src/core/** must not import from src/components/** (imports "${target}")`,
+    );
+  }
+
+  // R10: the crypto core does not know the vault; the dependency points the
+  // other way only, so that the key material stays a leaf of the graph.
+  if (inLayer(fileKey, 'src/core/crypto/') && inLayer(target, 'src/core/vault/')) {
+    report(
+      'R10',
+      fileKey,
+      imp.line,
+      `src/core/crypto/** must not import from src/core/vault/** (imports "${target}")`,
+    );
+  }
+
+  // R11: a plugin must never be able to reach the key material.
+  if (inLayer(fileKey, LAYERS.plugins) && inLayer(target, 'src/core/crypto/')) {
+    report(
+      'R11',
+      fileKey,
+      imp.line,
+      `src/plugins/** must not import the crypto core (imports "${target}"); plugins never see keys`,
+    );
+  }
+
+  // R12: only the core may use the key material.
+  if (
+    KEY_MATERIAL_MODULES.includes(target) &&
+    !KEY_MATERIAL_CONSUMERS.some((prefix) => inLayer(fileKey, prefix))
+  ) {
+    report(
+      'R12',
+      fileKey,
+      imp.line,
+      `"${target}" owns the key material and may only be imported by ${KEY_MATERIAL_CONSUMERS.join(' or ')} (imports "${target}")`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// The rules of the file (R13–R17)
+//
+// These rules look at a FILE and not at a single import: they state a
+// property of the module as a whole. Every violation is reported once per
+// file, with the list of the offending imports.
 // ---------------------------------------------------------------------------
+
+/**
+ * Checks the rules that concern a file as a whole.
+ *
+ * @param {string} fileKey POSIX path relative to the root (no extension)
+ * @param {{specifier: string, typeOnly: boolean, line: number, target: string}[]} imports
+ * @param {string} source The text of the file
+ */
+function checkFile(fileKey, imports, source) {
+  // R17 does not depend on the imports of the file: a sandboxed plugin may
+  // have none at all.
+  if (inLayer(fileKey, LAYERS.plugins)) {
+    checkSandboxSource(fileKey, source);
+  }
+
+  if (imports.length === 0) return;
+
+  // R13: a built-in plugin is self-contained. It may import the contract and
+  // the files of its own package — nothing else. The shared layers of the
+  // application (`src/core/**`, `src/api/**`, `src/lib/**`, `src/ui/**`,
+  // `src/components/**`) are not reachable from a plugin: a plugin repeats
+  // the small helpers it needs instead of borrowing them.
+  if (inLayer(fileKey, LAYERS.builtin)) {
+    const foreign = imports
+      .filter((item) => !isSameBuiltinPackage(fileKey, item.target))
+      .filter((item) => !ALLOWED_BUILTIN_PLUGIN_IMPORTS.includes(item.target));
+    if (foreign.length > 0) {
+      report(
+        'R13',
+        fileKey,
+        foreign[0].line,
+        `a built-in plugin is self-contained: it may import only ${ALLOWED_BUILTIN_PLUGIN_IMPORTS.join(', ')} and the files of its own package (imports ${foreign.map((item) => `"${item.target}"`).join(', ')})`,
+      );
+    }
+  }
+
+  // R14: the core depends on neither the plugin platform nor the interface.
+  // The property is a property of the module, so it is reported once.
+  if (inLayer(fileKey, LAYERS.core)) {
+    const foreign = imports.filter(
+      (item) => inLayer(item.target, LAYERS.plugins) || inLayer(item.target, LAYERS.components),
+    );
+    if (foreign.length > 0) {
+      report(
+        'R14',
+        fileKey,
+        foreign[0].line,
+        `src/core/** must not import from src/plugins/** or src/components/** (imports ${foreign.map((item) => `"${item.target}"`).join(', ')})`,
+      );
+    }
+  }
+
+  // R15: a module of the platform of the plugins may not use the core. Only
+  // the platform itself (the host, the registry, the loader, the manifest and
+  // the contract) may: for everybody else the contract is the only gateway.
+  if (inLayer(fileKey, LAYERS.plugins) && !PLATFORM_PLUGIN_MODULES.includes(fileKey)) {
+    const foreign = imports.filter((item) => inLayer(item.target, LAYERS.core));
+    if (foreign.length > 0) {
+      report(
+        'R15',
+        fileKey,
+        foreign[0].line,
+        `a plugin may not import src/core/**; the only gateway of a plugin is src/plugins/contract.ts (imports ${foreign.map((item) => `"${item.target}"`).join(', ')})`,
+      );
+    }
+  }
+
+  // R16: the contract declares the shape of the capabilities, never their
+  // implementation. It must not import the query core, the scanner of the
+  // metadata or the crypto core.
+  if (fileKey === PLUGIN_CONTRACT) {
+    const foreign = imports.filter((item) =>
+      CONTRACT_FORBIDDEN_MODULES.some((prefix) => inLayer(item.target, prefix)),
+    );
+    if (foreign.length > 0) {
+      report(
+        'R16',
+        fileKey,
+        foreign[0].line,
+        `src/plugins/contract.ts must not import the implementation of the query, of the metadata or the crypto core (imports ${foreign.map((item) => `"${item.target}"`).join(', ')})`,
+      );
+    }
+  }
+
+  // R17: the source of a sandboxed plugin runs inside an iframe with a strict
+  // CSP. It may not evaluate the code and it may not reach the network: the
+  // sandbox is the boundary, and the checker proves it before the plugin runs.
+}
+
+/**
+ * Checks the source of a sandboxed plugin (rule R17).
+ *
+ * The source of a sandboxed plugin is a string: `sandboxSource`. It is
+ * extracted from the file and searched for the constructs the sandbox
+ * forbids.
+ *
+ * @param {string} fileKey POSIX path relative to the root (no extension)
+ * @param {string} source The text of the file
+ */
+function checkSandboxSource(fileKey, source) {
+  const assignment = /sandboxSource\s*[:=]\s*(['"`])([\s\S]*?)\1/g;
+  let match = assignment.exec(source);
+  while (match !== null) {
+    const body = match[2] ?? '';
+    const line = source.slice(0, match.index).split('\n').length;
+    for (const forbidden of SANDBOX_FORBIDDEN) {
+      if (forbidden.pattern.test(body)) {
+        report(
+          'R17',
+          fileKey,
+          line,
+          `the source of a sandboxed plugin may not use ${forbidden.name}: the sandbox forbids it`,
+        );
+      }
+    }
+    match = assignment.exec(source);
+  }
+}
 
 function main() {
   const files = listSourceFiles(SRC_ROOT);
@@ -317,11 +562,14 @@ function main() {
     const fileKey = stripExt(toPosix(relative(FRONTEND_ROOT, file)));
     const source = readFileSync(file, 'utf8');
     checked += 1;
+    const imports = [];
     for (const imp of parseImports(source)) {
       const target = resolveTarget(file, imp.specifier);
       if (!target) continue;
       checkImport(fileKey, imp, target);
+      imports.push({ ...imp, target });
     }
+    checkFile(fileKey, imports, source);
   }
 
   violations.sort((a, b) =>

@@ -41,7 +41,7 @@ export const wordCountManifest: PluginManifest = {
   version: '1.0.0',
   manifestVersion: 1,
   minApiVersion: '1.0.0',
-  description: 'Считает слова и символы активной заметки.',
+  description: 'Counts the words and the characters of the active note.',
   author: 'Noto',
   // `editor.read` — the text of the note; `ui.contribute` — the panel and the
   // command. The plugin never asks for a write permission.
@@ -49,10 +49,10 @@ export const wordCountManifest: PluginManifest = {
   settings: [
     {
       key: 'countChars',
-      label: 'Считать символы',
+      label: 'Count the characters',
       type: 'boolean',
       default: true,
-      description: 'Показывать количество символов вместе с количеством слов.',
+      description: 'Show the number of the characters together with the number of the words.',
     },
   ],
 };
@@ -154,16 +154,16 @@ function WordCountView(props: WordCountViewProps) {
     return h(
       'div',
       { class: 'noto-word-count', 'data-plugin': 'word-count' },
-      h('span', { class: 'noto-word-count-empty' }, 'Нет открытой заметки'),
+      h('span', { class: 'noto-word-count-empty' }, 'No open note'),
     );
   }
 
   return h(
     'div',
     { class: 'noto-word-count', 'data-plugin': 'word-count' },
-    h('span', { class: 'noto-word-count-words' }, `Слов: ${state.stats.words}`),
+    h('span', { class: 'noto-word-count-words' }, `Words: ${state.stats.words}`),
     props.showChars()
-      ? h('span', { class: 'noto-word-count-chars' }, `Символов: ${state.stats.characters}`)
+      ? h('span', { class: 'noto-word-count-chars' }, `Characters: ${state.stats.characters}`)
       : null,
   );
 }
@@ -260,8 +260,8 @@ export const wordCountPlugin: Plugin = {
 
     ctx.registerCommand({
       id: 'word-count.count',
-      title: 'Word Count: показать счётчик',
-      description: 'Показывает количество слов и символов активной заметки.',
+      title: 'Word Count: show the counter',
+      description: 'Shows the number of the words and the characters of the active note.',
       run: () => {
         const state = store.get();
         ctx.logger.info('word count', {

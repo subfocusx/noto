@@ -15,6 +15,13 @@ import type {
   PluginSidebarItem,
   PluginToolbarItem,
 } from '../plugins/contract';
+import { Icon } from '../ui/icons';
+import { t } from '../i18n';
+import { useT } from '../i18n/useT';
+import '../styles/plugin-activity.css';
+import '../styles/plugin-links.css';
+import '../styles/plugin-graph.css';
+import '../styles/plugin-sandbox.css';
 
 /* ----------------------------------------------------------- error boundary */
 
@@ -54,7 +61,9 @@ export class PluginErrorBoundary extends Component<
     if (this.state.failed) {
       return (
         <div class="noto-plugin-error" role="alert">
-          Ошибка плагина{this.props.label ? `: ${this.props.label}` : ''}
+          {this.props.label
+            ? t('plugins.errorWithLabel', { label: this.props.label })
+            : t('plugins.error')}
         </div>
       );
     }
@@ -68,24 +77,30 @@ export interface PluginSidebarSlotProps {
   items: PluginSidebarItem[];
 }
 
-/** The sidebar entries of the plugins. */
+/**
+ * The sidebar entries of the plugins.
+ *
+ * The entries are icon-only buttons: the name of the entry stays in the
+ * `aria-label` and in the tooltip of the button.
+ */
 export function PluginSidebarSlot(props: PluginSidebarSlotProps) {
+  const t = useT();
   if (props.items.length === 0) return null;
   return (
-    <ul class="noto-plugin-sidebar" role="list" aria-label="Plugins">
+    <ul class="noto-plugin-sidebar" role="list" aria-label={t('plugins.label')}>
       {props.items.map((item) => (
         <li key={item.id} class="noto-plugin-sidebar-item">
           <PluginErrorBoundary label={item.title}>
             <button
               type="button"
-              class="noto-plugin-button"
+              class="noto-plugin-button noto-plugin-button-icon"
               title={item.title}
               aria-label={item.title}
               onClick={() => item.onSelect()}
             >
               {item.icon ? (
                 <span class="noto-plugin-icon" aria-hidden="true">
-                  {item.icon}
+                  <Icon name={item.icon} size={16} />
                 </span>
               ) : null}
               <span class="noto-plugin-label">{item.title}</span>
@@ -113,6 +128,7 @@ function PluginPanelContent(props: { panel: PluginPanel }) {
 
 /** The panels of the plugins, as switchable tabs. */
 export function PluginPanelSlot(props: PluginPanelSlotProps) {
+  const t = useT();
   const [selected, setSelected] = useState<string | null>(props.activePanelId ?? null);
   if (props.panels.length === 0) return null;
 
@@ -126,8 +142,8 @@ export function PluginPanelSlot(props: PluginPanelSlotProps) {
   };
 
   return (
-    <section class="noto-plugin-panels" aria-label="Plugin panels">
-      <div class="noto-plugin-tabs" role="tablist" aria-label="Plugin panels">
+    <section class="noto-plugin-panels" aria-label={t('plugins.panelsLabel')}>
+      <div class="noto-plugin-tabs" role="tablist" aria-label={t('plugins.panelsLabel')}>
         {props.panels.map((panel) => (
           <button
             key={panel.id}
@@ -163,16 +179,22 @@ export interface PluginToolbarSlotProps {
   items: PluginToolbarItem[];
 }
 
-/** The buttons the plugins added to the editor toolbar. */
+/**
+ * The buttons the plugins added to the editor toolbar.
+ *
+ * The buttons are icon-only: the name of the action stays in the `aria-label`
+ * and in the tooltip of the button.
+ */
 export function PluginToolbarSlot(props: PluginToolbarSlotProps) {
+  const t = useT();
   if (props.items.length === 0) return null;
   return (
-    <div class="noto-plugin-toolbar" role="toolbar" aria-label="Plugin actions">
+    <div class="noto-plugin-toolbar" role="toolbar" aria-label={t('plugins.actionsLabel')}>
       {props.items.map((item) => (
         <PluginErrorBoundary key={item.id} label={item.title}>
           <button
             type="button"
-            class="noto-plugin-button"
+            class="noto-plugin-button noto-plugin-button-icon"
             title={item.title}
             aria-label={item.title}
             onClick={() => {
@@ -181,7 +203,7 @@ export function PluginToolbarSlot(props: PluginToolbarSlotProps) {
           >
             {item.icon ? (
               <span class="noto-plugin-icon" aria-hidden="true">
-                {item.icon}
+                <Icon name={item.icon} size={16} />
               </span>
             ) : null}
             <span class="noto-plugin-label">{item.title}</span>
@@ -202,6 +224,7 @@ export interface PluginContextMenuSlotProps {
 
 /** The context menu entries the plugins added for a file. */
 export function PluginContextMenuSlot(props: PluginContextMenuSlotProps) {
+  const t = useT();
   const applicable = props.items.filter((item) => {
     try {
       return item.appliesTo(props.path);
@@ -211,7 +234,7 @@ export function PluginContextMenuSlot(props: PluginContextMenuSlotProps) {
   });
   if (applicable.length === 0) return null;
   return (
-    <ul class="noto-plugin-context-menu" role="menu" aria-label="Plugin actions">
+    <ul class="noto-plugin-context-menu" role="menu" aria-label={t('plugins.actionsLabel')}>
       {applicable.map((item) => (
         <li key={item.id} role="none">
           <PluginErrorBoundary label={item.title}>
@@ -242,9 +265,10 @@ export interface PluginCommandSlotProps {
 
 /** The commands the plugins registered (used by the command palette). */
 export function PluginCommandSlot(props: PluginCommandSlotProps) {
+  const t = useT();
   if (props.commands.length === 0) return null;
   return (
-    <ul class="noto-plugin-commands" role="list" aria-label="Plugin commands">
+    <ul class="noto-plugin-commands" role="list" aria-label={t('plugins.commandsLabel')}>
       {props.commands.map((command) => (
         <li key={command.id} class="noto-plugin-command">
           <PluginErrorBoundary label={command.title}>

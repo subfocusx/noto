@@ -15,9 +15,13 @@ import {
   applyTheme,
   refreshTree,
   resetAutosave,
+  setConnection,
   setOnline,
   type AppActions,
 } from './actions';
+import { connectionMonitor } from '../connection/monitor';
+import { installOfflineQueuePublisher } from './offlineQueue';
+import { attachDrawerGesture } from '../touch/drawerGesture';
 import { getSnapshot, notify, resetState, subscribe } from './state';
 
 /* -------------------------------------------------------------- lifecycle */
@@ -36,6 +40,15 @@ export function start(): void {
   window.addEventListener('online', goOnline);
   window.addEventListener('offline', goOffline);
 
+  // The state of the backend is measured, not guessed: the monitor polls the
+  // health endpoint and publishes what it learns.
+  connectionMonitor.setOnChange(setConnection);
+  connectionMonitor.start();
+
+  // The outbox of the writes that wait for the connection publishes its
+  // counter into the state.
+  installOfflineQueuePublisher();
+
   // Keep the layout height in sync with the mobile keyboard viewport.
   const viewport = typeof window !== 'undefined' ? window.visualViewport : undefined;
   let removeViewport: (() => void) | null = null;
@@ -52,10 +65,20 @@ export function start(): void {
     };
   }
 
+  // The drawer of a narrow screen answers to the touch: a swipe at the edge
+  // of the screen opens it, a swipe to the left closes it.
+  const removeDrawerGesture = attachDrawerGesture({
+    isOpen: () => getSnapshot().ui.drawerOpen,
+    onOpen: () => actions.setDrawerOpen(true),
+    onClose: () => actions.setDrawerOpen(false),
+  });
+
   cleanupEnvironment = () => {
     window.removeEventListener('online', goOnline);
     window.removeEventListener('offline', goOffline);
+    connectionMonitor.stop();
     removeViewport?.();
+    removeDrawerGesture();
   };
 
   void refreshTree();

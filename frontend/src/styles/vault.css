@@ -1,0 +1,421 @@
+/* The styles of the encrypted storage: the wizard that creates or migrates the
+   storage, the screen that unlocks it, the section of the settings and the
+   wizard of the migration of an open storage.
+
+   The rules of the migration of an open storage are prefixed with
+   `.noto-migration-`, so that both wizards can share the file. */
+
+/* --------------------------------------------------------------- buttons -- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-container);
+  color: var(--fg-secondary);
+  font-size: var(--text-base);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.button:hover {
+  background: var(--bg-container-high);
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button.primary {
+  height: var(--control-lg);
+  padding: 0 var(--space-4);
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: var(--weight-medium);
+}
+
+.button.primary:hover {
+  background: var(--accent-hover);
+  color: var(--accent-fg);
+}
+
+/* ------------------------------------------------- the wizard of the setup -- */
+
+.vault-setup {
+  max-width: 640px;
+}
+
+/* The steps of the wizard. */
+.vault-steps {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.vault-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.vault-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: var(--text-sm);
+}
+
+.vault-step.active {
+  color: var(--fg);
+}
+
+.vault-step.active .vault-step-index {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* The choice between a new storage and a migration. */
+.vault-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-choice-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-container);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vault-choice-item:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-container-high);
+}
+
+.vault-choice-title {
+  font-weight: var(--weight-medium);
+}
+
+.vault-choice-hint {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The form of the password. */
+.vault-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.vault-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vault-field-row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The meter of the strength of the password. */
+.vault-strength {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.vault-strength-label {
+  color: var(--fg-muted);
+}
+
+.vault-strength-value {
+  color: var(--fg-secondary);
+}
+
+.vault-strength-value.weak,
+.vault-strength-fill.weak {
+  color: var(--danger);
+  background: var(--danger);
+}
+
+.vault-strength-value.fair,
+.vault-strength-fill.fair {
+  color: var(--fg-muted);
+  background: var(--fg-muted);
+}
+
+.vault-strength-value.good,
+.vault-strength-fill.good {
+  color: var(--accent);
+  background: var(--accent);
+}
+
+.vault-strength-value.strong,
+.vault-strength-fill.strong {
+  color: var(--accent);
+  background: var(--accent);
+}
+
+.vault-strength-bar {
+  display: block;
+  flex: 1 1 auto;
+  height: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-container-highest);
+  overflow: hidden;
+}
+
+.vault-strength-fill {
+  display: block;
+  height: 100%;
+  width: 25%;
+  border-radius: var(--radius-md);
+}
+
+.vault-strength-fill.fair {
+  width: 50%;
+}
+
+.vault-strength-fill.good {
+  width: 75%;
+}
+
+.vault-strength-fill.strong {
+  width: 100%;
+}
+
+/* The parameters of the derivation. */
+.vault-kdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-switch-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-secondary);
+}
+
+/* The warnings of the wizard. */
+.vault-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-warning-text {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* The recovery key. */
+.vault-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-recovery-key {
+  display: block;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-container-high);
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+}
+
+/* The screen of the finished wizard. */
+.vault-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vault-done-title {
+  margin: 0;
+  font-weight: var(--weight-medium);
+}
+
+/* -------------------------------------------------- the screen of the lock -- */
+
+.vault-unlock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--bg);
+}
+
+.vault-unlock-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(420px, 100%);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-container);
+}
+
+.vault-unlock-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.vault-unlock-logo {
+  font-weight: var(--weight-medium);
+}
+
+.vault-unlock-name {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.vault-unlock-title {
+  margin: 0;
+  font-size: var(--text-lg, 16px);
+}
+
+.vault-unlock-hint {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+/* ------------------------------------------- the section of the settings -- */
+
+.vault-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.vault-ok-text {
+  margin: 0;
+  color: var(--fg-secondary);
+}
+
+.vault-broken-list {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.2em;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.vault-security-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* ------------------------------------- the migration of an open storage -- */
+
+/* The dialog of the migration. */
+.noto-migration {
+  max-width: 640px;
+}
+
+/* The list of the warnings of the migration. */
+.noto-migration-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding-left: 1.2em;
+  color: var(--fg-secondary);
+}
+
+/* The hint about the strength of the password. */
+.noto-migration-strength {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.noto-migration-strength-weak {
+  color: var(--danger);
+}
+
+.noto-migration-strength-fair {
+  color: var(--fg-muted);
+}
+
+.noto-migration-strength-good {
+  color: var(--accent);
+}
+
+/* The progress of the migration. */
+.noto-migration-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.noto-migration-phase {
+  font-weight: var(--weight-medium);
+}
+
+/* The path of the note that is being copied. */
+.noto-migration-path {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The honest note about what the application cannot erase. */
+.noto-migration-note {
+  color: var(--fg-secondary);
+}
+
+/* The list of the broken objects and of the notes that failed. */
+.noto-migration-broken ul {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2em;
+}
+
+.noto-migration-broken code {
+  font-size: var(--text-sm);
+}

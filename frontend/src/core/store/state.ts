@@ -4,6 +4,12 @@
 // need and the subscriber list. The actions (`./actions.ts`) work on top of
 // it, the facade (`./appStore.ts`) exposes both to the outside world.
 import type { AppState, NoteState } from './types';
+import { loadPrefs, type ThemePreference } from '../settings/prefs';
+import { loadFavorites } from '../favorites/types';
+import { loadNotifications } from '../notifications/persistence';
+import { clearNotifications } from '../notifications/types';
+import { loadReminders } from '../reminders/types';
+import { storageRegistry } from '../storages/storageRegistry';
 
 /**
  * Mutable mirrors of the state that asynchronous callbacks need.
@@ -23,10 +29,26 @@ export interface Refs {
   loadingPath: string | null;
 }
 
-function initialTheme(): 'light' | 'dark' {
-  return typeof localStorage !== 'undefined' && localStorage.getItem('noto-theme') === 'light'
-    ? 'light'
-    : 'dark';
+/**
+ * Resolves the theme that is really active.
+ *
+ * The explicit choice of the user always wins; `system` follows the
+ * preference of the operating system.
+ */
+export function resolveTheme(theme: ThemePreference): 'light' | 'dark' {
+  if (theme !== 'system') return theme;
+  try {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+  } catch {
+    /* the browser does not support the query */
+  }
+  return 'dark';
+}
+
+function initialTheme(): ThemePreference {
+  return loadPrefs().theme;
 }
 
 function initialOnline(): boolean {
@@ -34,8 +56,9 @@ function initialOnline(): boolean {
 }
 
 export function createInitialState(): AppState {
+  const prefs = loadPrefs();
   return {
-    tree: { folders: [], files: [], loading: true },
+    tree: { folders: [], files: [], loading: true, noteTotal: 0, folderTotal: 0 },
     note: {
       path: null,
       content: '',
@@ -44,10 +67,57 @@ export function createInitialState(): AppState {
       status: 'idle',
       dirty: false,
       saveError: null,
+      conflict: null,
     },
     dialog: { kind: null },
-    ui: { mode: 'split', expanded: new Set<string>(), searchOpen: false, drawerOpen: false },
-    env: { online: initialOnline(), theme: initialTheme() },
+    ui: {
+      mode: prefs.mode,
+      expanded: new Set<string>(prefs.expandedFolders),
+      findOpen: false,
+      findMode: 'search',
+      paletteOpen: false,
+      drawerOpen: false,
+      railSection: prefs.railSection,
+      calendarMonth: '',
+      calendarDay: null,
+      notifications: loadNotifications(),
+      favorites: loadFavorites(),
+      reminders: loadReminders(),
+      sidebarWidth: prefs.sidebarWidth,
+      treeSort: prefs.treeSort,
+      editorFontSize: prefs.editorFontSize,
+      editorWrap: prefs.editorWrap,
+      recentPaths: [...prefs.recentPaths],
+      openPaths: [],
+      query: '',
+      queryHits: [],
+      queryTotal: 0,
+      queryPartial: false,
+      queryError: null,
+      tags: [],
+      settingsOpen: false,
+      shortcutHelpOpen: false,
+      contextMenu: null,
+      rightPanelVisible: prefs.rightPanelVisible,
+      rightPanelPinned: prefs.rightPanelPinned,
+      rightPanelWidth: prefs.rightPanelWidth,
+      recentCollapsed: prefs.recentCollapsed,
+      treeShowCounts: prefs.treeShowCounts,
+      vaultConfigured: false,
+      vaultPath: '',
+      vaultFixed: false,
+      vaultBusy: false,
+      vaultRecents: prefs.vaultRecents,
+      vaultMenuOpen: false,
+      openStorages: [],
+    },
+    env: {
+      online: initialOnline(),
+      connection: 'connecting',
+      theme: initialTheme(),
+      effectiveTheme: resolveTheme(initialTheme()),
+      pendingSync: 0,
+    },
     draftOffer: null,
     banner: null,
   };
@@ -73,7 +143,21 @@ export function update(recipe: (prev: AppState) => AppState): void {
   const next = recipe(internals.state);
   if (next === internals.state) return;
   internals.state = next;
+  syncActiveStorage(next);
   notify();
+}
+
+/**
+ * Keeps the copy of the active storage in the registry up to date.
+ *
+ * The registry holds the state of every storage that is open; the state of the
+ * active one is published to the store, and the registry keeps its copy, so
+ * the switch back to the storage finds the tree and the note it left there.
+ */
+function syncActiveStorage(state: AppState): void {
+  const path = state.ui.vaultPath;
+  if (!path) return;
+  storageRegistry.sync(path, state, refs);
 }
 
 /** Tells every subscriber that the state changed. */
@@ -106,4 +190,11 @@ export function resetState(): void {
   refs.revision = 0;
   refs.content = '';
   refs.loadingPath = null;
+  // The notifications survive a reload of the page — but a reset of the store
+  // is a new session: the list of the session starts empty.
+  clearNotifications();
+  internals.state.ui.notifications = [];
+  // The storages that were open are closed with the state: the store starts
+  // again with one storage.
+  storageRegistry.clear();
 }

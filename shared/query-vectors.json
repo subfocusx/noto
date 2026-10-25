@@ -1,0 +1,604 @@
+{
+  "version": 1,
+  "note": "Golden vectors of the query language and of the derived properties. The Go and the TypeScript implementations read THIS file and must produce exactly the same canonical JSON. See docs/QUERY_LANGUAGE.md.",
+  "astFormat": {
+    "and": { "k": "and", "l": "<node>", "r": "<node>" },
+    "or": { "k": "or", "l": "<node>", "r": "<node>" },
+    "not": { "k": "not", "e": "<node>" },
+    "cmp": { "k": "cmp", "f": "<field>", "op": "<operator>", "v": "<value>" },
+    "truthy": { "k": "truthy", "f": "<field>" },
+    "str": { "k": "str", "v": "<text>" },
+    "num": { "k": "num", "v": 0 },
+    "bool": { "k": "bool", "v": true },
+    "list": { "k": "list", "items": ["<value>"] },
+    "now": { "k": "now" },
+    "today": { "k": "today" },
+    "rel": { "k": "rel", "base": "now", "off": -604800 }
+  },
+  "queries": [
+    {
+      "name": "tag equals a string",
+      "source": "tag == \"work\"",
+      "ast": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "work" } }
+    },
+    {
+      "name": "single quotes are the same as double quotes",
+      "source": "tag == 'work'",
+      "ast": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "work" } }
+    },
+    {
+      "name": "tag in a list",
+      "source": "tag in [\"work\", \"urgent\"]",
+      "ast": {
+        "k": "cmp",
+        "f": "tag",
+        "op": "in",
+        "v": { "k": "list", "items": [{ "k": "str", "v": "work" }, { "k": "str", "v": "urgent" }] }
+      }
+    },
+    {
+      "name": "negation of a flag",
+      "source": "!has_task_list",
+      "ast": { "k": "not", "e": { "k": "truthy", "f": "has_task_list" } }
+    },
+    {
+      "name": "a flag alone means truthy",
+      "source": "has_task_list",
+      "ast": { "k": "truthy", "f": "has_task_list" }
+    },
+    {
+      "name": "and of two flags",
+      "source": "has_task_list && !has_incomplete_tasks",
+      "ast": {
+        "k": "and",
+        "l": { "k": "truthy", "f": "has_task_list" },
+        "r": { "k": "not", "e": { "k": "truthy", "f": "has_incomplete_tasks" } }
+      }
+    },
+    {
+      "name": "or of two flags",
+      "source": "has_task_list || has_code",
+      "ast": {
+        "k": "or",
+        "l": { "k": "truthy", "f": "has_task_list" },
+        "r": { "k": "truthy", "f": "has_code" }
+      }
+    },
+    {
+      "name": "parentheses change the grouping",
+      "source": "(has_code || has_image) && tag == \"x\"",
+      "ast": {
+        "k": "and",
+        "l": {
+          "k": "or",
+          "l": { "k": "truthy", "f": "has_code" },
+          "r": { "k": "truthy", "f": "has_image" }
+        },
+        "r": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "x" } }
+      }
+    },
+    {
+      "name": "contains on the content",
+      "source": "content.contains(\"pineapple\")",
+      "ast": { "k": "cmp", "f": "content", "op": "contains", "v": { "k": "str", "v": "pineapple" } }
+    },
+    {
+      "name": "startsWith on the path",
+      "source": "path startsWith \"projects/\"",
+      "ast": { "k": "cmp", "f": "path", "op": "startsWith", "v": { "k": "str", "v": "projects/" } }
+    },
+    {
+      "name": "endsWith on the name",
+      "source": "name endsWith \".md\"",
+      "ast": { "k": "cmp", "f": "name", "op": "endsWith", "v": { "k": "str", "v": ".md" } }
+    },
+    {
+      "name": "created in the last seven days",
+      "source": "created_at >= now - 7d",
+      "ast": {
+        "k": "cmp",
+        "f": "created_at",
+        "op": ">=",
+        "v": { "k": "rel", "base": "now", "off": -604800 }
+      }
+    },
+    {
+      "name": "updated before now",
+      "source": "updated_at < now",
+      "ast": { "k": "cmp", "f": "updated_at", "op": "<", "v": { "k": "now" } }
+    },
+    {
+      "name": "created today",
+      "source": "created_at >= today",
+      "ast": { "k": "cmp", "f": "created_at", "op": ">=", "v": { "k": "today" } }
+    },
+    {
+      "name": "title equals",
+      "source": "title == \"Hello\"",
+      "ast": { "k": "cmp", "f": "title", "op": "==", "v": { "k": "str", "v": "Hello" } }
+    },
+    {
+      "name": "extension equals",
+      "source": "ext == \"md\"",
+      "ast": { "k": "cmp", "f": "ext", "op": "==", "v": { "k": "str", "v": "md" } }
+    },
+    {
+      "name": "folder equals",
+      "source": "folder == \"projects\"",
+      "ast": { "k": "cmp", "f": "folder", "op": "==", "v": { "k": "str", "v": "projects" } }
+    },
+    {
+      "name": "name not equal",
+      "source": "name != \"old.md\"",
+      "ast": { "k": "cmp", "f": "name", "op": "!=", "v": { "k": "str", "v": "old.md" } }
+    },
+    {
+      "name": "has attachments",
+      "source": "has_attachments",
+      "ast": { "k": "truthy", "f": "has_attachments" }
+    },
+    {
+      "name": "has a link",
+      "source": "has_link",
+      "ast": { "k": "truthy", "f": "has_link" }
+    },
+    {
+      "name": "has an image",
+      "source": "has_image",
+      "ast": { "k": "truthy", "f": "has_image" }
+    },
+    {
+      "name": "has code",
+      "source": "has_code",
+      "ast": { "k": "truthy", "f": "has_code" }
+    },
+    {
+      "name": "has incomplete tasks",
+      "source": "has_incomplete_tasks",
+      "ast": { "k": "truthy", "f": "has_incomplete_tasks" }
+    },
+    {
+      "name": "tag with a group",
+      "source": "tag == \"a\" && (tag == \"b\" || tag == \"c\")",
+      "ast": {
+        "k": "and",
+        "l": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "a" } },
+        "r": {
+          "k": "or",
+          "l": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "b" } },
+          "r": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "c" } }
+        }
+      }
+    },
+    {
+      "name": "negation of a comparison",
+      "source": "!(tag == \"x\")",
+      "ast": { "k": "not", "e": { "k": "cmp", "f": "tag", "op": "==", "v": { "k": "str", "v": "x" } } }
+    },
+    {
+      "name": "a string with a space",
+      "source": "content.contains(\"a b\")",
+      "ast": { "k": "cmp", "f": "content", "op": "contains", "v": { "k": "str", "v": "a b" } }
+    },
+    {
+      "name": "a string with a percent sign",
+      "source": "content.contains(\"100%\")",
+      "ast": { "k": "cmp", "f": "content", "op": "contains", "v": { "k": "str", "v": "100%" } }
+    },
+    {
+      "name": "a string with an apostrophe",
+      "source": "content.contains(\"it's\")",
+      "ast": { "k": "cmp", "f": "content", "op": "contains", "v": { "k": "str", "v": "it's" } }
+    },
+    {
+      "name": "a path with a slash",
+      "source": "path == \"notes/todo.md\"",
+      "ast": { "k": "cmp", "f": "path", "op": "==", "v": { "k": "str", "v": "notes/todo.md" } }
+    },
+    {
+      "name": "a non latin string",
+      "source": "title == \"Привет\"",
+      "ast": { "k": "cmp", "f": "title", "op": "==", "v": { "k": "str", "v": "Привет" } }
+    },
+    {
+      "name": "the last hour",
+      "source": "created_at >= now - 1h",
+      "ast": {
+        "k": "cmp",
+        "f": "created_at",
+        "op": ">=",
+        "v": { "k": "rel", "base": "now", "off": -3600 }
+      }
+    },
+    {
+      "name": "the last thirty minutes",
+      "source": "created_at >= now - 30m",
+      "ast": {
+        "k": "cmp",
+        "f": "created_at",
+        "op": ">=",
+        "v": { "k": "rel", "base": "now", "off": -1800 }
+      }
+    },
+    {
+      "name": "the last two days",
+      "source": "updated_at >= now - 2d",
+      "ast": {
+        "k": "cmp",
+        "f": "updated_at",
+        "op": ">=",
+        "v": { "k": "rel", "base": "now", "off": -172800 }
+      }
+    },
+    {
+      "name": "two comparisons on the same field",
+      "source": "name == \"a\" && name == \"b\"",
+      "ast": {
+        "k": "and",
+        "l": { "k": "cmp", "f": "name", "op": "==", "v": { "k": "str", "v": "a" } },
+        "r": { "k": "cmp", "f": "name", "op": "==", "v": { "k": "str", "v": "b" } }
+      }
+    },
+    {
+      "name": "a flag compared to true",
+      "source": "has_task_list == true",
+      "ast": { "k": "cmp", "f": "has_task_list", "op": "==", "v": { "k": "bool", "v": true } }
+    },
+    {
+      "name": "a flag compared to false",
+      "source": "has_task_list == false",
+      "ast": { "k": "cmp", "f": "has_task_list", "op": "==", "v": { "k": "bool", "v": false } }
+    },
+    {
+      "name": "the content equals",
+      "source": "content == \"exact\"",
+      "ast": { "k": "cmp", "f": "content", "op": "==", "v": { "k": "str", "v": "exact" } }
+    },
+    {
+      "name": "a title that starts with a non latin letter",
+      "source": "title startsWith \"Д\"",
+      "ast": { "k": "cmp", "f": "title", "op": "startsWith", "v": { "k": "str", "v": "Д" } }
+    },
+    {
+      "name": "an empty string",
+      "source": "folder != \"\"",
+      "ast": { "k": "cmp", "f": "folder", "op": "!=", "v": { "k": "str", "v": "" } }
+    },
+    {
+      "name": "an empty list",
+      "source": "tag in []",
+      "ast": { "k": "cmp", "f": "tag", "op": "in", "v": { "k": "list", "items": [] } }
+    },
+    {
+      "name": "an unknown field is an error",
+      "source": "unknownfield == \"x\"",
+      "error": "unknown field: unknownfield"
+    },
+    {
+      "name": "an unknown operator is an error",
+      "source": "tag ~ \"x\"",
+      "error": "unknown operator: ~"
+    },
+    {
+      "name": "a missing value is an error",
+      "source": "tag ==",
+      "error": "expected a value"
+    },
+    {
+      "name": "an unclosed parenthesis is an error",
+      "source": "(tag == \"x\"",
+      "error": "expected )"
+    },
+    {
+      "name": "a dangling operator is an error",
+      "source": "tag == \"x\" &&",
+      "error": "unexpected end of query"
+    },
+    {
+      "name": "an unknown operator on a known field is an error",
+      "source": "name ~ \"a.*\"",
+      "error": "unknown operator: ~"
+    }
+  ],
+  "metadata": [
+    {
+      "name": "a heading and nothing else",
+      "markdown": "# Title\n\ntext",
+      "props": {
+        "tags": [],
+        "title": "Title",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "two tags",
+      "markdown": "#work #urgent\n\ntext",
+      "props": {
+        "tags": ["work", "urgent"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a task list with an open task",
+      "markdown": "- [ ] task\n- [x] done",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": true,
+        "has_incomplete_tasks": true,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a task list with every task done",
+      "markdown": "- [x] done only",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": true,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a fenced code block",
+      "markdown": "```js\nconst a = 1;\n```",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": true,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "an inline code block",
+      "markdown": "text `code` end",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": true,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "an image",
+      "markdown": "![img](a.png)",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": true,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a wiki link",
+      "markdown": "see [[Other Note]]",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": true
+      }
+    },
+    {
+      "name": "a markdown link",
+      "markdown": "see [other](other.md)",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": true
+      }
+    },
+    {
+      "name": "a heading and a tag",
+      "markdown": "# Title\n#tag\n",
+      "props": {
+        "tags": ["tag"],
+        "title": "Title",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a tag inside a sentence",
+      "markdown": "text with #inline tag",
+      "props": {
+        "tags": ["inline"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a tag at the start of a line",
+      "markdown": "#work\n",
+      "props": {
+        "tags": ["work"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "tags are lower cased",
+      "markdown": "#Work\n",
+      "props": {
+        "tags": ["work"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "the same tag twice is one tag",
+      "markdown": "#work #Work\n",
+      "props": {
+        "tags": ["work"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a hierarchical tag",
+      "markdown": "#nested/tag\n",
+      "props": {
+        "tags": ["nested/tag"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a heading is not a tag",
+      "markdown": "# Not a tag\n",
+      "props": {
+        "tags": [],
+        "title": "Not a tag",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a tag inside a code fence is not a tag",
+      "markdown": "```\n#nottag\n```",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": true,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "everything at once",
+      "markdown": "# Title\n\n- [ ] a\n```x\n```\n[[link]]",
+      "props": {
+        "tags": [],
+        "title": "Title",
+        "has_task_list": true,
+        "has_incomplete_tasks": true,
+        "has_code": true,
+        "has_image": false,
+        "has_link": true
+      }
+    },
+    {
+      "name": "an empty note",
+      "markdown": "",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a tag ends at the whitespace",
+      "markdown": "#tag with space",
+      "props": {
+        "tags": ["tag"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a note without properties",
+      "markdown": "no properties here",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "a non latin tag",
+      "markdown": "#日本語\n",
+      "props": {
+        "tags": ["日本語"],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    },
+    {
+      "name": "only the first heading is the title",
+      "markdown": "## Sub\n\n# Real\n",
+      "props": {
+        "tags": [],
+        "title": "",
+        "has_task_list": false,
+        "has_incomplete_tasks": false,
+        "has_code": false,
+        "has_image": false,
+        "has_link": false
+      }
+    }
+  ]
+}

@@ -12,8 +12,9 @@ test('the app loads, the health endpoint answers and the empty state is visible'
 
   await page.goto('/');
 
-  // The header shows the product name while no note is selected.
-  await expect(page.locator('.app-title')).toHaveText('Noto');
+  // The header of the column was removed: the name of the open note lives in
+  // the tabs of the editor, and there is no tab while no note is selected.
+  await expect(page.locator('.app-header')).toHaveCount(0);
   await expect(page.getByTestId('file-tree')).toBeVisible();
   await expect(page.getByTestId('empty-state')).toBeVisible();
   await expect(page.getByTestId('empty-state')).toContainText('No note selected');

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  activeTabName,
   clickMove,
   clickRename,
   createFolder,
@@ -36,7 +37,7 @@ test.describe('tree operations', () => {
     await expect(folder.locator('button.tree-file-button', { hasText: note })).toHaveCount(1);
 
     // And it is the note that is open in the editor.
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
   });
 
   test('a note can be renamed and moved to another folder', async ({ page }) => {

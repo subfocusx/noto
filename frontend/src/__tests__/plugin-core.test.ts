@@ -393,6 +393,47 @@ describe('builtin loader', () => {
       expect(plugin.manifest.id).toMatch(/^[a-z0-9][a-z0-9._-]*$/);
     }
   });
+
+  it('keeps the built-in plugins compatible with the older APIs without any change', () => {
+    // The plugins written before the query capability were NOT touched by the
+    // additive bumps: they must keep working unchanged. The plugins of API
+    // 1.2.0 declare the version they need.
+    expect(builtinPlugins.length).toBeGreaterThan(0);
+    for (const plugin of builtinPlugins) {
+      expect(isCompatible(plugin.manifest.minApiVersion, PLUGIN_API_VERSION)).toBe(true);
+    }
+    for (const id of ['word-count', 'insert-template', 'backlinks']) {
+      const plugin = builtinPlugins.find((item) => item.manifest.id === id);
+      expect(plugin).toBeDefined();
+      expect(plugin?.manifest.minApiVersion).toBe('1.0.0');
+    }
+    for (const id of ['graph', 'tags', 'activity', 'links']) {
+      const plugin = builtinPlugins.find((item) => item.manifest.id === id);
+      expect(plugin).toBeDefined();
+      expect(plugin?.manifest.minApiVersion).toBe('1.2.0');
+    }
+  });
+
+  it('activates the built-in plugins without any vault state', async () => {
+    const registry = new PluginRegistry();
+    const bus = new EventBus<PluginEventMap>();
+    const commands = new CommandRegistry();
+    const settings = new SettingsStore();
+    const host = new PluginHost({
+      registry,
+      bus,
+      commands,
+      settings,
+      createApi: () => createPluginApi(),
+      getEditor: () => null,
+    });
+    for (const plugin of builtinPlugins) {
+      registry.register(plugin);
+      registry.enable(plugin.manifest.id);
+      await host.activate(plugin.manifest.id);
+      expect(registry.get(plugin.manifest.id)?.state).toBe('active');
+    }
+  });
 });
 
 // Type level check: a panel renders Preact children.

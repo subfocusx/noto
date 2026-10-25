@@ -192,6 +192,32 @@ describe('A. manifest validation', () => {
     // A different major is never compatible.
     expect(isCompatibleWithCurrentApi(manifest({ minApiVersion: '0.9.0' }))).toBe(false);
   });
+
+  it('keeps a plugin for API 1.0.0 working after the additive bump to 1.1.0', async () => {
+    // The bump to 1.1.0 only ADDED the optional `ctx.vault` member, so an
+    // existing plugin (manifestVersion 1, minApiVersion "1.0.0") keeps
+    // working unchanged.
+    expect(isCompatibleWithCurrentApi(manifest({ minApiVersion: '1.0.0' }))).toBe(true);
+    const { registry, host } = makeHost();
+    const activate = vi.fn();
+    registry.register(makePlugin(manifest({ minApiVersion: '1.0.0' }), activate));
+    await host.enable('api.demo');
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(registry.get('api.demo')?.state).toBe('active');
+  });
+
+  it('gives the plugin no vault state while the application published none', async () => {
+    const { registry, host } = makeHost();
+    let ctx: PluginContext | null = null;
+    registry.register(
+      makePlugin(manifest({ minApiVersion: '1.0.0' }), (c) => {
+        ctx = c;
+      }),
+    );
+    await host.enable('api.demo');
+    expect(ctx).not.toBeNull();
+    expect(ctx!.vault).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

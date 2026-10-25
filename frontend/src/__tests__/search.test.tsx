@@ -1,6 +1,11 @@
+// The tests of the search module of the window.
+//
+// The window of the search and the filters has two modules; this file covers
+// the search one: the debounce of the query, the results and the opening of a
+// note. The window itself is covered by `find-panel.test.tsx`.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/preact';
-import { SearchPanel } from '../components/SearchPanel';
+import { FindPanel } from '../components/FindPanel';
 
 const hits = [
   {
@@ -29,7 +34,15 @@ afterEach(() => {
 describe('search results', () => {
   it('debounces the query and renders the results', async () => {
     const onOpenNote = vi.fn();
-    const view = render(<SearchPanel open onClose={() => undefined} onOpenNote={onOpenNote} />);
+    const view = render(
+      <FindPanel
+        open
+        mode="search"
+        onModeChange={() => undefined}
+        onClose={() => undefined}
+        onOpenNote={onOpenNote}
+      />,
+    );
 
     fireEvent.input(view.getByLabelText('Search query'), { target: { value: 'results' } });
     expect(searchMock).not.toHaveBeenCalled();
@@ -45,7 +58,15 @@ describe('search results', () => {
 
   it('opens the note when a result is clicked', async () => {
     const onOpenNote = vi.fn();
-    const view = render(<SearchPanel open onClose={() => undefined} onOpenNote={onOpenNote} />);
+    const view = render(
+      <FindPanel
+        open
+        mode="search"
+        onModeChange={() => undefined}
+        onClose={() => undefined}
+        onOpenNote={onOpenNote}
+      />,
+    );
 
     fireEvent.input(view.getByLabelText('Search query'), { target: { value: 'results' } });
     await vi.advanceTimersByTimeAsync(250);
@@ -56,7 +77,15 @@ describe('search results', () => {
 
   it('shows an empty state when nothing matches', async () => {
     searchMock.mockResolvedValueOnce([]);
-    const view = render(<SearchPanel open onClose={() => undefined} onOpenNote={() => undefined} />);
+    const view = render(
+      <FindPanel
+        open
+        mode="search"
+        onModeChange={() => undefined}
+        onClose={() => undefined}
+        onOpenNote={() => undefined}
+      />,
+    );
     fireEvent.input(view.getByLabelText('Search query'), { target: { value: 'nothing' } });
     await vi.advanceTimersByTimeAsync(250);
     expect(view.getByTestId('search-results').textContent).toContain('No results');

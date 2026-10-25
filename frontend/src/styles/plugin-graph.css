@@ -1,0 +1,63 @@
+/* ==========================================================================
+   The panel of the Graph plugin.
+
+   The graph is a square SVG: the notes are the nodes, the links are the
+   edges. The panel keeps the square shape and paints the nodes and the edges
+   with the tokens of the application.
+   ========================================================================== */
+
+.noto-graph {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  color: var(--fg-secondary);
+  font-size: var(--text-sm);
+}
+
+.noto-graph-canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.noto-graph-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.noto-graph-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.noto-graph-node {
+  fill: var(--accent);
+  stroke: var(--bg-inset);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.noto-graph-node:hover {
+  fill: var(--accent-hover);
+  stroke: var(--fg);
+}
+
+.noto-graph-legend {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+.noto-graph-empty,
+.noto-graph-error {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.noto-graph-error {
+  color: var(--danger);
+}

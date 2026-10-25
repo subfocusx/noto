@@ -1,0 +1,163 @@
+/* The editor: the matches of the query, the completion of the tags and the
+   card of a note. The colours come from the tokens of the design system, so
+   the editor follows the light and the dark theme. */
+
+.editor-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-shell > .editor-host {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The matches of the query of the filter. */
+.noto-match {
+  background-color: var(--warning-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.noto-match-current {
+  background-color: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* The completion of the tags, under the editor. */
+.editor-completion {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 160px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+.editor-completion-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-completion-item.active,
+.editor-completion-item:hover {
+  background: var(--bg-hover);
+}
+
+/* The card of a note. */
+.note-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-app);
+}
+
+.note-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.note-card-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.note-card-crumb::after {
+  content: '/';
+  margin-left: 4px;
+  color: var(--fg-muted);
+}
+
+.note-card-crumb:last-child::after {
+  content: '';
+}
+
+.note-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-card-tag {
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.note-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+/* The toast of the undo of a deletion. */
+.noto-undo-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-2);
+}
+
+.noto-undo-toast-label {
+  font-size: 13px;
+}
+
+.noto-undo-toast-button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The focus mode: only the editor is left on the screen. */
+.noto-focus-mode .app-rail,
+.noto-focus-mode .app-sidebar,
+.noto-focus-mode .app-footer,
+.noto-focus-mode .app-right-panel {
+  display: none;
+}

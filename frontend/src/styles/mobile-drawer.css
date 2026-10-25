@@ -1,0 +1,58 @@
+/* ==========================================================================
+   Mobile: the drawer of the sections.
+
+   Under 820 px the column of the sections becomes a drawer that stands over
+   the editor. The rules of this file make the drawer answer to the touch:
+   a swipe at the edge of the screen opens it, a swipe to the left closes it,
+   and the scroll of the tree never fights with the gesture.
+   ========================================================================== */
+
+@media (max-width: 820px) {
+  /*
+   * The drawer follows the finger: the transition is short enough to feel
+   * like a drawer and long enough to see where it comes from.
+   */
+  .sidebar-wrap {
+    will-change: transform;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /*
+   * The tree scrolls with one finger. The browser is told that the vertical
+   * scroll belongs to the tree (`pan-y`), so a horizontal swipe is not eaten
+   * by the browser and can reach the gesture of the drawer.
+   */
+  .sidebar-scroll,
+  .sidebar-scroll .tree,
+  .sidebar-scroll .tree-list,
+  .sidebar-scroll .section-hint {
+    touch-action: pan-y;
+  }
+
+  /*
+   * The scroll of the tree stops at the ends of the list: the scroll of the
+   * page behind the drawer never moves with it.
+   */
+  .sidebar-scroll {
+    overscroll-behavior: contain;
+  }
+
+  /*
+   * The rows of the tree are big enough for a finger. The hit area of a row
+   * is 44 px high, the smallest that a finger can find.
+   */
+  .sidebar-scroll .tree-row,
+  .sidebar-scroll .tree-folder,
+  .sidebar-scroll .tree-file {
+    min-height: 44px;
+  }
+
+  /*
+   * The backdrop of the drawer covers the editor only, and it does not
+   * swallow the touches that scroll the drawer.
+   */
+  .app.drawer-open .drawer-backdrop {
+    touch-action: none;
+  }
+}

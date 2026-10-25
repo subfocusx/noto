@@ -18,6 +18,7 @@
 import type {
   Plugin,
   PluginApi,
+  PluginAuditEntry,
   PluginCommand,
   PluginContext,
   PluginContextMenuItem,
@@ -34,6 +35,8 @@ import type {
 } from './contract';
 import { PLUGIN_API_VERSION } from './contract';
 import { isCompatible } from './manifest';
+import { PluginAuditLog } from './audit';
+import { PluginSandbox, type SandboxHandlers } from './sandbox';
 import type { PluginRegistry } from './registry';
 import type { EventBus } from '../core/events/eventBus';
 import type { CommandRegistry } from '../core/commands/commandRegistry';
@@ -41,10 +44,13 @@ import type { SettingsStore } from '../core/settings/settingsStore';
 import { createLogger } from '../core/diagnostics/logger';
 import {
   PluginPermissionError,
+  freezeVaultState,
   requirePermission,
   restrictPluginApi,
   type PluginPermissionName,
+  type PluginVaultStateLike,
 } from '../core/api/pluginApi';
+import { h } from 'preact';
 
 /** Dependencies of the {@link PluginHost}. */
 export interface PluginHostDeps {
@@ -63,6 +69,32 @@ export interface PluginHostDeps {
    * change of the note.
    */
   subscribeEditor?: (cb: (editor: PluginEditor | null) => void) => () => void;
+  /**
+   * Optional source of the state of the encrypted storage.
+   *
+   * The application may publish the state through this function; the host
+   * hands a frozen copy to the plugins. When the function is missing (or
+   * returns nothing), the plugins see no state at all.
+   *
+   * The state carries status information only — never key material.
+   */
+  getVaultState?: () => PluginVaultStateLike | undefined;
+  /**
+   * The operation that opens a note (API 1.3.0).
+   *
+   * The application gives the host the way to navigate to a note: the host
+   * hands it to the plugins as `ctx.openNote(path)`. When the dependency is
+   * missing, the operation is refused with an error — it is never a silent
+   * no-op.
+   */
+  openNote?: (path: string) => void | Promise<void>;
+  /**
+   * The audit log of the actions of the plugins (API 1.3.0).
+   *
+   * The host creates its own log when the dependency is missing, so the log
+   * always exists and the panel can show it.
+   */
+  audit?: PluginAuditLog;
   logger?: PluginLogger;
 }
 
@@ -78,6 +110,8 @@ interface PluginRuntime {
   contextMenuItems: Map<string, PluginContextMenuItem>;
   toolbarItems: Map<string, PluginToolbarItem>;
   settingsSections: Map<string, PluginSettingsSection>;
+  /** The sandboxes of the plugins that run inside an iframe. */
+  sandboxes: Map<string, PluginSandbox>;
 }
 
 /**
@@ -142,20 +176,77 @@ function restrictEditor(
   };
 }
 
+/**
+ * Wraps the data API of a plugin with the audit log (API 1.3.0).
+ *
+ * The wrapper is a proxy: the shape of the API object stays exactly the same
+ * (the hidden members `query`, `tags` and `vault` keep their place), but
+ * every call is recorded in the log of the host.
+ *
+ * The log never carries the content of a note: only the path of the note, the
+ * kind of the query and the id of the command.
+ */
+function auditApi<T extends object>(api: T, pluginId: string, audit: PluginAuditLog): T {
+  const short = (value: unknown): string => {
+    const text = typeof value === 'string' ? value : String(value ?? '');
+    return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+  };
+  return new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as unknown;
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]): unknown => {
+        switch (property) {
+          case 'getNote':
+            audit.record(pluginId, 'read', short(args[0]));
+            break;
+          case 'saveNote':
+            audit.record(pluginId, 'write', short(args[0]));
+            break;
+          case 'getTree':
+            audit.record(pluginId, 'read', 'tree');
+            break;
+          case 'search':
+            audit.record(pluginId, 'read', `search:${short(args[0])}`);
+            break;
+          case 'query':
+            audit.record(pluginId, 'read', `query:${short(args[0])}`);
+            break;
+          case 'tags':
+            audit.record(pluginId, 'read', 'tags');
+            break;
+          default:
+            break;
+        }
+        return (value as (...rest: unknown[]) => unknown).apply(target, args);
+      };
+    },
+  });
+}
+
 export class PluginHost {
   private readonly runtimes = new Map<string, PluginRuntime>();
   private readonly deps: PluginHostDeps;
   private readonly log: PluginLogger;
+  /** The audit log of the actions of the plugins (API 1.3.0). */
+  private readonly auditLog: PluginAuditLog;
   /** Signature of the last known editor (used to detect a change). */
   private editorSignature: string | null = null;
   /** True when the editor was polled at least once. */
   private editorKnown = false;
   /** Cancels the subscription to the editor source. */
   private editorUnsubscribe: (() => void) | null = null;
+  /**
+   * The state of the encrypted storage published by the application.
+   *
+   * `undefined` means "unknown": the plugins see no state at all.
+   */
+  private publishedVault: PluginVaultStateLike | undefined;
 
   constructor(deps: PluginHostDeps) {
     this.deps = deps;
     this.log = deps.logger ?? createLogger('plugins');
+    this.auditLog = deps.audit ?? new PluginAuditLog();
     if (deps.subscribeEditor) {
       this.editorUnsubscribe = deps.subscribeEditor((editor) => {
         this.editorSignature = this.signatureOf(editor);
@@ -163,6 +254,51 @@ export class PluginHost {
         this.notifyEditorChange(editor);
       });
     }
+  }
+
+  /**
+   * Publishes the state of the encrypted storage to the plugins.
+   *
+   * The application calls this when the storage is sealed, unlocked or
+   * locked; the host keeps a frozen copy and hands it to every plugin as
+   * `ctx.vault`. Passing `undefined` withdraws the state again.
+   *
+   * Only status information is published — the master password, the wrapping
+   * key and the data key never leave the core.
+   */
+  publishVaultState(state: PluginVaultStateLike | undefined): void {
+    this.publishedVault = state ? freezeVaultState(state) : undefined;
+  }
+
+  /**
+   * The current state of the encrypted storage, as the plugins see it.
+   *
+   * The source is the application: the optional `getVaultState` dependency
+   * first, then the state published with {@link PluginHost.publishVaultState}.
+   * When nothing is published, the state is `undefined` (unknown).
+   *
+   * The returned value is always a frozen copy, so a plugin can never change
+   * what the application published.
+   */
+  currentVaultState(): PluginVaultStateLike | undefined {
+    const state = this.deps.getVaultState?.() ?? this.publishedVault;
+    return state ? freezeVaultState(state) : undefined;
+  }
+
+  /**
+   * The audit log of the actions of the plugins (API 1.3.0).
+   *
+   * The log is a bounded ring buffer: the plugin manager shows the last
+   * actions of the plugins (open, read, write, command) with the plugin, the
+   * action, the moment and the target.
+   */
+  audit(): PluginAuditLog {
+    return this.auditLog;
+  }
+
+  /** The records of the audit log, the newest first. */
+  auditEntries(): PluginAuditEntry[] {
+    return this.auditLog.entries();
   }
 
   /**
@@ -235,11 +371,19 @@ export class PluginHost {
       contextMenuItems: new Map(),
       toolbarItems: new Map(),
       settingsSections: new Map(),
+      sandboxes: new Map(),
     };
     this.runtimes.set(id, runtime);
 
     try {
       await this.applySettingsMigrations(id, manifest);
+      if (manifest.sandbox) {
+        // The plugin runs inside the sandbox: its code is in the frame, not
+        // in the context of the application.
+        this.activateSandbox(id, manifest, entry.plugin, runtime);
+        this.deps.registry.setState(id, 'active');
+        return;
+      }
       await entry.plugin.activate(this.createContext(id, manifest, runtime));
       this.deps.registry.setState(id, 'active');
     } catch (err) {
@@ -257,6 +401,86 @@ export class PluginHost {
       this.runtimes.delete(id);
       this.deps.registry.setState(id, 'failed', message);
     }
+  }
+
+  /**
+   * Activates a plugin that runs inside the sandbox (API 1.3.0).
+   *
+   * The code of the plugin is not executed here: it lives in the frame of the
+   * sandbox and talks to the host through the bridge. The host builds the
+   * handlers of the bridge from the restricted capabilities of the plugin, so
+   * the permissions are enforced exactly as they are for a trusted plugin.
+   *
+   * The plugin gets a panel of its own: the frame is mounted there.
+   */
+  private activateSandbox(
+    id: string,
+    manifest: Plugin['manifest'],
+    plugin: Plugin,
+    runtime: PluginRuntime,
+  ): void {
+    const source = plugin.sandboxSource;
+    if (!source) {
+      throw new Error('the sandboxed plugin has no source');
+    }
+    const ctx = this.createContext(id, manifest, runtime);
+    const handlers: SandboxHandlers = {
+      'api.getNote': (args) => ctx.api.getNote(String(args[0] ?? '')),
+      'api.getTree': () => ctx.api.getTree(),
+      'api.search': (args) =>
+        ctx.api.search(String(args[0] ?? ''), typeof args[1] === 'number' ? args[1] : undefined),
+      'api.query': (args) => {
+        const query = ctx.api.query;
+        if (!query) throw new Error('the query capability is not available in this build');
+        return query.call(ctx.api, String(args[0] ?? ''), typeof args[1] === 'number' ? args[1] : undefined);
+      },
+      'api.tags': () => {
+        const tags = ctx.api.tags;
+        if (!tags) throw new Error('the query capability is not available in this build');
+        return tags.call(ctx.api);
+      },
+      'editor.getText': () => ctx.editor?.getText() ?? '',
+      'editor.getSelection': () => ctx.editor?.getSelection() ?? '',
+      'editor.getCursor': () => ctx.editor?.getCursor() ?? { from: 0, to: 0 },
+      'editor.getPath': () => ctx.editor?.getPath() ?? null,
+      'openNote': (args) => {
+        if (!ctx.openNote) throw new Error('the host cannot open notes');
+        ctx.openNote(String(args[0] ?? ''));
+        return null;
+      },
+      'log': (args) => {
+        ctx.logger.info(String(args[0] ?? ''));
+        return null;
+      },
+    };
+
+    const sandbox = new PluginSandbox({
+      pluginId: id,
+      source,
+      handlers,
+      onRefuse: (message) => {
+        this.log.warn('the sandbox of the plugin was refused', id, message);
+      },
+    });
+    runtime.sandboxes.set(id, sandbox);
+    runtime.cleanups.push(() => {
+      sandbox.dispose();
+      runtime.sandboxes.delete(id);
+    });
+
+    const panelId = `${id}.panel`;
+    runtime.panels.set(panelId, {
+      id: panelId,
+      title: manifest.name,
+      render: () =>
+        h('div', {
+          class: 'noto-plugin-sandbox',
+          'data-plugin-sandbox': id,
+          ref: (element: Element | null) => {
+            if (element && !sandbox.element.isConnected) sandbox.attach(element as HTMLElement);
+          },
+        }),
+    });
   }
 
   /**
@@ -500,7 +724,12 @@ export class PluginHost {
     // A frozen copy: the plugin cannot change its own permissions.
     const permissions: readonly string[] = Object.freeze([...(manifest.permissions ?? [])]);
     // The plugin only gets the restricted API, never the original one.
-    const api = restrictPluginApi(this.deps.createApi(id), id, permissions);
+    // The wrapper of the audit log records every call of the plugin.
+    const api = auditApi(
+      restrictPluginApi(this.deps.createApi(id), id, permissions),
+      id,
+      this.auditLog,
+    );
 
     const track = (cleanup: () => void): (() => void) => {
       let active = true;
@@ -583,9 +812,41 @@ export class PluginHost {
         return restrictedEditor(host.currentEditor());
       },
       settings,
+      /**
+       * Opens a note in the editor (API 1.3.0).
+       *
+       * The operation needs the permission `notes.read`: a plugin navigates
+       * only to a note it is allowed to read. The action is recorded in the
+       * audit log of the host.
+       */
+      openNote: (path: string): void => {
+        requirePermission(id, permissions, 'notes.read');
+        const opener = this.deps.openNote;
+        if (!opener) {
+          throw new Error('the host cannot open notes');
+        }
+        this.auditLog.record(id, 'open', path);
+        void opener(path);
+      },
+      // The state of the encrypted storage is live: it is read from the
+      // application on every access, so a plugin always sees the current
+      // state. A frozen copy, so the plugin can never change it.
+      get vault(): PluginVaultStateLike | undefined {
+        // The API may already carry the published state (the application
+        // creates it with `createPluginApi({ ... }, { vaultState })`).
+        return host.currentVaultState() ?? api.vault;
+      },
       registerCommand: (cmd: PluginCommand): (() => void) => {
         requirePermission(id, permissions, 'ui.contribute');
-        const unregister = this.deps.commands.register(id, cmd);
+        // The run of the command is recorded in the audit log (API 1.3.0).
+        const audited: PluginCommand = {
+          ...cmd,
+          run: (): void | Promise<void> => {
+            this.auditLog.record(id, 'command', cmd.id);
+            return cmd.run();
+          },
+        };
+        const unregister = this.deps.commands.register(id, audited);
         return track(unregister);
       },
       registerPanel: (panel: PluginPanel): (() => void) => {

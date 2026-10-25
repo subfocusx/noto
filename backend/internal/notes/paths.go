@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 // reservedNames are the Windows device names that must not be used as file or
@@ -19,6 +20,14 @@ var reservedNames = map[string]bool{
 
 // invalidNameChars are characters that are not allowed inside a name.
 const invalidNameChars = `/\:*?"<>|`
+
+// maxNameRunes is the maximum number of the characters (the code points, not
+// the bytes) of a file or folder name.
+//
+// The limit is generous enough for every real name and small enough that a
+// name always fits into a path of the operating system and into a row of the
+// database. A longer name is rejected with the code invalid_name.
+const maxNameRunes = 512
 
 // normalizeRel validates and normalises a slash separated path relative to
 // the notes root.
@@ -75,6 +84,17 @@ func hasDriveLetter(p string) bool {
 }
 
 // validateName checks a single path segment (a file or folder name).
+//
+// The rules are:
+//   - the name is not empty and it is not "." or "..";
+//   - the name carries no NUL byte and no control character (the C0 range
+//     and the delete character), because a file name cannot carry them;
+//   - the name is at most maxNameRunes characters long;
+//   - the name carries no character of invalidNameChars;
+//   - the name has no leading or trailing space and does not end with a dot;
+//   - the name is not a reserved Windows device name.
+//
+// Every violation is reported with the code invalid_name.
 func validateName(name string) error {
 	if name == "" {
 		return newErr(ErrInvalidName, "name must not be empty")
@@ -85,8 +105,14 @@ func validateName(name string) error {
 	if strings.ContainsRune(name, 0) {
 		return newErr(ErrInvalidName, "name contains a NUL byte")
 	}
+	if count := utf8.RuneCountInString(name); count > maxNameRunes {
+		return newErr(ErrInvalidName, "name is longer than %d characters", maxNameRunes)
+	}
 	if strings.ContainsAny(name, invalidNameChars) {
 		return newErr(ErrInvalidName, "name %q contains an invalid character", name)
+	}
+	if r, ok := controlRune(name); ok {
+		return newErr(ErrInvalidName, "name contains the control character %q", r)
 	}
 	if strings.TrimSpace(name) != name {
 		return newErr(ErrInvalidName, "name must not have leading or trailing spaces")
@@ -105,6 +131,32 @@ func validateName(name string) error {
 		return newErr(ErrInvalidName, "name %q is a reserved device name", name)
 	}
 	return nil
+}
+
+// controlRune returns the first control character of a name.
+//
+// The control characters are the C0 range (0x00 to 0x1F) and the delete
+// character (0x7F). They are rejected: a file name cannot carry them, and
+// they break the terminal and the log.
+func controlRune(name string) (rune, bool) {
+	for _, r := range name {
+		if r < 0x20 || r == 0x7F {
+			return r, true
+		}
+	}
+	return 0, false
+}
+
+// stripNUL removes the NUL bytes of a name.
+//
+// A NUL byte cannot be part of a file name. It is stripped instead of
+// rejecting the whole name, so that a name that was pasted with a stray NUL
+// still works. The other control characters are rejected, not stripped.
+func stripNUL(name string) string {
+	if !strings.ContainsRune(name, 0) {
+		return name
+	}
+	return strings.ReplaceAll(name, "\x00", "")
 }
 
 // joinRel joins a parent path and a name into a normalised relative path.

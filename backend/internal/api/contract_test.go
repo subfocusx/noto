@@ -24,7 +24,7 @@ import (
 // only be changed together with a deliberate change of the contract.
 
 // contractCSP is the exact value of the Content-Security-Policy header.
-const contractCSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+const contractCSP = "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'"
 
 // contractSecurityHeaders is the exact set of security headers and their
 // values that every response carries.
@@ -236,6 +236,13 @@ func TestRouteContract(t *testing.T) {
 			wantKeys:   []string{"folders", "files"},
 		},
 		{
+			name:       "GET /api/tree/children",
+			method:     http.MethodGet,
+			path:       "/api/tree/children?parent=&limit=10",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"items", "nextCursor"},
+		},
+		{
 			name:       "POST /api/folders",
 			method:     http.MethodPost,
 			path:       "/api/folders",
@@ -350,6 +357,24 @@ func TestRouteContract(t *testing.T) {
 			},
 			wantStatus: http.StatusOK,
 			wantKeys:   []string{"hits"},
+		},
+		{
+			name:   "POST /api/query",
+			method: http.MethodPost,
+			path:   "/api/query",
+			body:   `{"query":"tag == 'pineapple'","limit":10}`,
+			seed: func(t *testing.T, ts *httptest.Server, _ *contractEnv) {
+				contractSeedFile(t, ts, "a", "# Apple\\n\\n#pineapple")
+			},
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"hits", "total", "partial"},
+		},
+		{
+			name:       "GET /api/tags",
+			method:     http.MethodGet,
+			path:       "/api/tags",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"tags"},
 		},
 		{
 			name:       "POST /api/search/reindex",
@@ -790,4 +815,139 @@ func TestMiddlewareOrderContract(t *testing.T) {
 			t.Fatalf("unexpected error code %q", apiErr.Error.Code)
 		}
 	})
+}
+
+// The JSON field names of the types of the new endpoints.
+var (
+	contractUserFields = []string{"id", "name", "role", "createdAt"}
+	contractAuditEntryFields = []string{
+		"id", "time", "user", "action", "target", "result",
+	}
+	contractSubscriptionFields = []string{
+		"id", "owner", "url", "events", "createdAt",
+	}
+	contractDeliveryFields = []string{
+		"id", "subscriptionId", "event", "payload", "state",
+		"attempts", "nextAttempt", "lastError", "createdAt",
+	}
+)
+
+// TestExtendedRouteContract freezes the shape of the endpoints of the
+// accounts, of the audit log, of the webhooks and of the Model Context
+// Protocol.
+func TestExtendedRouteContract(t *testing.T) {
+	env := newAuthEnv(t, true)
+	token := env.login(t, "admin", "secret")
+
+	cases := []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		wantStatus int
+		wantKeys   []string
+	}{
+		{
+			name:       "GET /api/auth/me",
+			method:     http.MethodGet,
+			path:       "/api/auth/me",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"user", "authenticated"},
+		},
+		{
+			name:       "GET /api/users",
+			method:     http.MethodGet,
+			path:       "/api/users",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"users"},
+		},
+		{
+			name:       "POST /api/users",
+			method:     http.MethodPost,
+			path:       "/api/users",
+			body:       `{"name":"bob","password":"secret","role":"user"}`,
+			wantStatus: http.StatusOK,
+			wantKeys:   contractUserFields,
+		},
+		{
+			name:       "GET /api/audit",
+			method:     http.MethodGet,
+			path:       "/api/audit",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"entries"},
+		},
+		{
+			name:       "GET /api/webhooks",
+			method:     http.MethodGet,
+			path:       "/api/webhooks",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"subscriptions"},
+		},
+		{
+			name:       "POST /api/webhooks",
+			method:     http.MethodPost,
+			path:       "/api/webhooks",
+			body:       `{"url":"https://example.com/hook","events":["note.created"]}`,
+			wantStatus: http.StatusOK,
+			wantKeys:   contractSubscriptionFields,
+		},
+		{
+			name:       "GET /api/webhooks/deliveries",
+			method:     http.MethodGet,
+			path:       "/api/webhooks/deliveries",
+			wantStatus: http.StatusOK,
+			wantKeys:   []string{"deliveries"},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			res := env.do(t, tc.method, tc.path, tc.body, token)
+			defer res.Body.Close()
+			if res.StatusCode != tc.wantStatus {
+				data, _ := io.ReadAll(res.Body)
+				t.Fatalf("unexpected status %d (want %d): %s", res.StatusCode, tc.wantStatus, data)
+			}
+			obj := contractObject(t, res)
+			contractRequireKeys(t, tc.name, obj, tc.wantKeys)
+		})
+	}
+}
+
+// TestTheContractOfTheDeliveriesAndTheAuditEntries checks the fields of the
+// entries of the audit log and of the deliveries on real answers.
+func TestTheContractOfTheDeliveriesAndTheAuditEntries(t *testing.T) {
+	env := newAuthEnv(t, true)
+	token := env.login(t, "admin", "secret")
+
+	res := env.do(t, http.MethodPost, "/api/webhooks",
+		`{"url":"https://example.com/hook","events":["note.created"]}`, token)
+	res.Body.Close()
+	res = env.do(t, http.MethodPost, "/api/files", `{"parentPath":"","name":"a"}`, token)
+	res.Body.Close()
+
+	res = env.do(t, http.MethodGet, "/api/audit", "", token)
+	obj := contractObject(t, res)
+	var raw json.RawMessage = obj["entries"]
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		t.Fatalf("decode the entries: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatalf("the audit log is empty")
+	}
+	contractRequireKeys(t, "audit entry", entries[0], contractAuditEntryFields)
+
+	res = env.do(t, http.MethodGet, "/api/webhooks/deliveries", "", token)
+	obj = contractObject(t, res)
+	raw = obj["deliveries"]
+	var deliveries []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &deliveries); err != nil {
+		t.Fatalf("decode the deliveries: %v", err)
+	}
+	if len(deliveries) == 0 {
+		t.Fatalf("the outbox is empty")
+	}
+	contractRequireKeys(t, "delivery", deliveries[0], contractDeliveryFields)
 }

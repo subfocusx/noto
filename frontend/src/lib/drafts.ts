@@ -11,6 +11,7 @@ export interface Draft {
 const DB_NAME = 'noto';
 const DB_VERSION = 1;
 const STORE = 'drafts';
+const SEALED_STORE = 'sealed-drafts';
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -28,6 +29,9 @@ function db(): Promise<IDBPDatabase> {
           upgrade(database) {
             if (!database.objectStoreNames.contains(STORE)) {
               database.createObjectStore(STORE, { keyPath: 'path' });
+            }
+            if (!database.objectStoreNames.contains(SEALED_STORE)) {
+              database.createObjectStore(SEALED_STORE);
             }
           },
         }),
@@ -59,6 +63,92 @@ export async function deleteDraft(path: string): Promise<void> {
 export async function listDrafts(): Promise<Draft[]> {
   const database = await db();
   return database.getAll(STORE);
+}
+
+/* ------------------------------------------------------- encrypted drafts */
+
+/**
+ * The raw storage of the encrypted drafts.
+ *
+ * The encrypted storage keeps its unsaved work in the same database, but the
+ * payload is ciphertext: the database of a sealed storage must never contain
+ * a readable note. This module only moves bytes; the encryption happens in
+ * the core (`src/core/vault/sealedDrafts.ts`), which owns the key.
+ */
+export async function putSealedDraft(id: string, payload: Uint8Array): Promise<void> {
+  const database = await db();
+  await database.put(SEALED_STORE, payload, id);
+}
+
+export async function getSealedDraft(id: string): Promise<Uint8Array | undefined> {
+  const database = await db();
+  const value = await database.get(SEALED_STORE, id);
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  // Some environments return the view of the buffer instead of the view
+  // itself; the bytes are the same.
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return undefined;
+}
+
+export async function deleteSealedDraft(id: string): Promise<void> {
+  const database = await db();
+  await database.delete(SEALED_STORE, id);
+}
+
+/** Removes every encrypted draft; called when the storage is locked. */
+export async function clearSealedDrafts(): Promise<void> {
+  const database = await db();
+  await database.clear(SEALED_STORE);
+}
+
+/* ------------------------------------------------------------ the pure part */
+
+/**
+ * The Markdown reference of a file that was dropped into the editor.
+ *
+ * The reference is the one of an image, so the preview shows the file and
+ * the text stays readable. The name is escaped: a file may carry spaces.
+ */
+export function attachmentReference(name: string, rawUrl: string): string {
+  const label = name.replace(/([()[\]])/g, '\\$1');
+  return `![${label}](${rawUrl})`;
+}
+
+/**
+ * The text with the reference of the file, and the caret after it.
+ *
+ * The reference is inserted at the caret of the editor. A space follows it,
+ * so the user can keep writing right behind the link.
+ */
+export function insertAttachmentReference(
+  text: string,
+  caret: number,
+  reference: string,
+): { text: string; caret: number } {
+  const position = Math.max(0, Math.min(caret, text.length));
+  const before = text.slice(0, position);
+  const after = text.slice(position);
+  const inserted = `${reference} `;
+  return { text: `${before}${inserted}${after}`, caret: position + inserted.length };
+}
+
+/**
+ * The draft that holds the content of the server again.
+ *
+ * The reset throws the local changes away: the draft keeps the path, but its
+ * content is the one of the server and it is a new revision, so the next
+ * save does not fight with the old one.
+ */
+export function resetDraft(draft: Draft, serverContent: string): Draft {
+  return {
+    path: draft.path,
+    content: serverContent,
+    revision: draft.revision + 1,
+    updatedAt: Date.now(),
+  };
 }
 
 /**

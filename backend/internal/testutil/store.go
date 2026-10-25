@@ -7,8 +7,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"noto/backend/internal/model"
+	"noto/backend/internal/query"
 )
 
 // TrashRow is a trashed entry of the memory store.
@@ -28,12 +30,23 @@ type MemStore struct {
 	index       map[string]indexEntry
 	attachments map[string]model.Attachment
 	trash       map[string]TrashRow
+	props       map[string]model.NoteProps
+	versions    map[string]model.NoteVersion
+	derived     map[string]model.DerivedProps
+	attachText  map[string]attachmentText
 	closed      bool
 }
 
 type indexEntry struct {
 	name string
 	body string
+}
+
+// attachmentText is the text extracted from an attachment.
+type attachmentText struct {
+	notePath string
+	name     string
+	body     string
 }
 
 // NewMemStore creates an empty in-memory store.
@@ -43,7 +56,128 @@ func NewMemStore() *MemStore {
 		index:       map[string]indexEntry{},
 		attachments: map[string]model.Attachment{},
 		trash:       map[string]TrashRow{},
+		props:       map[string]model.NoteProps{},
+		versions:    map[string]model.NoteVersion{},
+		derived:     map[string]model.DerivedProps{},
+		attachText:  map[string]attachmentText{},
 	}
+}
+
+// UpsertNoteProps implements port.Store.
+func (s *MemStore) UpsertNoteProps(_ context.Context, p model.NoteProps) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.props[p.Path] = p
+	return nil
+}
+
+// GetNoteProps implements port.Store.
+func (s *MemStore) GetNoteProps(_ context.Context, path string) (model.NoteProps, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	props, found := s.props[path]
+	return props, found, nil
+}
+
+// ListNoteProps implements port.Store.
+func (s *MemStore) ListNoteProps(_ context.Context) ([]model.NoteProps, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.NoteProps, 0, len(s.props))
+	for _, props := range s.props {
+		out = append(out, props)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+// DeleteNoteProps implements port.Store.
+func (s *MemStore) DeleteNoteProps(_ context.Context, path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.props, path)
+	return nil
+}
+
+// QueryNotes implements port.Store.
+//
+// The memory store evaluates the query with the predicate of the query
+// package: the answer must be the same as the one of the SQL store.
+func (s *MemStore) QueryNotes(_ context.Context, e query.Expr, limit int) ([]model.SearchHit, error) {
+	if e == nil {
+		return []model.SearchHit{}, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	predicate := query.CompilePredicate(e, time.Now())
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	paths := make([]string, 0, len(s.notes))
+	for path := range s.notes {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	hits := []model.SearchHit{}
+	for _, path := range paths {
+		note, ok := s.queryNote(path)
+		if !ok || !predicate(note) {
+			continue
+		}
+		hits = append(hits, model.SearchHit{Path: path, Name: note.Name, Kind: "query"})
+		if len(hits) >= limit {
+			break
+		}
+	}
+	return hits, nil
+}
+
+// queryNote builds the data of a note for the predicate of a query.
+func (s *MemStore) queryNote(path string) (query.Note, bool) {
+	node, found := s.notes[path]
+	if !found {
+		return query.Note{}, false
+	}
+	entry, hasIndex := s.index[path]
+	props := s.props[path]
+	note := query.Note{
+		Path:      node.Path,
+		Name:      node.Name,
+		Content:   entry.body,
+		Title:     props.Title,
+		Tags:      props.Tags,
+		Folder:    node.ParentPath,
+		Ext:       extOf(node.Name),
+		CreatedAt: node.CreatedAt.Unix(),
+		UpdatedAt: node.UpdatedAt.Unix(),
+	}
+	if hasIndex {
+		note.Name = entry.name
+	}
+	note.HasTaskList = props.Flags&model.PropHasTaskList != 0
+	note.HasIncompleteTasks = props.Flags&model.PropHasIncompleteTasks != 0
+	note.HasCode = props.Flags&model.PropHasCode != 0
+	note.HasImage = props.Flags&model.PropHasImage != 0
+	note.HasLink = props.Flags&model.PropHasLink != 0
+	for _, attachment := range s.attachments {
+		if attachment.NotePath == path {
+			note.HasAttachments = true
+			break
+		}
+	}
+	return note, true
+}
+
+// extOf returns the extension of a file name, without the dot, lower cased.
+func extOf(name string) string {
+	at := strings.LastIndex(name, ".")
+	if at < 0 || at == len(name)-1 {
+		return ""
+	}
+	return strings.ToLower(name[at+1:])
 }
 
 // Close implements port.Store.
@@ -208,9 +342,25 @@ func (s *MemStore) Search(_ context.Context, query string, limit int) ([]model.S
 	sort.Slice(nameHits, func(i, j int) bool { return nameHits[i].Path < nameHits[j].Path })
 	sort.Slice(contentHits, func(i, j int) bool { return contentHits[i].Path < contentHits[j].Path })
 
+	// The text extracted from the attachments is searched as well, like the
+	// SQLite store does.
+	attachHits := []model.SearchHit{}
+	for _, text := range s.attachText {
+		if !matchesTokens(text.body, tokens) && !matchesTokens(text.name, tokens) {
+			continue
+		}
+		attachHits = append(attachHits, model.SearchHit{
+			Path:    text.notePath,
+			Name:    baseOf(text.notePath),
+			Kind:    "content",
+			Snippet: text.name + ": " + snippet(text.body, tokens),
+		})
+	}
+	sort.Slice(attachHits, func(i, j int) bool { return attachHits[i].Path < attachHits[j].Path })
+
 	out := []model.SearchHit{}
 	seen := map[string]bool{}
-	for _, h := range append(nameHits, contentHits...) {
+	for _, h := range append(append(nameHits, contentHits...), attachHits...) {
 		key := h.Path + "\x00" + h.Kind
 		if seen[key] {
 			continue
@@ -260,10 +410,27 @@ func (s *MemStore) GetAttachment(_ context.Context, id string) (model.Attachment
 }
 
 // DeleteAttachment implements port.Store.
+//
+// The text that was extracted from the attachment is dropped with it.
 func (s *MemStore) DeleteAttachment(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.attachments, id)
+	delete(s.attachText, id)
+	return nil
+}
+
+// IndexAttachmentText implements port.Store.
+func (s *MemStore) IndexAttachmentText(_ context.Context, id, notePath, name, body string) error {
+	if id == "" {
+		return errors.New("testutil: empty attachment id")
+	}
+	if notePath == "" {
+		return errors.New("testutil: an indexed attachment needs a note")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.attachText[id] = attachmentText{notePath: notePath, name: name, body: body}
 	return nil
 }
 

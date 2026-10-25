@@ -49,9 +49,9 @@
 // ---------------------------------------------------------------------------
 //
 // Two notes with the same file name (in different folders) cannot be told
-// apart by a wiki link: `[[Отчёт]]` matches both of them. The plugin does
+// apart by a wiki link: `[[Report]]` matches both of them. The plugin does
 // NOT hide such links and does NOT pick a winner: the note is reported for
-// every candidate and the entry is marked with the badge «неоднозначно».
+// every candidate and the entry is marked with the badge «ambiguous».
 // A link to a name that matches NO note is ignored completely: it never
 // creates a phantom entry.
 //
@@ -79,8 +79,6 @@ import { createDebouncer, type Debouncer } from './debounce';
 
 /** Id of the panel contributed by the plugin. */
 export const BACKLINKS_PANEL_ID = 'backlinks.panel';
-/** Id of the sidebar item contributed by the plugin. */
-export const BACKLINKS_SIDEBAR_ID = 'backlinks.sidebar';
 /** Id of the command contributed by the plugin. */
 export const BACKLINKS_COMMAND_ID = 'backlinks.show';
 
@@ -97,7 +95,7 @@ export const backlinksManifest: PluginManifest = {
   version: '1.0.0',
   manifestVersion: 1,
   minApiVersion: '1.0.0',
-  description: 'Показывает обратные ссылки на открытую заметку и упоминания без ссылки.',
+  description: 'Shows the backlinks of the open note and the mentions without a link.',
   author: 'Noto',
   // `tree.read` — the list of the notes (`getTree`);
   // `notes.read` — the content of a note (`getNote`);
@@ -109,17 +107,17 @@ export const backlinksManifest: PluginManifest = {
   settings: [
     {
       key: 'includeUnlinked',
-      label: 'Показывать упоминания без ссылки',
+      label: 'Show the mentions without a link',
       type: 'boolean',
       default: true,
-      description: 'Добавляет в панель заметки, названные в тексте, но без wiki-ссылки.',
+      description: 'Adds the notes named in the text without a wiki link to the panel.',
     },
     {
       key: 'minNameLength',
-      label: 'Минимальная длина имени',
+      label: 'Minimal length of a name',
       type: 'number',
       default: BACKLINKS_MIN_NAME_LENGTH,
-      description: 'Имена короче этого значения не ищутся в тексте (защита от ложных срабатываний).',
+      description: 'The names shorter than this value are not looked for in the text (protection against false positives).',
     },
   ],
 };
@@ -387,6 +385,13 @@ export class BacklinksStore {
 interface BacklinksViewProps {
   /** The shared state of the plugin. */
   store: BacklinksStore;
+  /**
+   * Opens a note in the editor of the application (API 1.3.0).
+   *
+   * The property is absent when the host does not offer the operation: the
+   * panel then says that the note must be opened manually.
+   */
+  onOpen?: (path: string) => void;
 }
 
 /** The content of the panel. */
@@ -408,7 +413,7 @@ export function BacklinksView(props: BacklinksViewProps) {
     return h(
       'div',
       { class: 'noto-backlinks', 'data-plugin': 'backlinks' },
-      h('span', { class: 'noto-backlinks-empty' }, 'Нет открытой заметки'),
+      h('span', { class: 'noto-backlinks-empty' }, 'No open note'),
     );
   }
 
@@ -416,9 +421,18 @@ export function BacklinksView(props: BacklinksViewProps) {
     h(
       'li',
       { key: `b:${item.path}`, class: 'noto-backlinks-item' },
-      h('span', { class: 'noto-backlinks-name' }, item.name),
-      h('span', { class: 'noto-backlinks-path' }, item.path),
-      item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'неоднозначно') : null,
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'noto-backlinks-link',
+          'data-path': item.path,
+          onClick: () => props.onOpen?.(item.path),
+        },
+        h('span', { class: 'noto-backlinks-name' }, item.name),
+        h('span', { class: 'noto-backlinks-path' }, item.path),
+      ),
+      item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'ambiguous') : null,
     ),
   );
 
@@ -426,29 +440,40 @@ export function BacklinksView(props: BacklinksViewProps) {
     h(
       'li',
       { key: `u:${item.path}`, class: 'noto-backlinks-item' },
-      h('span', { class: 'noto-backlinks-name' }, item.name),
-      h('span', { class: 'noto-backlinks-path' }, item.path),
-      h('span', { class: 'noto-backlinks-badge' }, 'без ссылки'),
-      item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'неоднозначно') : null,
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'noto-backlinks-link',
+          'data-path': item.path,
+          onClick: () => props.onOpen?.(item.path),
+        },
+        h('span', { class: 'noto-backlinks-name' }, item.name),
+        h('span', { class: 'noto-backlinks-path' }, item.path),
+      ),
+      h('span', { class: 'noto-backlinks-badge' }, 'no link'),
+      item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'ambiguous') : null,
     ),
   );
 
   return h(
     'div',
     { class: 'noto-backlinks', 'data-plugin': 'backlinks' },
-    h('div', { class: 'noto-backlinks-section' }, `Обратные ссылки (${state.backlinks.length})`),
+    h('div', { class: 'noto-backlinks-section' }, `Backlinks (${state.backlinks.length})`),
     state.backlinks.length === 0
-      ? h('div', { class: 'noto-backlinks-empty' }, 'Нет обратных ссылок')
+      ? h('div', { class: 'noto-backlinks-empty' }, 'No backlinks')
       : h('ul', { class: 'noto-backlinks-list' }, backlinkItems),
-    h('div', { class: 'noto-backlinks-section' }, `Упоминания без ссылки (${state.unlinked.length})`),
+    h('div', { class: 'noto-backlinks-section' }, `Mentions without a link (${state.unlinked.length})`),
     state.unlinked.length === 0
-      ? h('div', { class: 'noto-backlinks-empty' }, 'Нет упоминаний без ссылки')
+      ? h('div', { class: 'noto-backlinks-empty' }, 'No mentions without a link')
       : h('ul', { class: 'noto-backlinks-list' }, unlinkedItems),
-    h(
-      'div',
-      { class: 'noto-backlinks-hint' },
-      'Открыть заметку из плагина нельзя — откройте её вручную.',
-    ),
+    props.onOpen
+      ? null
+      : h(
+          'div',
+          { class: 'noto-backlinks-hint' },
+          'The plugin cannot open a note — open it manually.',
+        ),
   );
 }
 
@@ -508,8 +533,6 @@ export function createBacklinksPlugin(): BacklinksPlugin {
   let text = '';
   /** Cancels the registration of the panel. */
   let unregisterPanel: (() => void) | null = null;
-  /** Cancels the registration of the sidebar item. */
-  let unregisterSidebar: (() => void) | null = null;
   /** Cancels the registration of the command. */
   let unregisterCommand: (() => void) | null = null;
   /** True while a computation is running. */
@@ -582,7 +605,7 @@ export function createBacklinksPlugin(): BacklinksPlugin {
       } catch (err) {
         linkCache.delete(file.path);
         if (isPermissionError(err)) throw err;
-        ctx.logger.warn('не удалось прочитать заметку', file.path, err);
+        ctx.logger.warn('cannot read the note', file.path, err);
       }
     }
   }
@@ -632,15 +655,15 @@ export function createBacklinksPlugin(): BacklinksPlugin {
           store.set({
             ...emptyState(),
             available: true,
-            error: 'Недостаточно прав для чтения заметок',
+            error: 'Not enough rights to read the notes',
           });
           return;
         }
-        ctx.logger.warn('не удалось прочитать дерево заметок', err);
+        ctx.logger.warn('cannot read the tree of the notes', err);
         store.set({
           ...emptyState(),
           available: true,
-          error: 'Не удалось прочитать дерево заметок',
+          error: 'Cannot read the tree of the notes',
         });
         return;
       }
@@ -655,11 +678,11 @@ export function createBacklinksPlugin(): BacklinksPlugin {
           store.set({
             ...emptyState(),
             available: true,
-            error: 'Недостаточно прав для чтения заметок',
+            error: 'Not enough rights to read the notes',
           });
           return;
         }
-        ctx.logger.warn('не удалось построить граф ссылок', err);
+        ctx.logger.warn('cannot build the graph of the links', err);
       }
 
       // The backlinks: the notes whose links point to the open note.
@@ -695,7 +718,7 @@ export function createBacklinksPlugin(): BacklinksPlugin {
       });
       resultCache.set(cacheKey, { backlinks, unlinked });
 
-      ctx.logger.debug('обратные ссылки пересчитаны', {
+      ctx.logger.debug('the backlinks are recalculated', {
         backlinks: backlinks.length,
         unlinked: unlinked.length,
       });
@@ -774,8 +797,6 @@ export function createBacklinksPlugin(): BacklinksPlugin {
         eventCleanups.length = 0;
         unregisterPanel?.();
         unregisterPanel = null;
-        unregisterSidebar?.();
-        unregisterSidebar = null;
         unregisterCommand?.();
         unregisterCommand = null;
         editor = null;
@@ -789,27 +810,28 @@ export function createBacklinksPlugin(): BacklinksPlugin {
 
       unregisterPanel = ctx.registerPanel({
         id: BACKLINKS_PANEL_ID,
-        title: 'Обратные ссылки',
-        render: () => h(BacklinksView, { store }),
+        title: 'Backlinks',
+        // The operation that opens a note (API 1.3.0): the panel shows the
+        // backlinks as links when the host offers it.
+        render: () =>
+          h(BacklinksView, {
+            store,
+            onOpen: typeof ctx.openNote === 'function' ? (path) => ctx.openNote?.(path) : undefined,
+          }),
       });
 
-      unregisterSidebar = ctx.registerSidebarItem({
-        id: BACKLINKS_SIDEBAR_ID,
-        title: 'Обратные ссылки',
-        icon: 'link',
-        onSelect: () => {
-          void compute(ctx);
-        },
-      });
+      // The plugin does NOT register an item of the sidebar: the backlinks are
+      // shown in the panel of the right column, and a second entry (an icon
+      // button at the bottom of the tree) would be the same feature twice.
 
       unregisterCommand = ctx.registerCommand({
         id: BACKLINKS_COMMAND_ID,
-        title: 'Показать обратные ссылки',
-        description: 'Пересчитывает обратные ссылки и упоминания без ссылки для активной заметки.',
+        title: 'Show the backlinks',
+        description: 'Recalculates the backlinks and the mentions without a link of the active note.',
         run: async () => {
           await compute(ctx);
           const state = store.get();
-          ctx.logger.info('обратные ссылки', {
+          ctx.logger.info('the backlinks', {
             available: state.available,
             backlinks: state.backlinks.length,
             unlinked: state.unlinked.length,
@@ -832,8 +854,6 @@ export function createBacklinksPlugin(): BacklinksPlugin {
       eventCleanups.length = 0;
       unregisterPanel?.();
       unregisterPanel = null;
-      unregisterSidebar?.();
-      unregisterSidebar = null;
       unregisterCommand?.();
       unregisterCommand = null;
       activeCtx = null;

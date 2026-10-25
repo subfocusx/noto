@@ -1,0 +1,126 @@
+/* ==========================================================================
+   The graph of the notes.
+
+   The panel draws the links of the vault: a note is a dot, a link is a line.
+   The drawing is a plain SVG, so the stylesheet only paints it.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`): the graph never carries a colour of its own.
+   ========================================================================== */
+
+/* The panel itself. */
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+/* The header of the panel: the name of the graph and the button that closes it. */
+.graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The hint of the panel: the graph is being built, or the vault is empty. */
+.graph-hint {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The drawing. */
+.graph-svg {
+  width: 100%;
+  height: auto;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* A link between two notes. */
+.graph-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+/* A note of the graph. */
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node circle {
+  fill: var(--accent);
+  stroke: var(--bg-inset);
+  stroke-width: 2;
+}
+
+/* A note that is linked to nothing: it is drawn in the muted colour. */
+.graph-node-orphan circle {
+  fill: var(--fg-muted);
+}
+
+/* The name of the note, written under the dot. */
+.graph-node text {
+  fill: var(--fg-secondary);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.graph-node:hover circle,
+.graph-node:focus circle {
+  fill: var(--accent-hover);
+}
+
+/* The list under the drawing: the same notes, for the readers of the list. */
+.graph-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.graph-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-list-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* The name of the note of the list. */
+.graph-list-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The number of the links of the note: the outgoing links and the incoming ones. */
+.graph-list-count {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}

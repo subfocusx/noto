@@ -21,3 +21,13 @@ export function moveNote(path: string, newParentPath: string): Promise<Node> {
 export function deleteNote(path: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/notes?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
 }
+
+/**
+ * Copies the note into a new one.
+ *
+ * The server creates the copy next to the original and answers with the node
+ * of the new note.
+ */
+export function duplicateNote(path: string): Promise<Node> {
+  return request<Node>('/notes/duplicate', jsonInit('POST', { path }));
+}

@@ -25,8 +25,15 @@ const CODEMIRROR_PACKAGES = [
 ];
 
 function manualChunks(id: string): string | undefined {
-  if (!id.includes('node_modules')) return undefined;
   const normalized = id.replace(/\\/g, '/');
+
+  // The panels of the built-in plugins (the graph of the links, the tree of
+  // the tags, the calendar of the activity, the cards of the links) are a
+  // separate chunk: they are opened on demand, and the entry chunk of the
+  // shell stays small.
+  if (normalized.includes('/src/plugins/builtin/')) return 'plugin-panels';
+
+  if (!id.includes('node_modules')) return undefined;
 
   for (const pkg of CODEMIRROR_PACKAGES) {
     if (normalized.includes(`/node_modules/${pkg}/`)) return 'codemirror';
@@ -51,7 +58,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    outDir: 'dist',
+    outDir: 'dist', manifest: true,
     // The vendor chunks are intentionally big; they are cached separately.
     chunkSizeWarningLimit: 800,
     rollupOptions: {

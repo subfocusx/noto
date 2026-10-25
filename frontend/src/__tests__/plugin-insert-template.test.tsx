@@ -211,7 +211,7 @@ describe('insert-template: manifest', () => {
     const schema = insertTemplateManifest.settings?.find((s) => s.key === 'template');
     expect(schema).toBeTruthy();
     expect(schema?.type).toBe('string');
-    expect(schema?.label).toBe('Шаблон');
+    expect(schema?.label).toBe('Template');
     expect(schema?.default).toBe(DEFAULT_TEMPLATE);
   });
 });
@@ -223,7 +223,7 @@ describe('insert-template: command', () => {
 
     plugin.activate(ctx);
     expect(commands.has(INSERT_TEMPLATE_COMMAND_ID)).toBe(true);
-    expect(commands.get(INSERT_TEMPLATE_COMMAND_ID)?.title).toBe('Вставить шаблон');
+    expect(commands.get(INSERT_TEMPLATE_COMMAND_ID)?.title).toBe('Insert template');
 
     // The host calls the deactivate callbacks when the plugin is disabled.
     for (const cb of deactivateCallbacks) cb();

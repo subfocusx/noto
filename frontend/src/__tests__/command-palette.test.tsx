@@ -42,6 +42,9 @@ vi.mock('../api/client', () => ({
   exportFolderUrl: (path: string) => `/api/export/folder?path=${path}`,
   exportAllUrl: () => '/api/export/all',
   attachmentRawUrl: (id: string) => `/api/attachments/${id}/raw`,
+  getVault: vi.fn(async () => ({ configured: true, path: 'C:\\notes', notesDir: 'C:\\notes' })),
+  setVault: vi.fn(async () => ({ ok: true, path: 'C:\\notes' })),
+  browseVault: vi.fn(async () => ({ path: 'C:\\', parent: '', dirs: [] })),
 }));
 
 beforeEach(() => {
@@ -151,6 +154,56 @@ describe('the command palette', () => {
     await waitFor(() =>
       expect(view.queryByRole('dialog', { name: 'Command palette' })).toBeNull(),
     );
+
+    view.unmount();
+  });
+
+  it('is a modal dialog over a backdrop that closes the palette', async () => {
+    const view = render(<App />);
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+
+    const dialog = await waitFor(() => view.getByRole('dialog', { name: 'Command palette' }));
+    // The palette is a modal: the assistive technology is told about it.
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+
+    // The backdrop is the frame of the palette and it closes it.
+    const backdrop = view.container.querySelector('.noto-palette-backdrop');
+    expect(backdrop).toBeTruthy();
+    fireEvent.click(backdrop as Element);
+
+    await waitFor(() =>
+      expect(view.queryByRole('dialog', { name: 'Command palette' })).toBeNull(),
+    );
+
+    view.unmount();
+  });
+
+  it('gives the icon of an option its own class and separates the title from the description', () => {
+    const registry = new CommandRegistry();
+    const command = {
+      id: 'demo-plugin:icon',
+      title: 'Command with an icon',
+      description: 'The description of the command',
+      icon: 'plus',
+      run: () => undefined,
+    };
+    registry.register('demo-plugin', command);
+
+    const view = render(
+      <CommandPalette open registry={registry} onClose={() => undefined} />,
+    );
+
+    const option = view.getByRole('option');
+    // The icon is placed by the grid of the option.
+    expect(option.querySelector('.noto-palette-option-icon')).toBeTruthy();
+
+    // The title and the description are two elements and not one text node.
+    const title = option.querySelector('.noto-palette-option-title');
+    const description = option.querySelector('.noto-palette-option-description');
+    expect(title?.textContent).toBe('Command with an icon');
+    expect(description?.textContent).toBe('The description of the command');
+    expect(title).not.toBe(description);
 
     view.unmount();
   });

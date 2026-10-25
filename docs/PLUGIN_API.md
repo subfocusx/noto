@@ -1,4 +1,4 @@
-# Noto — Plugin API (v1.0.0)
+# Noto — Plugin API (v1.3.0)
 
 Справочник публичного контракта плагинов. Источник истины — код:
 
@@ -17,8 +17,26 @@
 
 ```ts
 // frontend/src/plugins/contract.ts
-export const PLUGIN_API_VERSION = '1.0.0';
+export const PLUGIN_API_VERSION = '1.3.0';
 ```
+
+Версия `1.3.0` добавила три вещи:
+
+* **операцию открытия заметки** — `ctx.openNote(path)` (§4.2);
+* **песочницу плагинов** — `manifest.sandbox` и `plugin.sandboxSource` (§4.3);
+* **журнал аудита действий плагинов** — `PluginAuditEntry` (§13).
+
+Изменение аддитивное: новые члены необязательны в типе, поэтому плагин,
+объявивший `minApiVersion: '1.0.0'`, продолжает работать без единой правки.
+
+Версия `1.2.0` добавила **возможность запроса**: `ctx.api.query()` и
+`ctx.api.tags()` за новым правом `query.read` (§3, §5.1). Изменение
+аддитивное: новые члены необязательны в типе, поэтому плагин, объявивший
+`minApiVersion: '1.0.0'`, продолжает работать без единой правки.
+
+Версия `1.1.0` добавила **одно** необязательное поле — состояние
+запечатанного хранилища `ctx.vault` (§4.1). Изменение аддитивное: плагин,
+объявивший `minApiVersion: '1.0.0'`, продолжает работать без единой правки.
 
 Плагин объявляет в манифесте минимальную версию API, с которой он совместим:
 
@@ -68,6 +86,7 @@ minApiVersion: '1.0.0'
 | `settings` | `PluginSettingSchema[]` | нет | Схема пользовательских настроек плагина. |
 | `settingsVersion` | `number` | нет | Версия схемы настроек (неотрицательное целое). |
 | `settingsMigrations` | `Record<string, (value: unknown) => unknown>` | нет | Миграции настроек: ключ — номер исходной версии строкой (`"1"`), значение — функция `N → N+1`. |
+| `sandbox` | `boolean` | нет | Плагин просит песочницу (API 1.3.0): его код выполняется внутри iframe со строгой CSP и общается с хостом через мост (см. §4.3). Плагин без `sandboxSource` отвергается хостом (состояние `failed`). |
 
 Схема одной настройки (`PluginSettingSchema`):
 
@@ -89,14 +108,15 @@ minApiVersion: '1.0.0'
 ## 3. Права (`permissions`)
 
 Полный набор — `PLUGIN_PERMISSIONS` (`frontend/src/plugins/manifest.ts:16`),
-тип `PluginPermission` (`frontend/src/plugins/contract.ts:18`). Ровно восемь прав.
+тип `PluginPermission` (`frontend/src/plugins/contract.ts:18`). Ровно девять прав.
 
 | Право | Что оно означает по смыслу | Что даёт на практике сейчас |
 | --- | --- | --- |
-| `notes.read` | Чтение содержимого заметок | `ctx.api.getNote(path)` возвращает тело заметки вместе с ревизией. |
+| `notes.read` | Чтение содержимого заметок | `ctx.api.getNote(path)` возвращает тело заметки вместе с ревизией. Требуется и для `ctx.openNote(path)` — плагин переходит только к заметке, которую ему разрешено читать (§4.2). |
 | `notes.write` | Запись заметок | `ctx.api.saveNote(path, content, revision)` — запись идёт через optimistic locking. |
 | `tree.read` | Чтение дерева заметок | `ctx.api.getTree()` возвращает `{ folders, files }`. |
 | `search.read` | Поиск по заметкам | `ctx.api.search(query, limit?)`. |
+| `query.read` | Выборка заметок языком запросов (API 1.2.0) | `ctx.api.query(query, limit?)` и `ctx.api.tags()`. Плагин видит пути, имена и сниппеты совпавших заметок — но никогда материал ключей. |
 | `editor.read` | Чтение текста открытой заметки | `ctx.editor.getText()`, `getSelection()`, `getCursor()`, подписки `onChange` / `onSelectionChange`. |
 | `editor.write` | Изменение текста открытой заметки | `ctx.editor.insert()`, `insertAt()`, `replaceSelection()` — изменения идут через CodeMirror, поэтому автосохранение продолжает работать. |
 | `ui.contribute` | Вклад в интерфейс | Регистрация панели, пункта сайдбара, пункта контекстного меню, кнопки тулбара, секции настроек, команды. |
@@ -127,6 +147,8 @@ minApiVersion: '1.0.0'
 | `ctx.api.saveNote(path, content, revision)` | `notes.write` | `restrictPluginApi` |
 | `ctx.api.getTree()` | `tree.read` | `restrictPluginApi` |
 | `ctx.api.search(query, limit?)` | `search.read` | `restrictPluginApi` |
+| `ctx.api.query(query, limit?)` | `query.read` | `restrictPluginApi` |
+| `ctx.api.tags()` | `query.read` | `restrictPluginApi` |
 | `ctx.editor.getText()` / `getSelection()` / `getCursor()` | `editor.read` | `restrictEditor` |
 | `ctx.editor.onChange()` / `onSelectionChange()` | `editor.read` | `restrictEditor` |
 | `ctx.editor.insert()` / `insertAt()` / `replaceSelection()` | `editor.write` | `restrictEditor` |
@@ -179,6 +201,7 @@ stopped by a permission error»).
 | `logger` | `readonly PluginLogger` | Логгер с префиксом `[noto:<id>]` (`core/diagnostics/logger.ts`). |
 | `permissions` | `readonly PluginPermission[]` | Заявленные права (см. оговорку выше). |
 | `api` | `readonly PluginApi` | Доступ к данным (см. §5). |
+| `vault` | `readonly PluginVaultState \| undefined` | Состояние запечатанного хранилища (см. §4.1). Необязательное поле, добавленное в API 1.1.0. |
 | `editor` | `readonly PluginEditor \| null` | Ручка редактора (с проверкой прав) или `null`, если заметка не открыта. Это **геттер**: значение вычисляется при каждом обращении, поэтому плагин, активированный до открытия заметки, получит редактор позже. |
 | `settings` | `readonly PluginSettings` | Собственные настройки плагина (см. §8). |
 | `registerCommand(cmd)` | `() => void` | Регистрирует команду палитры. Требует `ui.contribute`. |
@@ -190,6 +213,7 @@ stopped by a permission error»).
 | `on(event, cb)` | `() => void` | Подписка на событие платформы. |
 | `onEditor(cb)` | `() => void` | Подписка на редактор приложения: колбэк вызывается сразу с текущим редактором (или `null`), затем при каждой смене. Поле **необязательное** (`onEditor?`), чтобы контексты, собранные вручную в тестах компонентов, оставались валидными. |
 | `onDeactivate(cb)` | `void` | Колбэк, который будет вызван при деактивации. |
+| `openNote(path)` | `void` | Открывает заметку в редакторе (API 1.3.0, право `notes.read`). Необязательный член — см. §4.2. |
 
 ### Функции, возвращающие `() => void`
 
@@ -212,10 +236,142 @@ off(); // команда снята
 `onDeactivate(cb)` — единственный метод, возвращающий `void`: он не
 отменяется, а добавляет колбэк в очередь деактивации.
 
+### 4.1. Состояние хранилища (`ctx.vault`, API 1.1.0)
+
+`ctx.vault` — необязательный член контекста. Он появляется в версии `1.1.0` и
+сообщает плагину **состояние** хранилища, ничего больше:
+
+```ts
+// frontend/src/plugins/contract.ts
+export interface PluginVaultState {
+  readonly mode: 'open' | 'sealed';
+  readonly encrypted: boolean;
+  readonly locked: boolean;
+  readonly formatVersion: number;
+}
+```
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `mode` | `'open' \| 'sealed'` | `sealed` — содержимое шифруется браузером; `open` — обычный Markdown на диске |
+| `encrypted` | `boolean` | То же самое, что `mode === 'sealed'`, но в виде булева флага — так его удобнее проверять |
+| `locked` | `boolean` | Хранилище заблокировано: плагин не может прочитать ничего |
+| `formatVersion` | `number` | Версия формата запечатанного хранилища; `0`, когда хранилище не зашифровано |
+
+Правила:
+
+* Поле **необязательное**. Пока приложение ничего не опубликовало, плагин
+  видит `ctx.vault === undefined` — то есть «состояние неизвестно», а не
+  «хранилище открыто». Поэтому код плагина обязан писать `ctx.vault?.encrypted`,
+  а не `ctx.vault.encrypted`.
+* Значение — **замороженная копия** (`Object.freeze` в
+  `frontend/src/core/api/pluginApi.ts`). Плагин может прочитать состояние, но
+  не может его изменить и не может изменить состояние приложения.
+* Поле **не перечисляемое** (`enumerable: false`): набор ключей `ctx.api`
+  остаётся ровно тем же, что в API 1.0.0, поэтому плагин, который
+  перечисляет ключи, не ломается.
+* Публикация состояния **не требует права**: это не операция над данными, а
+  факт о хранилище. Права нужны только для чтения и записи заметок.
+* Состояние публикует приложение (`frontend/src/App.tsx`, `getVaultState`),
+  а фасад API — `createPluginApi({ vaultState })`.
+* То же состояние доступно и как `ctx.api.vault`
+  (`frontend/src/core/api/pluginApi.ts`): там оно тоже замороженная копия и тоже
+  не перечисляемое. Два имени — одно значение, чтобы плагин мог читать его
+  там, где у него уже есть `ctx.api`.
+
+**Плагин никогда не видит материал ключей.** В состоянии нет и не может быть
+мастер-пароля, KEK или DEK. Проверка границ (`frontend/scripts/check-boundaries.mjs`,
+правила **R11** и **R12**) запрещает плагину импортировать крипто-ядро, так
+что это не обещание, а запрет компилятора. Подробнее —
+[PLUGIN_SECURITY.md](PLUGIN_SECURITY.md).
+
+Пример:
+
+```ts
+export function activate(ctx: PluginContext): void {
+  ctx.registerCommand({
+    id: 'my-plugin.state',
+    title: 'Show the state of the storage',
+    run: () => {
+      const vault = ctx.vault;
+      if (!vault) {
+        ctx.logger.info('the state of the storage is unknown');
+        return;
+      }
+      ctx.logger.info(
+        vault.encrypted
+          ? `the storage is encrypted (format ${vault.formatVersion})` +
+            (vault.locked ? ' and locked' : '')
+          : 'the storage is plain',
+      );
+    },
+  });
+}
+```
+
+### 4.2. Открытие заметки (`ctx.openNote`, API 1.3.0)
+
+`ctx.openNote(path)` — необязательный член контекста: он появился в версии
+`1.3.0` и открывает заметку в редакторе приложения.
+
+```ts
+export interface PluginContext {
+  // ...
+  openNote?(path: string): void;
+}
+```
+
+Правила:
+
+* операция требует права **`notes.read`**: плагин переходит только к заметке,
+  которую ему разрешено читать; без права бросается `PluginPermissionError`;
+* операция **не даёт** содержимое заметки — чтобы прочитать её, плагин
+  обращается к `ctx.api.getNote(path)`;
+* если хост не умеет открывать заметки (зависимость `openNote` не передана),
+  операция бросает `Error('the host cannot open notes')` — молчаливого
+  no-op нет;
+* действие записывается в журнал аудита (§13).
+
+Встроенный плагин `backlinks` использует операцию: ссылки панели открывают
+заметку.
+
+```ts
+ctx.registerPanel({
+  id: 'my-plugin.panel',
+  title: 'My plugin',
+  render: () =>
+    h('button', { onClick: () => ctx.openNote?.('notes/alpha.md') }, 'Alpha'),
+});
+```
+
+### 4.3. Песочница плагинов (API 1.3.0)
+
+Плагин, чей манифест объявляет `sandbox: true`, **не выполняется** в контексте
+приложения: его код живёт в строке `plugin.sandboxSource` и выполняется внутри
+`iframe` со строгой политикой безопасности.
+
+| Свойство | Значение |
+| --- | --- |
+| Атрибут `sandbox` кадра | `allow-scripts` — **без** `allow-same-origin`, поэтому документ имеет непрозрачный origin |
+| Политика (CSP) | `default-src 'none'; script-src 'nonce-…'; style-src 'nonce-…'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` — без `unsafe-inline` и без `unsafe-eval` |
+| Мост | `postMessage` с проверкой канала, идентификатора плагина, идентификатора запроса и списка разрешённых методов |
+| Разрешённые методы | `api.getNote`, `api.getTree`, `api.search`, `api.query`, `api.tags`, `editor.getText`, `editor.getSelection`, `editor.getCursor`, `editor.getPath`, `openNote`, `log` |
+| Права | Те же, что и у обычного плагина: обработчики моста строятся из ограниченных возможностей плагина, поэтому `PluginPermissionError` работает и в песочнице |
+
+Внутри кадра плагин пользуется только `window.notoPlugin`:
+
+```js
+const tree = await window.notoPlugin.api.getTree();
+```
+
+Исходный код песочницы **не должен** содержать `eval`, `new Function`,
+динамический `import()`, `fetch`, `XMLHttpRequest` или `WebSocket` — это
+проверяет новое правило границ **R17**
+(`frontend/scripts/check-boundaries.mjs`).
+
 ---
 
 ## 5. Доступ к данным (`PluginApi`)
-
 `frontend/src/plugins/contract.ts:117`. Реализация — фасад
 `createPluginApi()` (`frontend/src/core/api/pluginApi.ts:28`), который
 делегирует в `src/api/notes.ts`, `src/api/tree.ts`, `src/api/search.ts`.
@@ -227,6 +383,39 @@ off(); // команда снята
 | `getTree` | `() => Promise<{ folders: Node[]; files: Node[] }>` | Дерево заметок плоскими массивами. |
 | `search` | `(query: string, limit?: number) => Promise<SearchHit[]>` | Полнотекстовый поиск. Значение `limit` по умолчанию — `50` (`core/api/pluginApi.ts:39`). |
 | `saveNote` | `(path: string, content: string, revision: number) => Promise<SaveNoteResponse>` | Записывает заметку с optimistic locking. |
+| `query` | `(query: string, limit?: number) => Promise<PluginQueryResult>` | Выборка заметок языком запросов (API 1.2.0, право `query.read`). |
+| `tags` | `() => Promise<TagCount[]>` | Теги хранилища с числом заметок (API 1.2.0, право `query.read`). |
+
+### 5.1. Возможность запроса (API 1.2.0)
+
+Язык запросов описан в [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md). Плагин
+спрашивает хранилище тем же языком, что и человек:
+
+```ts
+const answer = await ctx.api.query?.("tag == 'work' && !has_incomplete_tasks");
+for (const hit of answer?.hits ?? []) {
+  console.log(hit.path, hit.title ?? hit.name);
+}
+const tags = await ctx.api.tags?.();
+// [{ tag: 'work', count: 12 }, { tag: 'home', count: 3 }]
+```
+
+| Поле ответа | Тип | Смысл |
+| --- | --- | --- |
+| `hits` | `PluginQueryHit[]` | Совпавшие заметки: путь, имя, сниппет и, когда хост знает, заголовок и таймстемпы. |
+| `total` | `number` | Число совпавших заметок до применения ограничения. |
+| `partial` | `boolean` | `true`, если свойства части заметок не удалось пересчитать, — ответ может быть неполным. |
+
+Как это работает в двух режимах хранения:
+
+* **открытое хранилище** — запрос уходит на сервер (`POST /api/query`), ответ
+  строит SQL-компилятор языка;
+* **запечатанное хранилище** — запрос выполняется **в браузере** над
+  расшифрованными заметками (`frontend/src/core/api/pluginQuery.ts`), поэтому
+  ключевой материал наружу не выходит никогда.
+
+Плагин без права `query.read` получает `PluginPermissionError` — тихого
+no-op здесь нет.
 
 Про `saveNote` важно:
 
@@ -412,6 +601,12 @@ export interface PluginSidebarItem {
 }
 ```
 
+`icon` — **имя иконки** из общего реестра (`frontend/src/ui/icons.tsx`):
+`file-text`, `folder`, `folder-open`, `search`, `settings`, `list-tree` и
+другие (полный список — в `docs/DESIGN_SYSTEM.md`). Неизвестное имя не
+является ошибкой: показывается нейтральная точка, поэтому старые значения
+продолжают работать.
+
 ### Пункт контекстного меню (`PluginContextMenuItem`)
 
 ```ts
@@ -437,6 +632,8 @@ export interface PluginToolbarItem {
   run(): void | Promise<void>;
 }
 ```
+
+`icon` — имя иконки из общего реестра, как и у пункта сайдбара.
 
 ### Секция настроек (`PluginSettingsSection`)
 
@@ -780,11 +977,34 @@ const all = await ctx.settings.all();
 | Подписываться на события `note.*`, `folder.*`, `editor.*`, `workspace.opened` | Получить содержимое заметки из payload события — там только пути и метаданные |
 | Выполнить операцию, на которую объявил право | Выполнить операцию без нужного права: будет `PluginPermissionError` (кроме сетевых вызовов мимо API — их enforcement не покрывает) |
 | Импортировать `src/plugins/contract.ts` и свои собственные файлы | Импортировать `src/api/client.ts`, `src/core/**` или модули другого плагина (правила R3, R8 проверяются скриптом) |
+| Узнать состояние хранилища через `ctx.vault` / `ctx.api.vault` (API 1.1.0) | Получить мастер-пароль, KEK или DEK: в состоянии их нет, а импорт крипто-ядра запрещён правилами R11 и R12 |
 | Выполняться как встроенный код приложения | Загружать удалённый JS: `import()`, `import.meta.glob`, `eval` и `new Function` в плагинах не используются и не поддерживаются |
 
 ---
 
-## 13. Где искать ещё
+## 13. Журнал аудита действий плагинов (API 1.3.0)
+
+Каждое действие плагина записывается в журнал аудита: идентификатор
+плагина, действие, момент и цель.
+
+| Действие | Когда записывается | Пример цели |
+| --- | --- | --- |
+| `read` | Плагин прочитал данные хранилища (`getNote`, `getTree`, `search`, `query`, `tags`) | `notes/alpha.md`, `tree`, `query:path != ""` |
+| `write` | Плагин записал заметку (`saveNote`) | `notes/alpha.md` |
+| `open` | Плагин попросил открыть заметку (`ctx.openNote`) | `notes/alpha.md` |
+| `command` | Плагин выполнил зарегистрированную команду | `backlinks.show` |
+
+Журнал — ограниченное кольцо на 500 записей
+(`PluginAuditLog`, `frontend/src/plugins/audit.ts`): когда он переполняется, самая
+старая запись вытесняется. Запись **никогда** не содержит содержимого заметки —
+только путь, вид запроса и идентификатор команды.
+
+Журнал показывает панель управления плагинами
+(`PluginManagerPanel`, свойство `audit`).
+
+---
+
+## 14. Где искать ещё
 
 * Модель доверия, ограничения и что **не** защищает enforcement:
   [PLUGIN_SECURITY.md](PLUGIN_SECURITY.md).
@@ -792,3 +1012,6 @@ const all = await ctx.settings.all();
   [PLUGIN_DEVELOPMENT.md](PLUGIN_DEVELOPMENT.md).
 * Архитектурные правила импортов: `frontend/scripts/check-boundaries.mjs`.
 * Бэкенд-точка расширения: `backend/internal/notes/noteapi.go`.
+* Механизм песочницы и мост: `frontend/src/plugins/sandbox.ts`.
+* Журнал аудита: `frontend/src/plugins/audit.ts`.
+* Установка плагинов из файла и из URL: `frontend/src/plugins/loader.ts`.

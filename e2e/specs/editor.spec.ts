@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  activeTabName,
   createFolder,
   createNote,
   editorText,
@@ -34,10 +35,10 @@ test.describe('editor', () => {
 
     await typeInEditor(page, MARKDOWN);
 
-    // The preview renders the markdown while it is typed.
-    const preview = page.getByTestId('preview');
-    await expect(preview.locator('h1')).toHaveText('E2E Заголовок');
-    await expect(preview).toContainText('Это тестовая заметка с кириллицей');
+    // The interface shows the editor only: the preview is not a part of it any
+    // more (the safe renderer of the Markdown stays in the repository and is
+    // covered by the unit tests).
+    await expect(page.getByTestId('preview')).toHaveCount(0);
 
     // Autosave (800 ms debounce) reports "Saved".
     await waitForSaved(page);
@@ -49,7 +50,7 @@ test.describe('editor', () => {
     // Re-open the note: the saved content is restored from the server.
     await expandFolder(page, folder);
     await treeFile(page, note).click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
     await expect(page.locator('.cm-content')).toContainText('E2E Заголовок');
     expect(await editorText(page)).toContain('Это тестовая заметка с кириллицей');
     expect(await editorText(page)).toContain('narwhal');
@@ -83,11 +84,15 @@ test.describe('editor', () => {
     await typeInEditor(page, 'Some content.\n');
     await waitForSaved(page);
 
-    // Count the write requests from now on.
+    // Count the write requests from now on. The query of the language is a
+    // read (it is a POST, but it changes nothing), so only the endpoints that
+    // write are counted here.
     const writes: string[] = [];
     page.on('request', (request) => {
+      const url = new URL(request.url()).pathname;
+      if (url.startsWith('/api/query')) return;
       if (request.method() === 'PUT' || request.method() === 'POST') {
-        writes.push(`${request.method()} ${request.url()}`);
+        writes.push(`${request.method()} ${url}`);
       }
     });
 
@@ -96,7 +101,7 @@ test.describe('editor', () => {
     await expect(page.getByTestId('empty-state')).toBeVisible();
     await expandFolder(page, folder);
     await treeFile(page, note).click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
 
     // Give the (spurious) autosave time to fire.
     await page.waitForTimeout(2000);
@@ -104,7 +109,7 @@ test.describe('editor', () => {
     expect(writes).toEqual([]);
   });
 
-  test('the preview never executes injected script or event handlers', async ({ page }) => {
+  test('the injected script of a note never reaches the document', async ({ page }) => {
     await gotoApp(page);
 
     const folder = 'E2E XSS Folder';
@@ -124,24 +129,22 @@ test.describe('editor', () => {
     // The payload really is part of the note source.
     expect(await editorText(page)).toContain('window.__x=1');
 
-    // Switch to preview only mode.
-    await page.getByRole('group', { name: 'View mode' }).getByRole('button', { name: 'preview' }).click();
-
-    const preview = page.getByTestId('preview');
-    await expect(preview).toBeVisible();
-
-    // No script element survives in the preview DOM.
-    await expect(preview.locator('script')).toHaveCount(0);
-
-    // No event handler attribute survives in the preview DOM.
-    const handlerAttributes = await preview.evaluate((root) =>
-      Array.from(root.querySelectorAll('*')).flatMap((el) =>
-        Array.from(el.attributes)
-          .filter((attr) => attr.name.toLowerCase().startsWith('on'))
-          .map((attr) => `${el.tagName.toLowerCase()}@${attr.name}`),
-      ),
-    );
-    expect(handlerAttributes).toEqual([]);
+    // The editor shows the source as text: no script element and no event
+    // handler ever reach the interface. (The safe renderer of the Markdown is
+    // covered by the unit tests of the component.)
+    const dangerous = await page.evaluate(() => {
+      const app = document.querySelector('.app') ?? document.body;
+      return {
+        scripts: app.querySelectorAll('script').length,
+        handlers: Array.from(app.querySelectorAll('*')).flatMap((element) =>
+          Array.from(element.attributes)
+            .filter((attr) => attr.name.toLowerCase().startsWith('on'))
+            .map((attr) => `${element.tagName.toLowerCase()}@${attr.name}`),
+        ),
+      };
+    });
+    expect(dangerous.scripts).toBe(0);
+    expect(dangerous.handlers).toEqual([]);
 
     // Nothing executed: give the asynchronous <img> error handler a chance to fire.
     await page.waitForTimeout(1500);

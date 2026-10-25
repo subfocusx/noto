@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"noto/backend/internal/model"
+	"noto/backend/internal/query"
 )
 
 // Store persists note metadata, the full text search index, attachments
@@ -26,6 +27,38 @@ type Store interface {
 	MoveNote(ctx context.Context, fromPath, toPath string) error
 	// ListNotes returns the metadata of every known note and folder.
 	ListNotes(ctx context.Context) ([]model.Node, error)
+	// ListChildrenPaged returns one page of the children of a folder.
+	//
+	// The children are ordered by path. The cursor is the path of the last
+	// item of the previous page: an empty cursor starts at the first
+	// child. The next cursor of the answer is empty when the page is the
+	// last one.
+	ListChildrenPaged(ctx context.Context, parentPath, cursor string, limit int) (model.NodePage, error)
+
+	// AppendVersion appends an immutable version of a note to its history.
+	//
+	// A version is never modified: the same revision is never written
+	// twice.
+	AppendVersion(ctx context.Context, v model.NoteVersion) error
+	// ListVersions returns the history of a note, ordered by revision.
+	ListVersions(ctx context.Context, path string) ([]model.NoteVersion, error)
+	// GetVersion returns a single version of a note.
+	GetVersion(ctx context.Context, path string, revision int64) (model.NoteVersion, bool, error)
+
+	// PutDerivedProps stores the cache of the derived properties of a note.
+	//
+	// The properties are a cache: the file on the disk stays the source of
+	// truth.
+	PutDerivedProps(ctx context.Context, d model.DerivedProps) error
+	// GetDerivedProps returns the cache of the derived properties of a note.
+	GetDerivedProps(ctx context.Context, path string) (model.DerivedProps, bool, error)
+	// MarkDerivedPropsStale marks the cached properties of a note as stale.
+	//
+	// It is called when a note changes: the properties are not recomputed
+	// right away, they are only known to be out of date.
+	MarkDerivedPropsStale(ctx context.Context, path string) error
+	// DeleteDerivedProps drops the cached properties of a note.
+	DeleteDerivedProps(ctx context.Context, path string) error
 
 	// IndexContent adds or replaces the searchable text of a path.
 	IndexContent(ctx context.Context, path, name, content string) error
@@ -44,6 +77,12 @@ type Store interface {
 	GetAttachment(ctx context.Context, id string) (model.Attachment, bool, error)
 	// DeleteAttachment removes the metadata of an attachment.
 	DeleteAttachment(ctx context.Context, id string) error
+	// IndexAttachmentText indexes the text extracted from an attachment, so
+	// that the content of the attachment is searchable.
+	//
+	// The text is extracted by the domain layer: the store only keeps the
+	// bytes and answers the searches.
+	IndexAttachmentText(ctx context.Context, id, notePath, name, body string) error
 
 	// PutTrash records a deleted entry so it can be restored.
 	PutTrash(ctx context.Context, originalPath, trashPath string, kind model.NodeType, size int64) error
@@ -51,4 +90,22 @@ type Store interface {
 	ListTrash(ctx context.Context) ([]model.Node, error)
 	// DeleteTrash removes a trash entry.
 	DeleteTrash(ctx context.Context, trashPath string) error
+
+	// UpsertNoteProps inserts or replaces the derived properties of a note.
+	//
+	// The properties are a cache of the text of the note: the file on the disk
+	// stays the source of truth.
+	UpsertNoteProps(ctx context.Context, p model.NoteProps) error
+	// GetNoteProps returns the derived properties of a single path.
+	GetNoteProps(ctx context.Context, path string) (model.NoteProps, bool, error)
+	// ListNoteProps returns the derived properties of every known note.
+	ListNoteProps(ctx context.Context) ([]model.NoteProps, error)
+	// DeleteNoteProps drops the derived properties of a path.
+	DeleteNoteProps(ctx context.Context, path string) error
+	// QueryNotes returns the notes that match a query of the query language.
+	//
+	// The query is compiled by the implementation: the store decides how the
+	// selection is calculated (SQL in the open mode, a predicate over the
+	// memory in the tests).
+	QueryNotes(ctx context.Context, e query.Expr, limit int) ([]model.SearchHit, error)
 }

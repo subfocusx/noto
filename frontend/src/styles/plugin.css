@@ -1,0 +1,485 @@
+/* ==========================================================================
+   The contribution points of the plugins.
+
+   Every class of this section is prefixed with `.noto-plugin-`, so the styles
+   of a plugin cannot collide with the styles of the application. The plugins
+   use the semantic tokens of the application, so they inherit the active
+   theme without copying any CSS.
+   ========================================================================== */
+
+.noto-plugin-sidebar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.noto-plugin-sidebar-item {
+  margin: 0;
+}
+
+.noto-plugin-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+  text-align: left;
+}
+
+.noto-plugin-button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.noto-plugin-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.noto-plugin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.noto-plugin-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The buttons of the sidebar and of the toolbar show an icon only: the name
+   of the action stays in the `aria-label` and in the tooltip of the button.
+   The label is hidden from the screen, but it stays readable by the
+   assistive technology. */
+.noto-plugin-button-icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+}
+
+.noto-plugin-button-icon .noto-plugin-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.noto-plugin-shortcut {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.noto-plugin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--divider);
+  background: var(--bg-surface);
+}
+
+/* The contributions of the plugins live in the footer of the left column:
+   they are a row of icons, and they must never push the tree out of the
+   column. This rule is the only one of the area: it used to be defined twice,
+   and the last definition won. */
+.noto-plugin-sidebar-area {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  flex: none;
+  max-height: 96px;
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow: auto;
+}
+
+/* The panels of the plugins live at the bottom of the right column, under the
+   outline of the note. */
+.noto-plugin-panels {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  max-height: 45%;
+  border-left: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.noto-plugin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex: none;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--divider);
+}
+
+.noto-plugin-tabs button {
+  min-height: var(--control-md);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+.noto-plugin-tabs button:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.noto-plugin-tabs button.active {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.noto-plugin-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.noto-plugin-tabpanel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.noto-plugin-context-menu,
+.noto-plugin-commands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.noto-plugin-error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-subtle);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+/* -------------------------------------------------------- plugin manager */
+
+.noto-plugin-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.noto-plugin-trust-warning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.noto-plugin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.noto-plugin-list-item {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.noto-plugin-list-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.noto-plugin-name {
+  font-weight: var(--weight-semibold);
+}
+
+.noto-plugin-version,
+.noto-plugin-author,
+.noto-plugin-description {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.noto-plugin-description,
+.noto-plugin-author {
+  margin: var(--space-1) 0 0;
+}
+
+.noto-plugin-status {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+}
+
+.noto-plugin-status-active {
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-subtle);
+}
+
+.noto-plugin-status-failed {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-subtle);
+}
+
+.noto-plugin-status-incompatible {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.noto-plugin-error-text {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.noto-plugin-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.noto-plugin-empty {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-base);
+}
+
+/* ------------------------------------------------- built-in: word count */
+
+.noto-word-count {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+  font-size: var(--text-base);
+}
+
+.noto-word-count-words {
+  font-weight: var(--weight-semibold);
+  color: var(--fg);
+}
+
+.noto-word-count-chars {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.noto-word-count-empty {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+/* ------------------------------------------------ built-in: backlinks */
+
+.noto-backlinks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.noto-backlinks-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.noto-backlinks-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.noto-backlinks-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noto-backlinks-context {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------ built-in: tags */
+
+/* The tags of the vault are chips in a row. They carry no fill of their own:
+   a thin border and the text colour mark them, so a list of tags does not
+   look like a wall of grey blocks. */
+.noto-tags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+
+.noto-tags-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.noto-tags-item {
+  margin: 0;
+}
+
+.noto-tags-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.noto-tags-button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.noto-tags-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.noto-tags-button.active {
+  border-color: var(--fg-muted);
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
+.noto-tags-name {
+  font-family: var(--font-mono);
+}
+
+.noto-tags-count {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.noto-tags-empty {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.noto-tags-error {
+  color: var(--danger);
+}
+
+.noto-tags-selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.noto-tags-selection-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.noto-tags-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.noto-tags-note {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

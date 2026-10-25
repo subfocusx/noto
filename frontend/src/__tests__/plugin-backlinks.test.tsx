@@ -28,7 +28,6 @@ import {
   BACKLINKS_COMMAND_ID,
   BACKLINKS_DEBOUNCE_MS,
   BACKLINKS_PANEL_ID,
-  BACKLINKS_SIDEBAR_ID,
   backlinksManifest,
   buildNoteIndex,
   createBacklinksPlugin,
@@ -288,14 +287,14 @@ describe('backlinks manifest', () => {
     expect(backlinksManifest.settings).toEqual([
       {
         key: 'includeUnlinked',
-        label: 'Показывать упоминания без ссылки',
+        label: 'Show the mentions without a link',
         type: 'boolean',
         default: true,
         description: expect.any(String),
       },
       {
         key: 'minNameLength',
-        label: 'Минимальная длина имени',
+        label: 'Minimal length of a name',
         type: 'number',
         default: 4,
         description: expect.any(String),
@@ -380,12 +379,12 @@ describe('backlinks resolution helpers', () => {
 });
 
 describe('backlinks activation', () => {
-  it('registers a panel, a sidebar item and a command', async () => {
+  it('registers a panel and a command, but no item of the sidebar', async () => {
     const fake = makeFakeContext(null, LIBRARY);
     await fake.plugin.activate(fake.ctx);
 
     expect(fake.panels.map((p) => p.id)).toEqual([BACKLINKS_PANEL_ID]);
-    expect(fake.sidebarItems.map((i) => i.id)).toEqual([BACKLINKS_SIDEBAR_ID]);
+    expect(fake.sidebarItems).toEqual([]);
     expect(fake.commands.map((c) => c.id)).toEqual([BACKLINKS_COMMAND_ID]);
   });
 
@@ -394,7 +393,7 @@ describe('backlinks activation', () => {
     await expect(fake.plugin.activate(fake.ctx)).resolves.toBeUndefined();
 
     render(fake.panels[0].render());
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
   });
 
   it('shows the backlinks of the open note', async () => {
@@ -408,7 +407,7 @@ describe('backlinks activation', () => {
       expect(screen.getByText('A')).toBeTruthy();
     });
     expect(screen.getByText('notes/a.md')).toBeTruthy();
-    expect(screen.getByText('Обратные ссылки (1)')).toBeTruthy();
+    expect(screen.getByText('Backlinks (1)')).toBeTruthy();
   });
 
   it('finds the backlinks written in cyrillic', async () => {
@@ -435,7 +434,7 @@ describe('backlinks activation', () => {
     render(fake.panels[0].render());
 
     await waitFor(() => {
-      expect(screen.getByText('Обратные ссылки (1)')).toBeTruthy();
+      expect(screen.getByText('Backlinks (1)')).toBeTruthy();
     });
     // "Заметка C" links to "[[Несуществующая]]": it is not a backlink.
     expect(screen.queryByText('Заметка C')).toBeNull();
@@ -457,7 +456,7 @@ describe('backlinks activation', () => {
     await waitFor(() => {
       expect(screen.getByText('src')).toBeTruthy();
     });
-    expect(screen.getByText('неоднозначно')).toBeTruthy();
+    expect(screen.getByText('ambiguous')).toBeTruthy();
   });
 
   it('shows the unlinked mentions and ignores the short names', async () => {
@@ -475,7 +474,7 @@ describe('backlinks activation', () => {
     await waitFor(() => {
       expect(screen.getByText('Большой отчёт')).toBeTruthy();
     });
-    expect(screen.getByText('без ссылки')).toBeTruthy();
+    expect(screen.getByText('no link')).toBeTruthy();
     // The name is shorter than 4 characters: it is ignored.
     expect(screen.queryByText('Отч')).toBeNull();
   });
@@ -489,7 +488,7 @@ describe('backlinks activation', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Открыть заметку из плагина нельзя — откройте её вручную.'),
+        screen.getByText('The plugin cannot open a note — open it manually.'),
       ).toBeTruthy();
     });
   });
@@ -510,7 +509,7 @@ describe('backlinks activation', () => {
 
     render(fake.panels[0].render());
     await waitFor(() => {
-      expect(screen.getByText('Недостаточно прав для чтения заметок')).toBeTruthy();
+      expect(screen.getByText('Not enough rights to read the notes')).toBeTruthy();
     });
   });
 
@@ -532,12 +531,11 @@ describe('backlinks activation', () => {
     expect(fake.eventCleanups.every((cleanup) => cleanup.mock.calls.length === 1)).toBe(true);
     // The registrations are removed as well.
     expect(fake.unregisterPanel).toHaveBeenCalledTimes(1);
-    expect(fake.unregisterSidebar).toHaveBeenCalledTimes(1);
     expect(fake.unregisterCommand).toHaveBeenCalledTimes(1);
 
     // After the deactivation the panel shows the placeholder again.
     render(fake.panels[0].render());
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
   });
 
   it('drops the subscription of the previous editor', async () => {

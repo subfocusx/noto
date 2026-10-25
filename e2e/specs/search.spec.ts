@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { createFolder, createNote, gotoApp, treeFile, typeInEditor, waitForSaved } from '../helpers/app';
+import {
+  activeTabName,
+  createFolder,
+  createNote,
+  gotoApp,
+  treeFile,
+  typeInEditor,
+  waitForSaved,
+} from '../helpers/app';
 
 test.describe('search', () => {
   test.beforeEach(({}, testInfo) => {
@@ -32,7 +40,7 @@ test.describe('search', () => {
 
     // Clicking the hit opens the note.
     await hit.click();
-    await expect(page.locator('.app-title')).toHaveText(note);
+    await expect(activeTabName(page)).toHaveText(note);
     await expect(page.getByTestId('search-results')).toHaveCount(0);
     await expect(page.locator('.cm-content')).toContainText('quokka');
 

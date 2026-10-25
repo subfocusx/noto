@@ -1,7 +1,15 @@
 // Autosave controller: debounced saving with status tracking and a
-// path/revision guard so a response of a previous note is never applied to
-// the note that is currently open.
-import { debounce } from './debounce';
+// path/revision guard so a response of a previous note is never applied to the
+// note that is currently open.
+//
+// The controller serialises the saves **per note**: only one request per note
+// is in flight at a time. Without it, a second save of the same note would
+// leave with the revision of the first one and the server would answer with a
+// conflict — a conflict the user never caused.
+//
+// The pending edit of every note is kept separately, so an edit of one note is
+// never lost because another note was edited in the meantime.
+import { debounce, type Debounced } from './debounce';
 import { errorMessage } from './errors';
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -47,11 +55,16 @@ export function createAutosave(options: AutosaveOptions): AutosaveController {
   let activePath: string | null = null;
   /** Sequence number of the newest edit; used to detect superseded responses. */
   let seq = 0;
-  /** The latest unsaved snapshot (the note that owns it may differ from activePath). */
-  let pending: Pending | null = null;
+  /** The pending edit of every note. */
+  const pendingByPath = new Map<string, Pending>();
   /** The newest server revision known for a note. */
   const revisions = new Map<string, number>();
-  let inflight: { target: Pending; promise: Promise<void> } | null = null;
+  /** The content that the server accepted last; it is never sent twice. */
+  const saved = new Map<string, string>();
+  /** The chain of the saves of every note: one request per note at a time. */
+  const chains = new Map<string, Promise<void>>();
+  /** The request that is in flight for a note. */
+  const inflight = new Map<string, Promise<void>>();
 
   const setStatus = (next: AutosaveStatus, error?: string) => {
     status = next;
@@ -68,13 +81,16 @@ export function createAutosave(options: AutosaveOptions): AutosaveController {
         // response is superseded by a newer edit.
         if (typeof newRevision === 'number') {
           revisions.set(target.path, newRevision);
-          if (pending?.path === target.path) pending.revision = newRevision;
+          const pending = pendingByPath.get(target.path);
+          if (pending) pending.revision = newRevision;
         }
+        saved.set(target.path, target.content);
         if (!isCurrent()) return;
         // The note may have been edited again while the save was in flight.
-        if (pending && pending.path === target.path && pending.content === target.content) {
-          pending = null;
-          dirty = false;
+        const pending = pendingByPath.get(target.path);
+        if (pending && pending.content === target.content) {
+          pendingByPath.delete(target.path);
+          dirty = pendingByPath.size > 0;
           setStatus('saved');
         } else {
           dirty = true;
@@ -86,20 +102,68 @@ export function createAutosave(options: AutosaveOptions): AutosaveController {
         setStatus('error', errorMessage(err));
       }
     })();
-    inflight = { target, promise };
+    inflight.set(target.path, promise);
     void promise.then(() => {
-      if (inflight?.promise === promise) {
-        inflight = null;
-        // A superseded save leaves the newer edit unsaved: show it as pending.
-        if (pending && status === 'saving') setStatus('idle');
-      }
+      if (inflight.get(target.path) === promise) inflight.delete(target.path);
     });
     return promise;
   };
 
-  const debounced = debounce((target: Pending, mySeq: number) => {
-    void startSave(target, mySeq);
-  }, delay);
+  /**
+   * Puts a save of the note into the chain of that note.
+   *
+   * The chain is what makes the saves serial: the second save of a note waits
+   * for the first one, takes the revision it returned and sends the newest
+   * content. Two requests of the same note never travel at the same time, so
+   * the server never sees a stale revision.
+   */
+  const enqueue = (path: string): Promise<void> => {
+    const previous = chains.get(path) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const current = pendingByPath.get(path);
+        if (!current) return;
+        if (saved.get(path) === current.content) {
+          // The content is already on the server: nothing to send.
+          pendingByPath.delete(path);
+          dirty = pendingByPath.size > 0;
+          return;
+        }
+        const known = revisions.get(path);
+        const revision = known === undefined ? current.revision : Math.max(known, current.revision);
+        seq += 1;
+        await startSave({ path, content: current.content, revision }, seq);
+      });
+    chains.set(path, next);
+    void next.finally(() => {
+      if (chains.get(path) === next) chains.delete(path);
+    });
+    return next;
+  };
+
+  /**
+   * The debounce of every note.
+   *
+   * The debounce is per note: the edit of one note must not cancel the timer
+   * of another one.
+   */
+  const debouncers = new Map<string, Debounced<[Pending]>>();
+  const debounceFor = (path: string): Debounced<[Pending]> => {
+    let timer = debouncers.get(path);
+    if (!timer) {
+      timer = debounce((target: Pending) => {
+        void enqueue(target.path);
+      }, delay);
+      debouncers.set(path, timer);
+    }
+    return timer;
+  };
+
+  /** Cancels the timers of every note. */
+  const cancelAll = (): void => {
+    for (const timer of debouncers.values()) timer.cancel();
+  };
 
   return {
     markDirty(path: string, content: string, revision: number) {
@@ -108,45 +172,35 @@ export function createAutosave(options: AutosaveOptions): AutosaveController {
       const known = revisions.get(path);
       const rev = known === undefined ? revision : Math.max(known, revision);
       revisions.set(path, rev);
-      pending = { path, content, revision: rev };
+      pendingByPath.set(path, { path, content, revision: rev });
       seq += 1;
       // While a save is running the status stays "saving" until it settles.
-      if (!inflight) setStatus('idle');
-      debounced(pending, seq);
+      if (inflight.size === 0) setStatus('idle');
+      debounceFor(path)(pendingByPath.get(path)!);
     },
     async flush() {
-      const target = pending;
+      const target = activePath ? pendingByPath.get(activePath) : undefined;
+      const snapshot = target ?? [...pendingByPath.values()][0];
       // Nothing was edited: never send a request (it would overwrite the note).
-      if (!target) return;
-      debounced.cancel();
-      // A save of the same note is still running: wait for it, otherwise the
-      // second request would use a stale revision and conflict with the first.
-      if (inflight && inflight.target.path === target.path) {
-        await inflight.promise;
-        const current = pending;
-        if (!current || current.content === inflight.target.content) return;
-        seq += 1;
-        await startSave(current, seq);
-        return;
-      }
-      seq += 1;
-      await startSave(target, seq);
+      if (!snapshot) return;
+      cancelAll();
+      await enqueue(snapshot.path);
     },
     cancel() {
-      debounced.cancel();
+      cancelAll();
     },
     setActivePath(path: string | null) {
       activePath = path;
     },
     markClean() {
       dirty = false;
-      pending = null;
+      pendingByPath.clear();
       seq += 1;
-      debounced.cancel();
+      cancelAll();
       setStatus('idle');
     },
     status: () => status,
     dirty: () => dirty,
-    pending: () => debounced.pending(),
+    pending: () => [...debouncers.values()].some((timer) => timer.pending()),
   };
 }

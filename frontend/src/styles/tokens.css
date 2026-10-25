@@ -1,0 +1,304 @@
+/* ==========================================================================
+   Design tokens of Noto — the "Obsidian Slate" palette.
+
+   Every colour, size and duration of the interface comes from this file.
+   The application, the components and the plugins all read the same semantic
+   variables, so a plugin never has to copy the private styles of the shell.
+
+   The palette is a deep zinc graphite with a single violet accent:
+
+     ground      #09090b   the frame of the application and the status bar
+     panel       #121215   the sidebar, the tree, the breadcrumb strip
+     surface     #18181b   the writing plane
+     container   #1f1f22   the overlays: dialogs, palettes, context menus
+     border      #27272a   the 1px structural dividers
+     accent      #818cf8   the only interactive colour
+
+   Themes:
+     - `html[data-theme='light']` — the explicit light theme,
+     - `html[data-theme='dark']`  — the explicit dark theme,
+     - no attribute at all       — the system theme is followed.
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------ surfaces */
+  --bg-app: #09090b;
+  --bg-sidebar: #121215;
+  --bg-surface: #18181b;
+  --bg-elevated: #1f1f22;
+  --bg-inset: #0e0e11;
+  --bg-container: #1f1f22;
+  --bg-container-high: #2a2a2d;
+  --bg-container-highest: #353438;
+  --bg-hover: rgb(255 255 255 / 4%);
+  --bg-active: rgb(255 255 255 / 8%);
+  --bg-selected: #1e1e24;
+
+  /* ----------------------------------------------------------------- text */
+  --fg: #e4e1e6;
+  --fg-secondary: #c6c5d5;
+  --fg-muted: #908f9e;
+  --fg-on-accent: #0b0b12;
+
+  /* -------------------------------------------------------------- borders */
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --divider: #27272a;
+
+  /* --------------------------------------------------------------- accent */
+  --accent: #818cf8;
+  --accent-hover: #6d78f0;
+  --accent-active: #5b66e8;
+  --accent-subtle: rgb(129 140 248 / 16%);
+  --accent-fg: #0b0b12;
+
+  /* ------------------------------------------------------------- semantic */
+  --success: #34d399;
+  --success-subtle: rgb(52 211 153 / 14%);
+  --warning: #fbbf24;
+  --warning-subtle: rgb(251 191 36 / 14%);
+  --danger: #ffb4ab;
+  --danger-subtle: rgb(255 180 171 / 14%);
+  --info: #38bdf8;
+  --info-subtle: rgb(56 189 248 / 14%);
+
+  /* -------------------------------------------------------- focus, select */
+  --focus-ring: #818cf8;
+  --selection-bg: rgb(129 140 248 / 28%);
+  --selection-fg: #ffffff;
+
+  /* ------------------------------------------------------------------ code */
+  --code-bg: #0e0e11;
+  --code-fg: #dfe4ec;
+  --code-border: #27272a;
+  --inline-code-bg: rgb(255 255 255 / 6%);
+
+  /* ---------------------------------------------------------------- links */
+  --link: #818cf8;
+  --link-hover: #a5b4fc;
+  --link-visited: #c4b5fd;
+
+  /* ----------------------------------------------------------- typography */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-editor: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mono-font: var(--font-mono);
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.75;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* --------------------------------------------------------------- spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 56px;
+
+  /* --------------------------------------------------------- radii, sizes */
+  /* The shapes are tight: 4px is the default, 8px for the dialogs. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 4px;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 32%);
+  --shadow-2: 0 4px 16px rgb(0 0 0 / 40%);
+  --shadow-3: 0 4px 16px rgb(0 0 0 / 40%);
+
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --touch-target: 32px;
+
+  --icon-size: 15px;
+  --icon-size-sm: 13px;
+  --icon-size-lg: 17px;
+  --stroke-width: 1.75;
+
+  --row-height: 32px;
+  /* The height of the header of every column: the line under the headers is
+     one line, because every header has the same height. */
+  --header-height: 40px;
+  --footer-height: 24px;
+  /* The height of the strip of the tabs: it is the header of the workspace. */
+  --tab-height: 40px;
+  /* The width of the rail of the sections; the rail never changes its width. */
+  --rail-width: 44px;
+  --sidebar-width: 240px;
+  --sidebar-width-min: 200px;
+  --sidebar-width-max: 480px;
+  --panel-width: 280px;
+  --panel-width-min: 200px;
+  --panel-width-max: 480px;
+  --editor-max-width: 720px;
+  --indent-step: 16px;
+  --indent-max: 8;
+
+  /* ------------------------------------------------------------ z-indexing */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-drawer: 30;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-palette: 60;
+
+  /* ---------------------------------------------------------------- motion */
+  --duration-fast: 100ms;
+  --duration-normal: 160ms;
+  --duration-slow: 240ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------- light theme */
+
+html[data-theme='light'] {
+  --bg-app: #fafafa;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-inset: #f4f4f5;
+  --bg-container: #ffffff;
+  --bg-container-high: #f4f4f5;
+  --bg-container-highest: #e4e4e7;
+  --bg-hover: rgb(24 24 27 / 4%);
+  --bg-active: rgb(24 24 27 / 8%);
+  --bg-selected: #f4f4f5;
+
+  --fg: #18181b;
+  --fg-secondary: #3f3f46;
+  --fg-muted: #71717a;
+  --fg-on-accent: #ffffff;
+
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --divider: #ececee;
+
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-active: #4338ca;
+  --accent-subtle: rgb(99 102 241 / 12%);
+  --accent-fg: #ffffff;
+
+  --success: #059669;
+  --success-subtle: rgb(5 150 105 / 12%);
+  --warning: #b45309;
+  --warning-subtle: rgb(180 83 9 / 12%);
+  --danger: #dc2626;
+  --danger-subtle: rgb(220 38 38 / 12%);
+  --info: #0284c7;
+  --info-subtle: rgb(2 132 199 / 12%);
+
+  --focus-ring: #6366f1;
+  --selection-bg: rgb(99 102 241 / 20%);
+  --selection-fg: #ffffff;
+
+  --code-bg: #f4f4f5;
+  --code-fg: #1f2530;
+  --code-border: #e4e4e7;
+  --inline-code-bg: rgb(24 24 27 / 6%);
+
+  --link: #6366f1;
+  --link-hover: #4338ca;
+  --link-visited: #7c3aed;
+
+  --shadow-1: 0 1px 2px rgb(24 24 27 / 6%);
+  --shadow-2: 0 4px 16px rgb(24 24 27 / 10%);
+  --shadow-3: 0 4px 16px rgb(24 24 27 / 12%);
+
+  color-scheme: light;
+}
+
+/* ----------------------------------------------------------- system theme */
+
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) {
+    --bg-app: #fafafa;
+    --bg-sidebar: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-elevated: #ffffff;
+    --bg-inset: #f4f4f5;
+    --bg-container: #ffffff;
+    --bg-container-high: #f4f4f5;
+    --bg-container-highest: #e4e4e7;
+    --bg-hover: rgb(24 24 27 / 4%);
+    --bg-active: rgb(24 24 27 / 8%);
+    --bg-selected: #f4f4f5;
+
+    --fg: #18181b;
+    --fg-secondary: #3f3f46;
+    --fg-muted: #71717a;
+    --fg-on-accent: #ffffff;
+
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --divider: #ececee;
+
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-active: #4338ca;
+    --accent-subtle: rgb(99 102 241 / 12%);
+    --accent-fg: #ffffff;
+
+    --success: #059669;
+    --success-subtle: rgb(5 150 105 / 12%);
+    --warning: #b45309;
+    --warning-subtle: rgb(180 83 9 / 12%);
+    --danger: #dc2626;
+    --danger-subtle: rgb(220 38 38 / 12%);
+    --info: #0284c7;
+    --info-subtle: rgb(2 132 199 / 12%);
+
+    --focus-ring: #6366f1;
+    --selection-bg: rgb(99 102 241 / 20%);
+    --selection-fg: #ffffff;
+
+    --code-bg: #f4f4f5;
+    --code-fg: #1f2530;
+    --code-border: #e4e4e7;
+    --inline-code-bg: rgb(24 24 27 / 6%);
+
+    --link: #6366f1;
+    --link-hover: #4338ca;
+    --link-visited: #7c3aed;
+
+    --shadow-1: 0 1px 2px rgb(24 24 27 / 6%);
+    --shadow-2: 0 4px 16px rgb(24 24 27 / 10%);
+    --shadow-3: 0 4px 16px rgb(24 24 27 / 12%);
+
+    color-scheme: light;
+  }
+}
+
+/* Legacy aliases: the old names point at the semantic tokens, so the meaning
+   of a colour never depends on the theme any more. */
+:root,
+html[data-theme='light'],
+html:not([data-theme]) {
+  --editor-bg: var(--bg-surface);
+  --editor-fg: var(--fg);
+  --editor-gutter: var(--fg-muted);
+  --editor-active-line: var(--bg-hover);
+  --panel: var(--bg-surface);
+  --text: var(--fg);
+  --muted: var(--fg-muted);
+}

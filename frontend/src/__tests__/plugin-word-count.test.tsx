@@ -208,7 +208,7 @@ describe('word-count manifest', () => {
     expect(wordCount.wordCountManifest.settings).toEqual([
       {
         key: 'countChars',
-        label: 'Считать символы',
+        label: 'Count the characters',
         type: 'boolean',
         default: true,
         description: expect.any(String),
@@ -271,8 +271,8 @@ describe('word-count activation', () => {
 
     render(fake.panels[0].render());
 
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
-    expect(screen.getByText('Символов: 12')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
+    expect(screen.getByText('Characters: 12')).toBeTruthy();
   });
 
   it('hides the characters when the setting is off', async () => {
@@ -282,8 +282,8 @@ describe('word-count activation', () => {
 
     render(fake.panels[0].render());
 
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
-    expect(screen.queryByText('Символов: 12')).toBeNull();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
+    expect(screen.queryByText('Characters: 12')).toBeNull();
   });
 
   it('recalculates the counters when the text changes', async () => {
@@ -292,14 +292,14 @@ describe('word-count activation', () => {
     await wordCount.wordCountPlugin.activate(fake.ctx);
 
     render(fake.panels[0].render());
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
 
     act(() => {
       fakeEditor.emit('hello brave new world');
     });
 
-    expect(screen.getByText('Слов: 4')).toBeTruthy();
-    expect(screen.getByText('Символов: 21')).toBeTruthy();
+    expect(screen.getByText('Words: 4')).toBeTruthy();
+    expect(screen.getByText('Characters: 21')).toBeTruthy();
   });
 
   it('does not fail when there is no editor', async () => {
@@ -308,7 +308,7 @@ describe('word-count activation', () => {
 
     render(fake.panels[0].render());
 
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
     expect(screen.queryByText(/^Слов:/)).toBeNull();
   });
 
@@ -317,7 +317,7 @@ describe('word-count activation', () => {
     await wordCount.wordCountPlugin.activate(fake.ctx);
 
     render(fake.panels[0].render());
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
 
     // The note is opened after the activation: the plugin is notified.
     const { editor } = makeFakeEditor('Привет мир');
@@ -325,8 +325,8 @@ describe('word-count activation', () => {
       fake.emitEditor(editor);
     });
 
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
-    expect(screen.getByText('Символов: 10')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
+    expect(screen.getByText('Characters: 10')).toBeTruthy();
   });
 
   it('drops the subscription of the previous editor when another one appears', async () => {
@@ -354,7 +354,7 @@ describe('word-count activation', () => {
     act(() => {
       first.emit('a lot of words in the old editor');
     });
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
   });
 
   it('shows the placeholder when the note is closed again', async () => {
@@ -363,13 +363,13 @@ describe('word-count activation', () => {
     await wordCount.wordCountPlugin.activate(fake.ctx);
 
     render(fake.panels[0].render());
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
 
     act(() => {
       fake.emitEditor(null);
     });
 
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
     expect(fakeEditor.listenerCount()).toBe(0);
   });
 
@@ -393,7 +393,7 @@ describe('word-count activation', () => {
       fakeEditor.emit('a completely different text');
     });
     render(fake.panels[0].render());
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
 
     // A new editor does not revive the deactivated plugin.
     const revived = makeFakeEditor('hello again');
@@ -460,7 +460,7 @@ describe('word-count in the host', () => {
     await host.activate('word-count');
 
     render(host.panels()[0].render());
-    expect(screen.getByText('Нет открытой заметки')).toBeTruthy();
+    expect(screen.getByText('No open note')).toBeTruthy();
 
     // The note is opened: the host notices the new editor.
     const fakeEditor = makeFakeEditor('Привет мир');
@@ -469,7 +469,7 @@ describe('word-count in the host', () => {
       host.emit('editor.available', { path: 'notes/a.md' });
     });
 
-    expect(screen.getByText('Слов: 2')).toBeTruthy();
-    expect(screen.getByText('Символов: 10')).toBeTruthy();
+    expect(screen.getByText('Words: 2')).toBeTruthy();
+    expect(screen.getByText('Characters: 10')).toBeTruthy();
   });
 });

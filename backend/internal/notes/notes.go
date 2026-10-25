@@ -2,6 +2,8 @@ package notes
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,9 @@ func (s *Service) CreateFolder(ctx context.Context, parentPath, name string) (mo
 	if err != nil {
 		return model.Node{}, err
 	}
+	// The NUL bytes of a name are stripped, the other control characters
+	// are rejected.
+	name = stripNUL(name)
 	if err := validateName(name); err != nil {
 		return model.Node{}, err
 	}
@@ -52,6 +57,9 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 	}
 	// The raw name is validated before the Markdown suffix is appended, so
 	// that a name like ".." cannot be turned into a valid name.
+	// The NUL bytes of a name are stripped, the other control characters
+	// are rejected.
+	name = stripNUL(name)
 	if err := validateName(name); err != nil {
 		return model.Node{}, err
 	}
@@ -92,6 +100,8 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 	if err := s.indexFile(ctx, rel, ""); err != nil {
 		return model.Node{}, err
 	}
+	// The note starts its history: the empty text is its first version.
+	s.appendVersion(ctx, rel, "", node.Revision, node.UpdatedAt)
 	synced, err := s.syncNode(ctx, node)
 	if err != nil {
 		return model.Node{}, err
@@ -118,6 +128,108 @@ func ensureMarkdownSuffix(name string) string {
 		return name
 	}
 	return name + ".md"
+}
+
+// Duplicate creates a copy of a note next to the original and returns the
+// node of the copy.
+//
+// The name of the copy is derived from the name of the original: "note.md"
+// becomes "note copy.md". When the name is taken, a counter is appended:
+// "note copy 2.md", "note copy 3.md" and so on. The content of the copy is
+// identical to the content of the original, the original stays untouched.
+func (s *Service) Duplicate(ctx context.Context, rel string) (model.Node, error) {
+	norm, err := normalizeRel(rel)
+	if err != nil {
+		return model.Node{}, err
+	}
+	if norm == "" {
+		return model.Node{}, newErr(ErrInvalidPath, "a note path is required")
+	}
+	abs, err := s.resolve(norm)
+	if err != nil {
+		return model.Node{}, err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return model.Node{}, newErr(ErrNotFound, "note not found")
+	}
+	if info.IsDir() {
+		return model.Node{}, newErr(ErrInvalidPath, "the path is a folder")
+	}
+	original, err := s.Read(ctx, norm)
+	if err != nil {
+		return model.Node{}, err
+	}
+
+	parent := parentOf(norm)
+	stem := strings.TrimSuffix(baseOf(norm), filepath.Ext(baseOf(norm)))
+	if stem == "" {
+		stem = baseOf(norm)
+	}
+	// The copy of a copy keeps the name of the original: the suffix " copy"
+	// (and its number) is removed before the new suffix is added.
+	base := trimCopySuffix(stem)
+	// The name of the copy is chosen again when it is taken in the meantime,
+	// so that two parallel duplications do not fail.
+	for attempt := 0; attempt < 100; attempt++ {
+		name := duplicateName(base, attempt)
+		// The note itself is never overwritten by its own copy.
+		if name == baseOf(norm) {
+			continue
+		}
+		target, err := joinRel(parent, name)
+		if err != nil {
+			return model.Node{}, err
+		}
+		if _, err := s.CreateFile(ctx, parent, name); err != nil {
+			if errors.Is(err, ErrDuplicateName) {
+				continue
+			}
+			return model.Node{}, err
+		}
+		if _, err := s.Write(ctx, target, original.Content, 0); err != nil {
+			return model.Node{}, err
+		}
+		return s.nodeFor(ctx, target)
+	}
+	return model.Node{}, newErr(ErrDuplicateName, "cannot find a free name for the copy")
+}
+
+// trimCopySuffix removes the suffix " copy" (with an optional number) from the
+// name of a note, so that the copies of a copy keep the name of the original.
+func trimCopySuffix(stem string) string {
+	trimmed := strings.TrimSuffix(stem, " copy")
+	if trimmed != stem {
+		return trimmed
+	}
+	// The name of a numbered copy is "note copy 2.md": the number is dropped
+	// as well.
+	if index := strings.LastIndex(stem, " copy "); index > 0 {
+		rest := stem[index+len(" copy "):]
+		if rest != "" && isDigits(rest) {
+			return stem[:index]
+		}
+	}
+	return stem
+}
+
+// isDigits reports whether the string is a non-empty sequence of digits.
+func isDigits(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
+}
+
+// duplicateName builds the name of the n-th copy of a note. The first copy
+// is called "<stem> copy.md", the following ones "<stem> copy 2.md" and so on.
+func duplicateName(stem string, attempt int) string {
+	if attempt <= 0 {
+		return stem + " copy.md"
+	}
+	return fmt.Sprintf("%s copy %d.md", stem, attempt+1)
 }
 
 // prepareParent validates the parent path of a new entry. When create is
@@ -298,6 +410,9 @@ func (s *Service) Write(ctx context.Context, rel, content string, revision int64
 	if err := s.store.UpsertNote(ctx, node); err != nil {
 		return WriteResult{}, newErr(ErrInternal, "cannot persist the note metadata")
 	}
+	// The write of a note appends a version to its history: the history is
+	// append only and never rewritten.
+	s.appendVersion(ctx, norm, content, node.Revision, node.UpdatedAt)
 	res := WriteResult{Path: norm, Revision: node.Revision, UpdatedAt: node.UpdatedAt}
 	op := NoteOpUpdated
 	if !existed {

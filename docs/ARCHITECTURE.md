@@ -66,11 +66,11 @@ Noto — персональное PWA-приложение для Markdown-за�
    └──────────────────────────┬──────────────────────────────────────────────┘
                               │ зависит только от интерфейса port.Store
    ┌──────────────────────────▼──────────────┐  ┌───────────────────────────┐
-   │  backend/internal/port (Store, 17 методов) │◄─┤ backend/internal/sqlitestore│
+   │  backend/internal/port (Store, 22 метода) │◄─┤ backend/internal/sqlitestore│
    │  backend/internal/port/porttest (conformance)│  │ store*.go · search.go      │
    └────────────────────────────────────────────┘  └───────────────────────────┘
 
-   Листья: model (69 LOC), config (138), web (133).
+   Листья: model (69 LOC), config (138), web (133), query, metadata.
    Пакет internal/deps удалён (был мёртвым кодом).
 ```
 
@@ -108,7 +108,7 @@ model, config, web — листья. Циклов в графе импортов
 | `internal/api` | `api.go` 134 (146), `handlers_notes.go` 176 (194), `handlers_importexport.go` 143 (152), `handlers_attachments.go` 87 (94), `handlers_search.go` 30 (33), `middleware.go` 200 (215), `errors.go` 71 (77) | HTTP-слой: маршруты, хендлеры, JSON-энкодирование, конвертация ошибок, security-заголовки, host/origin-проверки, логирование |
 | `internal/notes` | `notes.go` 285 (297), `service.go` 236 (257), `paths.go` 238 (252), `trash.go` 199 (209), `notes_move.go` 194 (203), `import_files.go` 191 (202), `attachments.go` 161 (173), `export.go` 133 (140), `import_zip.go` 126 (130), `errors.go` 127 (139), `locks.go` 109 (116), `fsatomic.go` 96 (102), `search.go` 95 (99), `reparse_windows.go` 40 (44), `reparse_other.go` 27 (30), `reconcile.go` 321 (352) | Доменная логика: ФС, нормализация и защита путей, блокировки, атомарная запись, корзина, импорт/экспорт, вложения, поиск, сверка ФС↔БД, типизированные ошибки |
 | `internal/sqlitestore` | `search.go` 309 (329), `store_notes.go` 172 (186), `store.go` 128 (145), `store_index.go` 109 (116), `store_schema.go` 106 (113), `store_attachments.go` 75 (82), `store_trash.go` 67 (73) | Реализация `port.Store`: схема и миграции, метаданные, индекс (FTS5 + LIKE), вложения, корзина |
-| `internal/port` | `port.go` 47 (54), `porttest/porttest.go` 504 (550) | Интерфейс хранилища (17 методов) и переиспользуемый conformance-набор |
+| `internal/port` | `port.go` 47 (54), `porttest/porttest.go` 504 (550) | Интерфейс хранилища (22 метода, из них 5 — свойства заметки и выборка запросом) и переиспользуемый conformance-набор |
 | `internal/model` | `model.go` 69 (79) | Общие типы домена; одновременно контракт JSON API |
 | `internal/config` | `config.go` 138 (148) | Конфигурация из переменных окружения, умолчания, создание каталогов |
 | `internal/web` | `web.go` 133 (141) | Раздача SPA: `embed` сборки, fallback на `index.html`, `Content-Type` по расширению |
@@ -119,6 +119,40 @@ model, config, web — листья. Циклов в графе импортов
 | `internal/restore` | `restore.go` 430 | Логика восстановления: проверка контрольных сумм, `-dry-run`, `-force`, сохранение текущей БД как `noto.db.pre-restore-<timestamp>`, атомарная подмена БД, удаление `-wal`/`-shm`, проверка схемы, откат при непригодной схеме |
 | `internal/backuppkg` | `archive.go` 439 (476), `create.go` 160 (176), `manifest.go` 145 (160) | Формат архива: манифест версии 2 с SHA-256 каждого файла, создание (во временный файл + rename), открытие и проверка |
 | `cmd/smoke` | `main.go` 169 (195), `http.go` 111 (124), `helpers.go` 74 (81) | Smoke-проверка REST API: собирает сервер, поднимает на временном порту, прогоняет сценарии, печатает PASS/FAIL. Это бинарник, а не `go test` |
+| `internal/sealed` | `store.go` (396), `blocked_store.go` | Слепое объектное хранилище запечатанного vault: каталог `.noto` (`objects/`, `manifests/`, `keystore.json`, `config.json`), запись и чтение байтов по идентификатору, поколения манифестов, лимиты размера. Хранилище **не знает** ключа и **не разбирает** контейнер: оно хранит байты |
+| `internal/query` | `grammar.go`, `ir.go`, `schema.go`, `render.go`, `predicate.go` | Язык запросов: парсер, IR и **два** компилятора — `Compile` (SQL для открытого хранилища) и `CompilePredicate` (предикат по дереву для зашифрованного). Лист: не импортирует ничего, кроме `model` |
+| `internal/metadata` | `extract.go` | Производные свойства заметки: заголовок (первый заголовок первого уровня), теги (`#` + слово без пробела), флаги (список задач, незавершённая задача, код, картинка, ссылка). Лист |
+
+### 3.0.1. Язык запросов (фаза 8)
+
+Язык запросов — единственная новая «подсистема» фазы 8. Он устроен так, чтобы
+одна спецификация давала две реализации:
+
+```
+        shared/query-vectors.json  (золотые векторы: 45 запросов + 23 свойства)
+                 │
+        ┌────────┴─────────┐
+        │                  │
+ backend/internal/query   frontend/src/core/query
+   grammar → ir → render    grammar → ir → predicate
+        │   (SQL)                │   (предикат по дереву)
+        ▼                        ▼
+ открытое хранилище        зашифрованное хранилище
+```
+
+* `backend/internal/query` — только парсер, IR и компиляторы; ни ФС, ни БД он
+  не знает. SQL собирается в `render.go` и выполняется в
+  `sqlitestore/store_query.go`; предикат (`predicate.go`) обходит дерево и
+  сравнивает поля заметки.
+* `frontend/src/core/query` — тот же язык на TypeScript: тот же парсер, тот же
+  IR, свой предикат (`predicate.ts`) и подсветка совпадений (`highlight.ts`).
+* `backend/internal/metadata` и `frontend/src/core/metadata/extract.ts` —
+  одно и то же извлечение свойств, на двух языках.
+* Дрейф невозможен: оба пакета читают **один и тот же** файл
+  `shared/query-vectors.json` в своих конформанс-тестах, а
+  `backend/internal/query/parity_test.go` задаёт одни и те же вопросы обоим
+  компиляторам на одном хранилище и сравнивает ответы.
+
 
 ### 3.1. `internal/api`
 
@@ -150,6 +184,35 @@ GET    /api/trash
 обычной сборке маршрута нет и запрос получает `404 not_found`. Тело
 необязательно: `{"apply":bool,"dropGhosts":bool}`; без флагов вызывается
 только отчёт.
+
+### 3.2. Режим `sealed` (фаза 7)
+
+Когда vault запечатан, сервер перестаёт быть хранилищем заметок и становится
+**слепым объектным хранилищем**. Маршруты запечатанного режима
+(`backend/internal/api/api.go:222-234`) зарегистрированы всегда, но данные
+носят только в запечатанном режиме:
+
+```
+GET    /api/vault/sealed/status
+GET    /api/vault/sealed/keystore        PUT /api/vault/sealed/keystore
+GET    /api/vault/sealed/objects         PUT /api/vault/sealed/objects/{id}
+GET    /api/vault/sealed/objects/{id}    DELETE /api/vault/sealed/objects/{id}
+GET    /api/vault/sealed/manifests       PUT /api/vault/sealed/manifests/{gen}
+GET    /api/vault/sealed/manifests/{gen} DELETE /api/vault/sealed/manifests/{gen}
+POST   /api/vault/sealed/enable          POST /api/vault/sealed/purge-plaintext
+```
+
+Все маршруты «открытого» конвейера (дерево, заметки, поиск, импорт, экспорт,
+вложения, корзина) обёрнуты в `openRoute`
+(`backend/internal/api/api.go:190-211`). Обёртка отвечает `409` с кодом
+`vault_sealed`, как только хранилище запечатано: сервер тогда физически не
+может записать открытый текст — ни намеренно, ни по ошибке.
+
+Режим хранилища хранится в файле `<vault>/.noto/config.json` (`mode`, `format`),
+поэтому «запечатанность» — это факт на диске, а не состояние процесса: после
+перезапуска сервер поднимается в том же режиме. Всё, что касается формата и
+гарантий, описано в [`ENCRYPTION.md`](ENCRYPTION.md) и
+[`API.md`](API.md).
 
 Порядок middleware (снаружи внутрь):
 `recoverer → securityHeaders → hostCheck → originCheck → logger → mux`
@@ -240,6 +303,12 @@ DeleteAttachment
 | `src/components/CommandPalette.tsx` | 208 (228) | Глобальная палитра команд: Ctrl+K / Ctrl+P, поиск по командам, навигация стрелками, вклад в режиме ввода |
 | `src/core/settings/settingsStore.ts` | 197 (211) | Хранилище настроек (в работе: хост плагинов) |
 | `src/core/diagnostics/logger.ts` | 37 (41) | Логирование для плагинов (в работе) |
+| `src/core/crypto/**` | `kdf.ts`, `keys.ts`, `sealed.ts`, `format.ts`, `errors.ts` | Крипто-ядро: Argon2id (`hash-wasm`, ленивый импорт), вывод KEK, иерархия ключей (KEK → DEK), эпохи и key wrapping, контейнер `NOTOSEAL` (заголовок 28 байт как AAD), AES-256-GCM, ключ восстановления. Ядро не знает о vault и не знает об интерфейсе |
+| `src/core/vault/**` | `session.ts`, `sealedVault.ts`, `sealedClient.ts`, `sealedIndex.ts`, `conflicts.ts`, `migration.ts`, `autoLock.ts`, `vaultService.ts`, `types.ts` | Слой запечатанного хранилища: манифест и поколения, объекты, поисковый индекс в памяти, слияние и конфликты, миграция с журналом, автоблокировка и единая точка входа `VaultService` |
+| `src/core/connection/**` | `types.ts`, `healthMonitor.ts`, `monitor.ts` | Состояние связи с бэкендом: `connected` / `connecting` / `unreachable`, опрос публичного `/api/health` с растущей паузой при отказе, немедленная проверка при возврате вкладки в фокус |
+| `src/core/query/**` | `grammar.ts`, `ir.ts`, `schema.ts`, `predicate.ts`, `highlight.ts`, `service.ts` | Язык запросов на TypeScript: парсер, IR, предикат по дереву, подсветка совпадений и сервис, который отвечает в обоих режимах хранения (сервер в открытом режиме, локальная оценка в зашифрованном). Золотые векторы те же, что и в Go |
+| `src/core/metadata/extract.ts` | `extract.ts` | Производные свойства заметки: заголовок, теги, флаги — те же правила, что и в `backend/internal/metadata` |
+| `src/core/views/types.ts` | `types.ts` | Сохранённые представления (представление = имя + запрос): тип и хранилище в `localStorage` (`noto-views-v1`). Ядро не знает про иконки — иначе сломалась бы граница R1/R9 |
 | `src/App.tsx` | 203 (225) | Оболочка приложения: подписка на стор, горячие клавиши, композиция панелей, производные `useMemo` |
 | `src/main.tsx` | 12 (14) | Точка входа: `render(<App/>)`, подключение `styles.css` |
 | `src/plugins/contract.ts` | 207 (229) | Публичный контракт плагинов: версия API, разрешения, манифест, интерфейсы API и точек вклада в UI, карта событий |
@@ -256,7 +325,9 @@ DeleteAttachment
 | `src/components/NoteDialogs.tsx` | 101 (106) | Диалоги создания/переименования/перемещения/удаления и восстановление черновика |
 | `src/components/AttachmentsPanel.tsx` | 77 (84) | Загрузка, список и удаление вложений |
 | `src/components/Dialog.tsx` | 72 (78) | Модальное окно |
-| `src/components/AppHeader.tsx` | 67 (69) | Шапка: заголовок, статус сохранения, режим, тема, дйвер |
+| `src/components/AppHeader.tsx` | — | Шапка приложения **удалена** в фазе 7: бренд и имя открытой заметки живут в шапке колонки дерева, действия — в шапке раздела EXPLORER, состояние документа — в строке состояния |
+| `src/components/ConnectionIndicator.tsx` | 51 | Индикатор связи с бэкендом: единственный цветной элемент оболочки (`--success` / `--warning` / `--danger`); при `unreachable` кнопка просит повторить проверку |
+| `src/components/Vault{Setup,Migration}Dialog.tsx`, `VaultUnlockScreen.tsx`, `VaultSecuritySection.tsx` | — | Экраны запечатанного хранилища: мастер, миграция, разблокировка, настройки безопасности. Ни один из них не касается материала ключей |
 | `src/components/Preview.tsx` | 31 (35) | Рендер Markdown через `renderSafeMarkdown` и `dangerouslySetInnerHTML` (`:32`) |
 | `src/components/AppFooter.tsx` | 25 (27) | Подвал: ошибка сохранения и повтор |
 | `src/lib/autosave.ts` | 143 (152) | Контроллер автосохранения с debounce и гардами пути/ревизии/последовательности |
@@ -778,4 +849,81 @@ frontend store/api split, PWA privacy + chunking, plugin extension point»)
   проверки целостности переиспользуются. Восстановление доступно и как
   подкоманда `noto restore`, и как отдельная программа `cmd/restore`: обе
   точки входа вызывают общий `restore.Run`.
+
+---
+
+## 15. Фаза 7: единый путь хранилища и новые границы
+
+Фаза 7 принесла две вещи: запечатанное (шифрованное на клиенте) хранилище и
+редизайн оболочки. Обе описаны подробно в
+[`ENCRYPTION.md`](ENCRYPTION.md) и [`UI_AUDIT.md`](UI_AUDIT.md); здесь — карта
+связей и правила, которые их держат.
+
+### 15.1. Правило одного пути
+
+Хранилище заметок имеет **два режима** и **один вход**:
+
+```
+                      store (core/store/*)
+                             │
+                             ▼
+                     VaultService (core/vault/vaultService.ts)
+                        │              │
+        open: createOpenVaultService()  sealed: createSealedVaultService()
+                        │              │
+                        ▼              ▼
+        API заметок (/api/notes, …)   SealedVault → SealedClient
+                                       → /api/vault/sealed/*
+```
+
+* Стор **никогда** не знает, в каком режиме живёт хранилище: он спрашивает
+  `getVaultService()` и получает один и тот же интерфейс
+  (`listTree`, `readNote`, `saveNote`, `createFile`, `createFolder`,
+  `renameNote`, `moveNote`, `deleteNote`, `duplicateNote`, `listTrash`,
+  `restoreNote`, `search`, `listAttachments`, `uploadAttachment`,
+  `deleteAttachment`) в обоих режимах. Поэтому интерфейс и стор не меняются
+  при переходе в запечатанный режим — меняется только адаптер под ними.
+* В открытом режиме адаптер — тонкая обёртка над API заметок: поведение
+  открытого режима не меняется вообще.
+* В запечатанном режиме адаптер работает поверх `SealedVault`: содержимое
+  запечатывается до записи и вскрывается после чтения. Заблокированное
+  хранилище не работает «вхолостую» — оно бросает `VaultLockedError`.
+* **Два режима не используются одновременно.** Синхронизатор
+  `syncVaultServiceWithSession()` (`frontend/src/core/vault/vaultService.ts`)
+  подписывается на сессию хранилища и устанавливает ровно один сервис.
+* Второй рубеж — сервер: в запечатанном режиме все «открытые» маршруты
+  отвечают `409 vault_sealed` (`openRoute`,
+  `backend/internal/api/api.go:190-211`). Поэтому даже ошибка в клиенте не
+  приведёт к записи открытого текста на диск.
+
+### 15.2. Новые модули
+
+| Модуль | Роль | Что ему запрещено |
+|---|---|---|
+| `frontend/src/core/crypto/**` | Крипто-ядро: KDF, иерархия ключей, контейнер, эпохи, ключ восстановления | Знать о vault (R10) и об интерфейсе (R9) |
+| `frontend/src/core/vault/**` | Манифест, объекты, индекс, сессия, миграция, `VaultService` | Импортировать интерфейс (R9) |
+| `frontend/src/core/connection/**` | Монитор связи с бэкендом | Знать о хранилище вообще |
+| `backend/internal/sealed/**` | Слепое объектное хранилище сервера | Знать ключ и разбирать контейнер (это невозможно по построению: он оперирует байтами) |
+
+### 15.3. Новые правила проверки границ (R9–R12)
+
+`frontend/scripts/check-boundaries.mjs` проверяет импорты между слоями. Фаза 7
+добавила четыре правила:
+
+| Правило | Что запрещает | Почему |
+|---|---|---|
+| **R9** | `src/core/**` не может импортировать `src/components/**` | Ядро не зависит от интерфейса: иначе крипто-ядро пришлось бы переписывать вместе с редизайном, а логику — тестировать вместе с DOM |
+| **R10** | `src/core/crypto/**` не может импортировать `src/core/vault/**` | Зависимость направлена только в одну сторону: крипто-ядро остаётся листом графа, и материал ключей нельзя случайно протянуть в прикладной слой |
+| **R11** | `src/plugins/**` не может импортировать `src/core/crypto/**` | Плагин никогда не видит ключи — это не обещание в документации, а запрет компилятора |
+| **R12** | `src/core/crypto/keys` и `src/core/crypto/sealed` может импортировать только `src/core/crypto/**` и `src/core/vault/**` | Только ядро работает с материалом ключей: интерфейс и плагины до него не дотягиваются |
+
+Нарушение — падение `npm run check:boundaries`, а не замечание на ревью.
+
+### 15.4. Состояние связи
+
+`frontend/src/core/connection/` введён вместе с редизайном: потерянная связь —
+это **состояние**, а не ошибка, поэтому она показывается индикатором в шапке
+раздела EXPLORER (`--success` / `--warning` / `--danger`), а не красным
+баннером. Монитор опрашивает публичный `/api/health`, не касаясь заметок.
+
 

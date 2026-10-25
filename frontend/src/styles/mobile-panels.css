@@ -1,0 +1,86 @@
+/* ==========================================================================
+   Mobile: the right column and the panels.
+
+   Under 820 px the right column (the outline, the panels of the plugins) is
+   not a column any more: it stands over the editor as a sheet that the user
+   opens and closes. The rules of this file make the panels usable on a narrow
+   screen: they scroll, they do not overflow and their actions stay reachable.
+   ========================================================================== */
+
+@media (max-width: 820px) {
+  /*
+   * The right column becomes a sheet over the editor. It keeps its width
+   * (the user can still make it wider), but it never takes more than the
+   * screen.
+   */
+  .panel-wrap {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: calc(var(--z-drawer) + 10);
+    width: min(var(--panel-width, 280px), 88vw);
+    max-width: 88vw;
+    transform: translateX(100%);
+    transition: transform var(--duration-normal) var(--ease-out);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app.panel-open .panel-wrap {
+    transform: translateX(0);
+  }
+
+  /* The sheet covers the editor: the touches that scroll it belong to it. */
+  .app.panel-open .panel-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 45%);
+    z-index: calc(var(--z-drawer) + 5);
+    touch-action: none;
+  }
+
+  /* The content of the sheet scrolls with one finger. */
+  .panel-wrap .panel-body,
+  .panel-wrap .outline-list,
+  .noto-plugin-panels {
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+
+  /*
+   * The panels of the plugins are stacked under the sheet: they give up
+   * their height, and they scroll inside their own box.
+   */
+  .noto-plugin-panels {
+    max-height: 40dvh;
+    overflow-y: auto;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 480px) {
+  /* On a small screen the sheet is the whole screen minus a margin. */
+  .panel-wrap {
+    width: min(var(--panel-width, 280px), 92vw);
+    max-width: 92vw;
+  }
+
+  /*
+   * The actions of a panel are at least 40 px high: a finger finds them.
+   */
+  .panel-wrap .icon-button,
+  .panel-wrap .button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* The list of the outline does not overflow the sheet. */
+  .panel-wrap .outline-list,
+  .panel-wrap .panel-body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}

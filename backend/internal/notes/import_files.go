@@ -155,6 +155,9 @@ func (s *Service) importOne(ctx context.Context, rel string, content []byte, pol
 	if err := s.store.UpsertNote(ctx, node); err != nil {
 		return "", false, newErr(ErrInternal, "cannot persist the imported file")
 	}
+	// The import is a write of the content of the note: it appends a
+	// version to the history, like every other write.
+	s.appendVersion(ctx, rel, string(content), node.Revision, node.UpdatedAt)
 	return rel, false, nil
 }
 

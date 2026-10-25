@@ -4,6 +4,7 @@ import { EditorView } from '@codemirror/view';
 import { MarkdownEditor, type EditorHandle } from '../components/Editor';
 import { PluginManagerPanel, type PluginManagerEntry } from '../components/PluginManagerPanel';
 import {
+  PluginCommandSlot,
   PluginContextMenuSlot,
   PluginPanelSlot,
   PluginSidebarSlot,
@@ -79,7 +80,7 @@ describe('PluginManagerPanel', () => {
 
     expect(
       screen.getByText(
-        'Встроенные плагины выполняются как доверенный код в приложении. Изоляции/песочницы нет.',
+        'The built-in plugins run as trusted code inside the application. There is no sandbox.',
       ),
     ).toBeTruthy();
   });
@@ -190,6 +191,33 @@ describe('plugin slots', () => {
     expect(onSelect).toHaveBeenCalled();
   });
 
+  it('shows the sidebar and the toolbar items as icon-only buttons', () => {
+    render(
+      <div>
+        <PluginSidebarSlot items={[{ id: 'a', title: 'Alpha', onSelect: () => undefined }]} />
+        <PluginToolbarSlot items={[{ id: 'b', title: 'Beta', run: () => undefined }]} />
+      </div>,
+    );
+
+    for (const label of ['Alpha', 'Beta']) {
+      const button = screen.getByLabelText(label);
+      expect(button.className).toContain('noto-plugin-button-icon');
+      expect(button.getAttribute('title')).toBe(label);
+    }
+  });
+
+  it('keeps the text of the commands of the plugins', () => {
+    render(
+      <PluginCommandSlot
+        commands={[{ id: 'a', title: 'Do it', run: () => undefined }]}
+      />,
+    );
+
+    const button = screen.getByLabelText('Do it');
+    expect(button.className).not.toContain('noto-plugin-button-icon');
+    expect(button.textContent).toContain('Do it');
+  });
+
   it('renders the toolbar items of the plugins', () => {
     const run = vi.fn();
     render(<PluginToolbarSlot items={[{ id: 'a', title: 'Do it', run }]} />);
@@ -233,7 +261,7 @@ describe('plugin slots', () => {
 
     expect(screen.getByText('page content')).toBeTruthy();
     expect(document.querySelector('.noto-plugin-error')).toBeTruthy();
-    expect(document.querySelector('.noto-plugin-error')?.textContent).toContain('Ошибка плагина');
+    expect(document.querySelector('.noto-plugin-error')?.textContent).toContain('Plugin error');
   });
 
   it('filters the context menu items by the path', () => {

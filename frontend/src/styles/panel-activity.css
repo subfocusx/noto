@@ -1,0 +1,61 @@
+/* ==========================================================================
+   The graph of the activity.
+
+   The footer of the column shows how many notes were written on each of the
+   last days. The bars are the answer; the line of text under them tells how
+   many notes the days hold together.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The graph and its summary. */
+.activity-graph {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* The row of the bars. */
+.activity-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 22px;
+}
+
+/* One day of the graph. */
+.activity-bar {
+  width: 4px;
+  min-height: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--border-strong);
+}
+
+/* The level of a day: the busier the day, the brighter the bar. */
+.activity-level-1 {
+  background: var(--fg-muted);
+}
+
+.activity-level-2 {
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
+}
+
+.activity-level-3 {
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.activity-level-4 {
+  background: var(--accent);
+}
+
+/* The summary under the bars. */
+.activity-summary {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}

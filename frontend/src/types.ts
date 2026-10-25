@@ -13,6 +13,10 @@ export interface Node {
   revision: number;
   createdAt: string;
   updatedAt: string;
+  /** The number of the notes under the folder (counted recursively). */
+  noteCount?: number;
+  /** The number of the direct child folders of the folder. */
+  folderCount?: number;
 }
 
 export interface NoteContent {
@@ -28,6 +32,12 @@ export interface SearchHit {
   name: string;
   kind: 'name' | 'content' | string;
   snippet: string;
+}
+
+/** A tag of the vault and the number of the notes that carry it. */
+export interface TagCount {
+  tag: string;
+  count: number;
 }
 
 export interface Attachment {
@@ -48,6 +58,22 @@ export interface ImportResult {
 export interface TreeResponse {
   folders: Node[];
   files: Node[];
+  /** The total number of the notes of the tree. */
+  noteTotal?: number;
+  /** The total number of the folders of the tree. */
+  folderTotal?: number;
+}
+
+/**
+ * One page of the children of a folder.
+ *
+ * The tree is loaded lazily: the interface asks for one page at a time and
+ * follows the cursor of the answer. The cursor is empty when the page is the
+ * last one.
+ */
+export interface NodePage {
+  items: Node[];
+  nextCursor?: string;
 }
 
 export interface TrashResponse {
@@ -71,3 +97,15 @@ export interface SaveNoteResponse {
 }
 
 export type ConflictPolicy = 'skip' | 'rename' | 'overwrite';
+
+/**
+ * The state of the connection between the interface and the backend.
+ *
+ * The indicator of the sidebar shows it at a glance: the user must know
+ * whether the changes reach the disk without opening a dialog.
+ *
+ * The definition lives in the core, next to the monitor that measures it; the
+ * re-export keeps the type reachable from the whole application without
+ * duplicating it.
+ */
+export type { ConnectionState } from './core/connection/types';

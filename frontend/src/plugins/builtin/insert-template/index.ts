@@ -33,14 +33,14 @@ export const TEMPLATE_SETTING_KEY = 'template';
  * (heading, task list and a notes section).
  */
 export const DEFAULT_TEMPLATE = [
-  '# Новая заметка',
+  '# New note',
   '',
-  '## Задачи',
+  '## Tasks',
   '',
   '- [ ] ',
   '- [ ] ',
   '',
-  '## Заметки',
+  '## Notes',
   '',
 ].join('\n');
 
@@ -52,7 +52,7 @@ export const insertTemplateManifest: PluginManifest = {
   manifestVersion: 1,
   minApiVersion: '1.0.0',
   description:
-    'Вставляет настраиваемый Markdown-шаблон в активную заметку по позиции курсора.',
+    'Inserts a configurable Markdown template into the active note at the position of the cursor.',
   author: 'Noto',
   // The plugin contributes a command (`ui.contribute`), reads the cursor
   // position of the editor (`editor.read`) and writes the template into it
@@ -61,10 +61,10 @@ export const insertTemplateManifest: PluginManifest = {
   settings: [
     {
       key: TEMPLATE_SETTING_KEY,
-      label: 'Шаблон',
+      label: 'Template',
       type: 'string',
       default: DEFAULT_TEMPLATE,
-      description: 'Markdown-текст, который вставляется в заметку.',
+      description: 'The Markdown text that is inserted into the note.',
     },
   ],
 };
@@ -80,7 +80,7 @@ async function resolveTemplate(ctx: PluginContext): Promise<string> {
     const stored = await ctx.settings.get<string>(TEMPLATE_SETTING_KEY);
     if (typeof stored === 'string' && stored.trim().length > 0) return stored;
   } catch (err) {
-    ctx.logger.warn('не удалось прочитать настройку шаблона, используется дефолт', err);
+    ctx.logger.warn('cannot read the setting of the template, the default is used', err);
   }
   return DEFAULT_TEMPLATE;
 }
@@ -125,7 +125,7 @@ async function runInsertTemplate(ctx: PluginContext): Promise<void> {
     // No note is open: there is nothing to insert into. The contract has no
     // dialogs, so the user only sees that nothing happened — the reason is
     // written to the log of the plugin.
-    ctx.logger.info('шаблон не вставлен: нет открытой заметки');
+    ctx.logger.info('the template is not inserted: no open note');
     return;
   }
 
@@ -133,13 +133,13 @@ async function runInsertTemplate(ctx: PluginContext): Promise<void> {
 
   try {
     insertAtCursor(editor, template);
-    ctx.logger.debug('шаблон вставлен в заметку');
+    ctx.logger.debug('the template is inserted into the note');
   } catch (err) {
     if (isPermissionError(err)) {
-      ctx.logger.error('шаблон не вставлен: недостаточно прав', err);
+      ctx.logger.error('the template is not inserted: not enough rights', err);
       return;
     }
-    ctx.logger.error('не удалось вставить шаблон в заметку', err);
+    ctx.logger.error('cannot insert the template into the note', err);
   }
 }
 
@@ -158,8 +158,8 @@ export function createInsertTemplatePlugin(): Plugin {
     activate(ctx: PluginContext): void {
       const unregister = ctx.registerCommand({
         id: INSERT_TEMPLATE_COMMAND_ID,
-        title: 'Вставить шаблон',
-        description: 'Вставляет Markdown-шаблон в активную заметку по позиции курсора.',
+        title: 'Insert template',
+        description: 'Inserts a Markdown template into the active note at the position of the cursor.',
         run: () => runInsertTemplate(ctx),
       });
       unregisterCommand = unregister;

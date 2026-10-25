@@ -1,0 +1,57 @@
+/* ==========================================================================
+   The storages of the notes.
+
+   The styles of the menu of the storage and of the note that explains that
+   the storage is fixed by the environment. The menu is the quick way to walk
+   from one storage to another: it shows the storages that are open at the
+   same time and the ones that were opened before.
+   ========================================================================== */
+
+/* The note of the storage that cannot be changed. */
+.storage-fixed-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-subtle);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.storage-fixed-note .text-button {
+  align-self: flex-start;
+}
+
+/* A row of the menu: the storage and the button that closes it. */
+.vault-menu-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.vault-menu-row .vault-menu-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.vault-menu-close {
+  flex: none;
+  align-self: center;
+}
+
+/* The explanation of the storage that is fixed by the environment. */
+.vault-menu-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.vault-menu-fixed-reason {
+  color: var(--fg-subtle, var(--fg-muted));
+}

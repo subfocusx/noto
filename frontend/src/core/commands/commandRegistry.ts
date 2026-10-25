@@ -11,6 +11,24 @@ export interface CommandLike {
   title: string;
   description?: string;
   shortcut?: string;
+  /**
+   * The key of the title in the catalogue of the strings.
+   *
+   * The core knows the key, not the text: the palette translates the key when
+   * it draws the command, so the language of the user is respected.
+   */
+  titleKey?: string;
+  /** The key of the description in the catalogue of the strings. */
+  descriptionKey?: string;
+  /**
+   * The parameters of the title.
+   *
+   * A value that starts with `$` is the key of another string: the palette
+   * translates it before it puts it into the title.
+   */
+  titleParams?: Record<string, string>;
+  /** The parameters of the description (the same rule as the title). */
+  descriptionParams?: Record<string, string>;
   run(): void | Promise<void>;
 }
 

@@ -1,0 +1,109 @@
+/* ==========================================================================
+   The outline of the note.
+
+   The panel of the right column shows the skeleton of the open note: its
+   headings, with their level, as a tree. The section the cursor is in is
+   highlighted, and the way to it stays visible.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The panel itself.
+ *
+ * The top of the panel has no padding: the header of the outline is a header
+ * of the column, so it stands on the line of the headers of the other columns
+ * (see §3.2 of the design system). */
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 var(--space-2) var(--space-2);
+  overflow-y: auto;
+}
+
+/* The title of the panel. */
+.outline-header {
+  padding: 0 var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* The empty state: the note has no heading. */
+.outline-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The list of the sections. */
+.outline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The sections under a section. */
+.outline-list-nested {
+  padding-left: var(--space-3);
+}
+
+/* One heading of the outline. */
+.outline-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: transparent;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* The level of the heading: the deeper the heading, the smaller the text. */
+.outline-level-1 {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.outline-level-2 {
+  font-size: var(--text-sm);
+}
+
+.outline-level-3,
+.outline-level-4 {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+/* The section the cursor is in. */
+.outline-item.active {
+  border-left-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--fg);
+}
+
+/* The way to the section the cursor is in. */
+.outline-item.outline-ancestor {
+  color: var(--fg);
+}
+
+.outline-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}

@@ -1,0 +1,141 @@
+/* ==========================================================================
+   The notifications of the session.
+
+   The list is a list of events: a small mark of the kind of the event, the
+   text of the event, the moment of the event and the actions of the entry.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`): the section never carries a colour of its own.
+   ========================================================================== */
+
+/* The actions of the list: they stand above the entries. */
+.notifications-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.notifications-toolbar .q9-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The list of the notifications: the newest comes first. */
+.notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One notification. A read one is dimmed, an unread one is stronger. */
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.notification-item:hover {
+  background: var(--bg-hover);
+}
+
+.notification-item.is-unread {
+  color: var(--fg);
+}
+
+/* The part of the entry that says that the notification has been read. */
+.notification-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-main:focus-visible,
+.notification-actions .icon-button:focus-visible,
+.notifications-toolbar .q9-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The mark of the kind of the notification. */
+.notification-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+
+.notification-mark-info {
+  background: var(--accent);
+}
+
+.notification-mark-success {
+  background: var(--success);
+}
+
+.notification-mark-warning {
+  background: var(--warning);
+}
+
+.notification-mark-error {
+  background: var(--danger);
+}
+
+/* The text of the notification: the title, then the explanation. */
+.notification-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.notification-title {
+  font-size: var(--text-base);
+  line-height: var(--leading-tight);
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.notification-item.is-unread .notification-title {
+  font-weight: var(--weight-semibold);
+}
+
+.notification-body {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The moment of the event. */
+.notification-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The actions of one entry: open the note, dismiss the notification. */
+.notification-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}

@@ -1,0 +1,25 @@
+/* ==========================================================================
+   The dates of a note in the tree.
+
+   The row of a note shows the moment it was written when the pointer rests on
+   it: the date is there for the reader, but it does not crowd the tree.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The date of the creation of the note, on the row. */
+.tree-created {
+  flex: none;
+  padding: 0 var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.tree-row:hover .tree-created,
+.tree-created:focus-visible {
+  opacity: 1;
+}

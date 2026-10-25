@@ -15,7 +15,7 @@ import (
 
 // schemaUserVersion is the schema version of the current database format.
 // A database with a greater version must be rejected.
-const schemaUserVersion = 1
+const schemaUserVersion = 3
 
 // openSchemaStore opens a store in a temporary file.
 func openSchemaStore(t *testing.T, path string) *sqlitestore.Store {
@@ -197,6 +197,55 @@ func TestSchemaCompatibilityIsIdempotent(t *testing.T) {
 		if err := store.Close(); err != nil {
 			t.Fatalf("round %d: close the store: %v", round, err)
 		}
+	}
+}
+
+// TestSchemaCompatibilityMigratesVersionOne makes sure that a database of the
+// schema version 1 is opened, migrated to the current version and keeps its
+// data.
+//
+// The migration is additive: the table of the derived properties is created,
+// everything else stays as it was.
+func TestSchemaCompatibilityMigratesVersionOne(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "noto.db")
+	ctx := context.Background()
+
+	// Build a database of the version 1: the current tables, but without the
+	// table of the derived properties.
+	store := openSchemaStore(t, path)
+	seedSchemaData(t, store)
+	if _, err := store.DB().Exec("DROP TABLE note_props"); err != nil {
+		t.Fatalf("drop the table of the properties: %v", err)
+	}
+	if _, err := store.DB().Exec("PRAGMA user_version = 1"); err != nil {
+		t.Fatalf("set user_version: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close the store: %v", err)
+	}
+
+	// Opening the database migrates it.
+	store = openSchemaStore(t, path)
+	defer store.Close()
+	if got := readUserVersion(t, store); got != schemaUserVersion {
+		t.Fatalf("unexpected user_version %d after the migration (want %d)", got, schemaUserVersion)
+	}
+	assertSchemaData(t, store)
+
+	// The table of the derived properties exists and is usable.
+	props := model.NoteProps{Path: "a.md", Name: "a.md", Title: "Pineapple", Tags: []string{"work"}}
+	if err := store.UpsertNoteProps(ctx, props); err != nil {
+		t.Fatalf("upsert the properties: %v", err)
+	}
+	stored, found, err := store.GetNoteProps(ctx, "a.md")
+	if err != nil {
+		t.Fatalf("get the properties: %v", err)
+	}
+	if !found {
+		t.Fatalf("the properties are missing")
+	}
+	if stored.Title != "Pineapple" || len(stored.Tags) != 1 || stored.Tags[0] != "work" {
+		t.Fatalf("unexpected properties %+v", stored)
 	}
 }
 

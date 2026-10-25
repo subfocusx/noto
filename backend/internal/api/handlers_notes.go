@@ -2,9 +2,12 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"noto/backend/internal/audit"
+	"noto/backend/internal/model"
 	"noto/backend/internal/notes"
 )
 
@@ -17,17 +20,89 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// treeFolder is a folder of the tree listing. It carries the counters of the
+// notes and of the subfolders below the folder.
+type treeFolder struct {
+	model.Node
+	// NoteCount is the number of notes under the folder, recursively.
+	NoteCount int `json:"noteCount"`
+	// FolderCount is the number of the direct child folders.
+	FolderCount int `json:"folderCount"`
+}
+
 // handleTree returns the flat folder and file lists.
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
-	folders, files, err := s.svc.Tree(r.Context())
+	folders, files, err := s.service().Tree(r.Context())
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	out := make([]treeFolder, 0, len(folders))
+	for _, f := range folders {
+		out = append(out, treeFolder{Node: f})
+	}
+	// The counters are computed from the lists of the listing, so that the
+	// tree does not need an extra query and no column is needed.
+	notesByFolder := map[string]int{}
+	foldersByParent := map[string]int{}
+	for _, f := range files {
+		for parent := f.ParentPath; parent != ""; parent = parentOfPath(parent) {
+			notesByFolder[parent]++
+		}
+	}
+	for _, f := range out {
+		foldersByParent[f.ParentPath]++
+	}
+	for i := range out {
+		out[i].NoteCount = notesByFolder[out[i].Path]
+		out[i].FolderCount = foldersByParent[out[i].Path]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"folders":     out,
+		"files":       files,
+		"noteTotal":   len(files),
+		"folderTotal": len(folders),
+	})
+}
+
+// handleTreePage serves one page of the children of a folder.
+//
+// The tree of the interface is loaded lazily: the client asks for the
+// children of a folder and follows the cursor of the answer. Without the
+// parameters the whole tree is returned (the answer of `GET /api/tree`).
+//
+//	GET /api/tree/children?parent=<path>&cursor=<path>&limit=<n>
+//
+// The answer is `{"items":[Node],"nextCursor":"<path>"}`; the cursor is empty
+// when the page is the last one.
+func (s *Server) handleTreePage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the limit must be a positive number", notes.ErrBadRequest))
+			return
+		}
+		limit = parsed
+	}
+	page, err := s.service().Children(r.Context(), q.Get("parent"), q.Get("cursor"), limit)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"folders": folders,
-		"files":   files,
+		"items":      page.Items,
+		"nextCursor": page.NextCursor,
 	})
+}
+
+// parentOfPath returns the parent path of a slash separated relative path.
+func parentOfPath(rel string) string {	i := strings.LastIndex(rel, "/")
+	if i < 0 {
+		return ""
+	}
+	return rel[:i]
 }
 
 // createRequest is the body of the folder and file creation endpoints.
@@ -43,11 +118,13 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.CreateFolder(r.Context(), req.ParentPath, req.Name)
+	node, err := s.service().CreateFolder(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
+		s.recordAudit(r, audit.ActionFolderCreated, req.Name, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionFolderCreated, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -58,11 +135,13 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.CreateFile(r.Context(), req.ParentPath, req.Name)
+	node, err := s.service().CreateFile(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
+		s.recordAudit(r, audit.ActionFileCreated, req.Name, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionFileCreated, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -73,7 +152,7 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path parameter is required", notes.ErrBadRequest))
 		return
 	}
-	content, err := s.svc.Read(r.Context(), p)
+	content, err := s.service().Read(r.Context(), p)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -99,11 +178,13 @@ func (s *Server) handlePutNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path field is required", notes.ErrBadRequest))
 		return
 	}
-	res, err := s.svc.Write(r.Context(), req.Path, req.Content, req.Revision)
+	res, err := s.service().Write(r.Context(), req.Path, req.Content, req.Revision)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteUpdated, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteUpdated, res.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -120,11 +201,13 @@ func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Rename(r.Context(), req.Path, req.NewName)
+	node, err := s.service().Rename(r.Context(), req.Path, req.NewName)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteRenamed, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteRenamed, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -141,11 +224,13 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Move(r.Context(), req.Path, req.NewParentPath)
+	node, err := s.service().Move(r.Context(), req.Path, req.NewParentPath)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteMoved, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteMoved, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -156,10 +241,12 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path parameter is required", notes.ErrBadRequest))
 		return
 	}
-	if err := s.svc.Delete(r.Context(), p); err != nil {
+	if err := s.service().Delete(r.Context(), p); err != nil {
+		s.recordAudit(r, audit.ActionNoteDeleted, p, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteDeleted, p, audit.ResultOK)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -175,7 +262,35 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, err)
 		return
 	}
-	node, err := s.svc.Restore(r.Context(), req.TrashPath)
+	node, err := s.service().Restore(r.Context(), req.TrashPath)
+	if err != nil {
+		s.recordAudit(r, audit.ActionNoteRestored, req.TrashPath, audit.ResultError)
+		writeError(w, s.log, err)
+		return
+	}
+	s.recordAudit(r, audit.ActionNoteRestored, node.Path, audit.ResultOK)
+	writeJSON(w, http.StatusOK, node)
+}
+
+// duplicateRequest is the body of the duplicate endpoint.
+type duplicateRequest struct {
+	// Path is the relative path of the note that is copied.
+	Path string `json:"path"`
+}
+
+// handleDuplicate copies a note next to the original and answers with the
+// node of the copy. The content of the note is never written to the logs.
+func (s *Server) handleDuplicate(w http.ResponseWriter, r *http.Request) {
+	var req duplicateRequest
+	if err := decodeJSON(w, r, maxJSONBody, &req); err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	if strings.TrimSpace(req.Path) == "" {
+		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path field is required", notes.ErrBadRequest))
+		return
+	}
+	node, err := s.service().Duplicate(r.Context(), req.Path)
 	if err != nil {
 		writeError(w, s.log, err)
 		return
@@ -185,7 +300,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 
 // handleTrash lists the trashed entries.
 func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
-	entries, err := s.svc.Trash(r.Context())
+	entries, err := s.service().Trash(r.Context())
 	if err != nil {
 		writeError(w, s.log, err)
 		return

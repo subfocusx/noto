@@ -18,6 +18,9 @@ func (s *Service) Rename(ctx context.Context, rel, newName string) (model.Node, 
 	if norm == "" {
 		return model.Node{}, newErr(ErrInvalidPath, "a note path is required")
 	}
+	// The NUL bytes of a name are stripped, the other control characters
+	// are rejected.
+	newName = stripNUL(newName)
 	if err := validateName(newName); err != nil {
 		return model.Node{}, err
 	}

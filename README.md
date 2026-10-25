@@ -5,7 +5,8 @@ over real `.md` files on disk, and a Preact PWA that edits, previews, searches
 and syncs them.
 
 Noto is designed for a single owner on a single machine (or behind a VPN).
-It has **no user accounts and no login** — see
+The accounts and the login are **optional and off by default**: without
+`NOTO_AUTH_ENABLED=true` every request is served as the local owner. See
 [Security model](#security-model-and-limitations) before exposing it to a
 network.
 
@@ -42,13 +43,23 @@ network.
 
 - Real Markdown files on disk — the filesystem is the source of truth, the
   database only mirrors metadata and the search index.
-- Folder and file tree with create, rename, move, delete and restore.
+- Folder and file tree with create, rename, move, duplicate, delete and restore.
+  A duplicate is created next to the original (`note copy.md`, `note copy 2.md`, …).
 - Deletion is a move to a trash directory, so anything can be restored.
 - Optimistic concurrency: every note carries a `revision`; a write with a
   stale revision is rejected with the current server copy instead of
   silently overwriting.
 - Atomic saves — the content is written to a temporary file and renamed over
   the target.
+- History of the versions: every write appends an immutable version of the
+  note, and the interface can show the list, the line diff between two
+  revisions and restore an old revision (`GET /api/notes/versions`,
+  `GET /api/notes/versions/diff`, `POST /api/notes/versions/restore`).
+- The moment of the creation of a note (`created_at`) is written once, by the
+  server, and never changes. The migration of the schema fills it for the
+  notes that were written before the column existed.
+- Notes can be pinned to the top of the tree, and a quick note is created
+  without a name and without a folder.
 
 **Editing**
 
@@ -57,8 +68,23 @@ network.
   `idle` / `saving` / `saved` / `error` status indicator.
 - Unsaved drafts are kept in IndexedDB and can be recovered after a network
   failure or a reload.
-- Sanitised Markdown preview (`marked` + DOMPurify) — raw HTML from notes is
-  never injected into the page.
+- Sanitised Markdown rendering (`marked` + DOMPurify) — raw HTML from notes is
+  never injected into the page. The renderer stays in the repository as a
+  library; the interface itself shows the editor only.
+- The matches of the query are highlighted in the editor, and the tags of the
+  vault are completed while the note is written.
+- A focus mode hides everything but the text of the note.
+- A deletion can be undone from a toast that stays on the screen for five
+  seconds.
+- The card of a note shows its title, its tags and its dates.
+- The filter of the tree is kept in the URL, so a link carries the selection.
+- A file can be dropped into the editor, and a draft can be reset to the
+  content of the server.
+- The Markdown of the preview understands the formulas (`$…$`), the footnotes
+  (`[^1]`) and the highlighted code blocks.
+- A note can be presented as a deck of slides.
+- The sound of a note can be recorded with the `MediaRecorder` of the browser
+  and attached to it.
 
 **Search**
 
@@ -66,32 +92,160 @@ network.
 - Ranked hits with a snippet; falls back to a `LIKE` scan with a warning if
   FTS5 is unavailable.
 - Manual reindex endpoint.
+- Full-text search over the text of the attachments: the text of a `text/plain`,
+  a `text/markdown`, a `.md` and a `.txt` file is indexed at the upload, and
+  the panel of the attachments searches it.
+
+**Selection (the query language)**
+
+- The notes carry derived properties — the title (the first heading), the tags
+  (`#tag` without a space) and the flags (a task list, an unfinished task, a
+  code block, an image, a link) — and a small language selects the notes by
+  them: `tag == 'work' && !has_incomplete_tasks`. The language is described
+  in [`docs/QUERY_LANGUAGE.md`](docs/QUERY_LANGUAGE.md).
+- The selection works the same in the open storage (the server compiles the
+  query into SQL) and in the encrypted storage (the browser evaluates the
+  query over the decrypted notes). One file of golden vectors
+  (`shared/query-vectors.json`) binds the two implementations, and a parity
+  test asks both of them the same questions.
+- The interface offers the selection as a query bar with the number of the
+  matches, as saved views and as a tree of the tags with their counters.
+- The plugin API 1.2.0 gives the plugins the same capability
+  (`ctx.api.query()`, `ctx.api.tags()`) behind the new right `query.read`.
+- The operator `matches` (and the prefix form `match:`) looks for a regular
+  expression in the text of a note. The backend compiles it with RE2 and the
+  browser with the `RegExp` of JavaScript; the golden vectors
+  (`shared/vectors/regex.json`) hold the expressions that both engines
+  understand.
 
 **Data**
 
 - Import Markdown files or a whole zip archive, with `skip` / `rename` /
   `overwrite` conflict handling.
-- Export a single note, a folder or the entire tree as a zip.
+- Export a single note, a folder or the entire tree as a zip. The archive is
+  written to a temporary file and served from it, so the memory of the server
+  does not grow with the size of the storage.
 - Attachments (images, PDF, plain text) stored outside the notes directory
-  with server-side content sniffing.
+  with server-side content sniffing. The panel of the attachments shows a
+  preview of an image, opens it in a lightbox and reads the content of a file.
 - Consistency check between the notes directory and the database
   (`noto reconcile`): it reports files that have no metadata row, metadata
   rows whose file is gone ("ghosts") and metadata that differs from the file
   system. By default it only reports; repairing the library requires the
   explicit `--apply` / `--drop-ghosts` flags.
 
+**Encrypted storage**
+
+- The storage of the notes can be encrypted in the browser: the master password
+  is stretched with Argon2id, the data key is wrapped, and every object and
+  every manifest is sealed with AES-256-GCM before the bytes reach the server.
+  The server becomes a blind object store: it stores the bytes under an
+  identifier and never sees a key — see
+  [`docs/ENCRYPTION.md`](docs/ENCRYPTION.md).
+- One path at a time: the store always talks to a `VaultService`, which is
+  either an adapter over the API of the notes (plain mode) or an adapter over
+  the sealed vault. In the sealed mode the server refuses the open endpoints
+  with `409 vault_sealed`, so the server cannot write plaintext even by
+  mistake.
+- The key lives only in the memory of the tab, as a non-extractable
+  `CryptoKey`. The storage locks itself on demand, after a period of
+  inactivity or when the window loses the focus; the screen of the unlocking
+  shows nothing but the name of the storage and the password field.
+- A recovery key can be enabled: it wraps the same data key and is the only
+  way back into the storage without the master password.
+- An existing plain storage can be migrated: the notes are sealed and stored
+  first, the copy is verified object by object, the server is switched only
+  after the verification, and the plaintext is removed **only** after an
+  explicit confirmation. The journal of the migration lives inside the sealed
+  manifest, so an interrupted migration continues instead of starting over.
+- Honest about the limits: the application cannot erase the copies that remain
+  in the history of a cloud provider, in its snapshots or in its backups —
+  they have to be cleaned in the settings of the provider. See
+  [`docs/VAULT.md`](docs/VAULT.md).
+- The plugin API 1.1.0 adds an optional `ctx.vault` state (`mode`,
+  `encrypted`, `locked`, `formatVersion`). A plugin never sees the key
+  material — the boundary is enforced by the import checker (rules R11 and
+  R12), not by a promise — see
+  [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md).
+
 **Application**
 
 - Installable PWA (web manifest, service worker, offline app shell).
-- Light and dark themes, following `prefers-color-scheme` with a manual
-  toggle.
-- Responsive layout with a drawer sidebar and 44 px touch targets on mobile.
+- **Storage of the notes (the "vault").** At the first start the application asks
+  for the folder that holds the notes, like Obsidian does. The notes are plain
+  Markdown files in that folder, the internal data of Noto lives in a hidden
+  `.noto` subfolder next to them, and the folder can be changed at any time from
+  the left column. See [`docs/VAULT.md`](docs/VAULT.md).
+- One design system: semantic CSS tokens, a graphite dark theme ("Obsidian
+  Slate": canvas `#09090b`, accent `#818cf8`) and a matching light theme, one
+  icon set (Lucide), locally served Inter and JetBrains Mono, one spacing scale
+  — see [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- The shell of the application is compact: there is no separate top bar. The
+  brand and the path of the storage live in the header of the left column, the
+  actions of the storage (the search, the graph, the archive,
+  the command palette, the plugins) live in the header of the EXPLORER section,
+  and the state of the document (the status of the autosave, the path, the
+  cursor, the counters) stays in the permanent status bar at the bottom, so a
+  hidden column can always be brought back. Both columns are resized with the
+  same control.
+- A small dot in the header of the EXPLORER section shows the state of the
+  connection with the backend (green — connected, amber — checking, red —
+  unreachable, click to retry). A lost connection is a state, not an error, so
+  it is not a banner.
+- The tree shows the hierarchy explicitly (guide lines, a uniform step of the
+  indent) and the number of the notes in every folder.
+- Notes and folders can be dragged from one place of the tree to another. The
+  rules live on the server: a folder cannot be dropped into itself or into one
+  of its own subfolders.
+- Long names in the tree are cut off with an ellipsis on one line; the full name
+  is shown in a tooltip when the text is really clipped.
+- The theme can follow the operating system (`System`) or be pinned to light or
+  dark; the choice survives a reload.
+- Responsive layout: a drawer sidebar below 820 px, a resizable sidebar above,
+  no horizontal overflow from 360 px to 1920 px and 44 px touch targets on
+  mobile.
 - Single static Go binary in production — the frontend is embedded.
-- Global command palette on **Ctrl+K** / **Ctrl+P** with eight built-in
+- Global command palette on **Ctrl+K** / **Ctrl+P** with eleven built-in
   commands (new note, new folder, daily note, search, rename note, delete
-  note, toggle theme, open trash) plus every command the plugins contribute.
+  note, toggle theme, open trash, settings, keyboard shortcuts, toggle
+  sidebar) plus every command the plugins contribute.
 - Daily note: one command creates or opens `YYYY-MM-DD.md` in the root of the
   library. The local date is used, and an existing file is never overwritten.
+- Settings dialog: theme, the width of the columns, the font size
+  and the wrapping of the editor, the order of the tree — every switch has a
+  real effect and is remembered.
+- Note tree with icons, a context menu (right click or the `…` button),
+  renaming in place, a list of the recently opened notes and a configurable
+  order (by name or by date of change).
+- Breadcrumbs of the open note above the editor.
+- The graph of the notes (the wiki links are the edges) and the archive (the
+  notes the tree cannot place) are real panels, not stubs.
+- The graph of the activity shows the notes of the last days, and the section
+  of the versions shows the history of the open note with its diff.
+- The interface is localised: English and Russian, and the language of the user
+  is a preference of the application.
+- The writes that wait for the connection are queued in the browser and replayed
+  in the order they were made when the connection comes back.
+- The notifications and the reminders survive a reload of the page.
+- The window of the search is not modal: the tree behind it stays reachable.
+- Several storages can be open at the same time; the state of each of them
+  lives in the registry of the browser.
+- The drawer of a narrow screen answers to the touch: a swipe from the edge
+  opens it, a swipe to the left closes it.
+- When the storage is fixed by the environment (`NOTO_VAULT_FIXED`), the button
+  says so instead of opening a picker that cannot work.
+
+**Server**
+
+- The authentication, the accounts and the multi-user mode: the server can
+  require a login, the administrator manages the users and the roles, and the
+  audit log records the actions. The authentication is off by default, so the
+  local mode behaves exactly as before.
+- The webhooks: an outbox in the database, a delivery worker with a backoff and
+  the signature of the event.
+- The MCP over HTTP: a JSON-RPC 2.0 endpoint with the tools of the notes.
+- The TLS termination: the server serves HTTPS when the certificate and the key
+  are given.
 
 **Keyboard shortcuts**
 
@@ -100,28 +254,42 @@ network.
 | `Ctrl+K` / `Ctrl+P` | Open the command palette. |
 | `Ctrl+Shift+F` | Open the note search (also reachable through the search button in the sidebar and through the "Search notes" command of the palette). |
 | `Ctrl+S` | Save the open note explicitly (outside the editor). |
+| `Ctrl+,` | Open the settings. |
+| `Ctrl+/` | Show the list of the shortcuts. |
+| `Ctrl+Alt+N` | Create a note. |
+| `Ctrl+Alt+B` | Collapse or expand the sidebar. |
+| `Ctrl+Alt+T` | Switch between the light and the dark theme. |
+
+The full list lives in one place (`frontend/src/core/commands/shortcuts.ts`) and
+is shown in the dialog of the shortcuts.
 
 ---
 
 ## Plugins
 
-Noto has a plugin platform (phase 2). Plugins are **built-in code that is
-compiled into the application** — there is no plugin installation from disk or
-from the network, and there is no sandbox: a built-in plugin is trusted code
-running in the context of the app.
+Noto has a plugin platform (phase 2). A plugin is normally **built-in code
+that is compiled into the application**; a plugin can also be **installed from
+a disk or from a network**, and such a plugin runs inside a **sandbox**: an
+iframe with a strict Content-Security-Policy, without the access to the
+origins of the application.
 
-Three plugins ship with the app:
+Eight plugins ship with the app:
 
 | Plugin | What it does | Permissions it needs |
 | --- | --- | --- |
 | **Word Count** | Shows the word and character count of the open note in a panel. | `editor.read`, `ui.contribute` |
-| **Insert Template** | Inserts a configurable Markdown template at the cursor position. | `editor.write`, `ui.contribute` |
+| **Insert Template** | Inserts a configurable Markdown template at the cursor position. | `editor.read`, `editor.write`, `ui.contribute` |
 | **Backlinks** | Lists the notes that link to the open note (`[[Wiki Link]]`) and the notes that only mention its name. | `editor.read`, `notes.read`, `tree.read`, `ui.contribute` |
+| **Graph** | Draws the graph of the wiki links of the storage. | `notes.read`, `query.read`, `ui.contribute` |
+| **Tags** | Shows the tags of the storage with their counters. | `query.read`, `ui.contribute` |
+| **Activity** | Draws the calendar of the days on which the notes were written. | `query.read`, `tree.read`, `ui.contribute` |
+| **Links** | Draws the cards of the links of the open note. | `editor.read`, `notes.read`, `query.read`, `ui.contribute` |
+| **Sandbox Demo** | Shows how a plugin runs inside the sandbox of the iframe. | `tree.read` |
 
 The **Backlinks** plugin uses the public contract only (it imports nothing but
-`plugins/contract.ts`). It shows the path of every matching note but cannot
-open it: the contract has no "open this note" operation and it was not
-extended.
+`plugins/contract.ts`). It shows the path of every matching note and can open
+it: the contract of the API 1.3.0 has the operation `ctx.openNote(path)`,
+which needs the right `notes.read`.
 
 A plugin can:
 
@@ -137,13 +305,22 @@ A plugin can:
   `folder.moved`, `editor.saved`, `workspace.opened`) — payloads never carry
   note content, only paths and metadata;
 - keep its own settings, stored separately in the `noto-plugins` IndexedDB
-  database under a per-plugin namespace.
+  database under a per-plugin namespace;
+- open a note of the storage (`ctx.openNote(path)`, API 1.3.0, the right
+  `notes.read`);
+- read the state of the storage through the optional `ctx.vault` (API 1.1.0):
+  `mode`, `encrypted`, `locked`, `formatVersion`. It is a state, not an access:
+  the key material is not in the API and cannot be imported by a plugin (rules
+  R11 and R12 of the boundary checker).
 
 **Managing plugins.** Open the app and press the **Plugins** button in the
-sidebar. The dialog lists every built-in plugin with its state (`Active`,
-`Disabled`, `Failed`, `Incompatible`), lets you enable or disable it, and
+sidebar. The dialog lists every plugin with its state (`Active`,
+`Disabled`, `Failed`, `Incompatible`), lets you enable or disable it, installs
+a plugin from a disk or from a network, and
 offers **Open settings** / **Reset settings** for plugins that declare a
-settings schema. The enabled/disabled flags survive a reload.
+settings schema. The enabled/disabled flags survive a reload. The journal of
+the actions of the plugins is kept by the platform, and the panels of the
+plugins have styles of their own.
 
 **Permissions are enforced at runtime.** A manifest may request eight
 permissions; the validator rejects unknown names and duplicates, and every
@@ -152,8 +329,9 @@ refusal raises a `PluginPermissionError` inside the plugin (e.g. `editor.write`
 is needed to insert text, `ui.contribute` to add a panel or a command,
 `settings.write` to store settings). The checks cover the data API, the editor,
 the UI contributions and the settings; they do **not** cover network calls the
-plugin makes itself (`fetch` is still available to it) and there is no sandbox,
-because a built-in plugin is trusted code.
+plugin makes itself (`fetch` is still available to it). A built-in plugin is
+trusted code and runs in the context of the application; a plugin that is
+installed from a disk or from a network runs inside the sandbox of the iframe.
 
 Documentation:
 
@@ -363,8 +541,10 @@ Other frontend commands:
 | `npm test` | Runs the Vitest suite once. |
 | `npm run test:watch` | Runs Vitest in watch mode. |
 | `npm run typecheck` | Type-checks the whole frontend with `tsc --noEmit`. |
-| `npm run check:boundaries` | Checks the architectural import boundaries (rules R1–R8) of the frontend source tree. |
+| `npm run check:boundaries` | Checks the architectural import boundaries (rules R1–R12) of the frontend source tree. |
 | `npm run measure` | Prints the bundle size report. |
+| `npx vitest run src/core/crypto` | Runs only the tests of the crypto core (KDF, the key hierarchy, the container). |
+| `npx vitest run src/core/vault` | Runs only the tests of the sealed vault (the manifest, the index, the conflicts, the service). |
 
 ### Helper scripts
 
@@ -416,19 +596,27 @@ Every variable is optional. The defaults below come from
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `NOTO_ADDR` | `127.0.0.1:8080` | TCP address the HTTP server listens on. A non-loopback address (including a host-less `:8080`) requires `NOTO_ALLOW_PUBLIC=true`. |
-| `NOTO_DATA_DIR` | `<user config dir>/noto` | Root of all persistent state. On Windows `%AppData%\noto`; on Linux `~/.config/noto`; on macOS `~/Library/Application Support/noto`. |
+| `NOTO_DATA_DIR` | `<user config dir>/noto` | Root of all persistent state. On Windows `%AppData%\noto`; on Linux `~/.config/noto`; on macOS `~/Library/Application Support/noto`. It only chooses the **default** location: the folder of the notes can still be changed at runtime. |
 | `NOTO_NOTES_DIR` | `<NOTO_DATA_DIR>/notes` | Directory holding the Markdown files. |
+| `NOTO_VAULT_FIXED` | *(empty)* | Fixes the storage of the notes: the folder cannot be changed at runtime and the application shows it as a normal state (not as an error). Any value except an empty string, `0` and `false` enables the fix. |
 | `NOTO_ATTACHMENTS_DIR` | `<NOTO_DATA_DIR>/attachments` | Directory holding uploaded binaries. |
 | `NOTO_TRASH_DIR` | `<NOTO_DATA_DIR>/trash` | Directory holding deleted-but-restorable entries. |
 | `NOTO_DB_PATH` | `<NOTO_DATA_DIR>/noto.db` | SQLite database file. |
 | `NOTO_STATIC_DIR` | *(empty)* | Serve the frontend from this directory instead of the assets embedded in the binary. |
 | `NOTO_ALLOWED_ORIGINS` | *(empty)* | Comma-separated list of extra origins allowed to call the API. Empty means no `Access-Control-Allow-Origin` header is sent at all. Not an authentication mechanism. |
-| `NOTO_ALLOW_PUBLIC` | `false` | Allows binding a non-loopback address. The server refuses to start on a public address without it, because there is no authentication. |
+| `NOTO_ALLOW_PUBLIC` | `false` | Allows binding a non-loopback address. The server refuses to start on a public address without it: the authentication is off by default, so a public deployment must either turn it on (`NOTO_AUTH_ENABLED`) or stay behind an authenticating reverse proxy. |
 | `NOTO_MAX_UPLOAD_MB` | `32` | Maximum size of a single upload body, in megabytes. |
 | `NOTO_MAX_ARCHIVE_MB` | `256` | Maximum uncompressed size of an imported archive, in megabytes. |
 | `NOTO_REQUEST_TIMEOUT_SEC` | `60` | Per-request timeout, in seconds. |
 | `NOTO_SHUTDOWN_TIMEOUT_SEC` | `15` | Graceful shutdown timeout, in seconds. |
 | `NOTO_LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn` or `error`. |
+| `NOTO_AUTH_ENABLED` | `false` | Turns the authentication on. While it is off, every request is served as the local user `local` (role `admin`). |
+| `NOTO_CREDENTIALS_PATH` | `<NOTO_DATA_DIR>/credentials.db` | Database of the accounts and of the sessions. |
+| `NOTO_SESSION_TTL_SEC` | `86400` | Lifetime of a session, in seconds. |
+| `NOTO_AUDIT_PATH` | `<NOTO_DATA_DIR>/audit.db` | Database of the audit log. |
+| `NOTO_WEBHOOKS_PATH` | `<NOTO_DATA_DIR>/webhooks.db` | Database of the webhook subscriptions and of the outbox. |
+| `NOTO_TLS_CERT_FILE` | *(empty)* | Certificate of the server: when it and the key are set, the server serves HTTPS. |
+| `NOTO_TLS_KEY_FILE` | *(empty)* | Private key of the server (see `NOTO_TLS_CERT_FILE`). |
 
 Booleans accept the values `strconv.ParseBool` understands (`true`, `false`,
 `1`, `0`, `t`, `f`, …). Integers fall back to the default when the value does
@@ -506,6 +694,23 @@ Frontend:
 ```powershell
 cd E:\Code\Software\noto\frontend
 npm test
+```
+
+The crypto core and the sealed vault have their own suites; they can be run
+alone while working on them:
+
+```powershell
+cd E:\Code\Software\noto\frontend
+npx vitest run src/core/crypto
+npx vitest run src/core/vault
+```
+
+The backend of the sealed storage (`internal/sealed`) is covered by the Go
+suite:
+
+```powershell
+cd E:\Code\Software\noto\backend
+& $go test ./internal/sealed/... -race
 ```
 
 Both at once:
@@ -654,9 +859,16 @@ On iOS the equivalent is Safari → Share → **Add to Home Screen**.
 
 ## HTTPS and reverse proxy
 
-Noto does not terminate TLS itself and has no user accounts. Put an
-authenticating reverse proxy in front of it for any deployment that is
-reachable beyond the machine it runs on.
+Noto can terminate TLS itself: when `NOTO_TLS_CERT_FILE` and
+`NOTO_TLS_KEY_FILE` are set, the server serves HTTPS (`ListenAndServeTLS`).
+Nothing changes in the API — the routes, the envelopes and the codes are the
+same over HTTPS.
+
+Noto also has user accounts, but the authentication is **off by default**: a
+request without a session is served as the local user `local`. For a
+deployment that is reachable beyond the machine it runs on, either turn the
+authentication on (`NOTO_AUTH_ENABLED=true`) or put an authenticating reverse
+proxy in front of it.
 
 Caddy:
 
@@ -830,13 +1042,15 @@ the comparison, and junctions and symbolic links are skipped.
 
 ## Security model and limitations
 
-Noto has **no user accounts**: no registration, no login, no password, no
-session, no token, and no per-user data model. Every request that reaches the
-server is treated as a fully privileged request from the owner.
+Noto has **optional** user accounts: with `NOTO_AUTH_ENABLED=true` there is a
+login, a password (Argon2id), a session and a token, and the administrator
+manages the accounts and their roles. **By default the authentication is off**,
+and then every request that reaches the server is treated as a fully
+privileged request from the owner: there is no way to give two people
+separate access to one Noto instance while the authentication is off.
 
 **Anyone who can open a TCP connection to the server can read, write, delete
-and export every note.** There is no way to give two people separate access
-to one Noto instance.
+and export every note** — unless the authentication is on.
 
 What the server does do:
 
@@ -861,13 +1075,17 @@ What the server does do:
   timeout.
 * Never returns stack traces or absolute server paths, and never logs note
   contents.
+* Keeps an audit log of the actions of the users when the authentication is
+  on; the log holds the identifiers, never the content of a note.
 
 What it does **not** do:
 
-* Authenticate anybody.
-* Encrypt data at rest.
-* Provide an audit trail.
-* Serve HTTPS itself.
+* Encrypt the data at rest: the files of the server are plain Markdown on the
+  disk. The sealed mode encrypts the files **in the browser**, before they
+  reach the disk, but it is a mode of the client, not of the server.
+* Encrypt the traffic between the browser and the server by itself: the
+  traffic is protected by the TLS of the server or of the proxy, not by the
+  end-to-end encryption (see the limitations).
 * Protect against a local user who can read the data directory, a malicious
   browser extension, or traffic interception on a non-HTTPS link.
 
@@ -943,6 +1161,8 @@ authentication — see [Security model](#security-model-and-limitations).
 | `GET` | `/api/trash` | List trashed entries. |
 | `GET` | `/api/search?q=…&limit=50` | Full-text search over names and bodies. |
 | `POST` | `/api/search/reindex` | Rebuild the search index from disk. |
+| `POST` | `/api/query` | Selection by the query language. Body `{"query":"tag == 'work'","limit":50}`. Answer `{"hits":[…],"total":N,"partial":false}`. |
+| `GET` | `/api/tags` | The tags of the vault with their counters: `{"tags":[{"tag":"work","count":3}]}`. |
 | `POST` | `/api/import/files` | Import Markdown files (`multipart`). |
 | `POST` | `/api/import/zip` | Import a zip archive (`multipart`). |
 | `GET` | `/api/export/note?path=…` | Download one note as `text/markdown`. |
@@ -971,52 +1191,51 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
 
 ## Known limitations and roadmap
 
+The complete list of what the repository claims and does not deliver, over
+all the phases, is in [`docs/NOT_IMPLEMENTED.md`](docs/NOT_IMPLEMENTED.md):
+every line of it points at the place that declares the gap.
+
 **Limitations**
 
-* No user accounts, no multi-user support, no authentication of any kind.
-* No encryption at rest and no TLS termination in the server.
-* No audit log and no note history — the trash keeps deleted files, but an
-  edited note keeps only its current content.
+* The end-to-end encryption between the browser and the server is **not**
+  implemented: the encrypted storage seals the files in the browser, but the
+  traffic between the browser and the server is only protected by the TLS of
+  the server.
 * Full-text search falls back to a `LIKE` scan when the SQLite build lacks
   FTS5; the fallback is slower and less accurate.
-* Attachments are not editable or re-orderable in the UI, and there is no
-  image thumbnail generation.
-* No server-side pagination — `/api/tree` and `/api/attachments` return
-  everything.
-* The UI is single-language (English) and has no tagging or filtering beyond
-  folders and search.
-* Offline support covers the app shell and the static assets only: every
-  `/api/*` route is served `network-only`, so private responses never come
-  from a cache. Writes made offline are queued as local drafts and are not
-  synchronised automatically to the server.
-* Plugins are built-in code that runs as trusted code inside the application —
-  there is no sandbox and no plugin installation from disk or the network.
-  Declared permissions are enforced for the data API, the editor, the UI
-  contributions and the settings, but a plugin can still make network requests
-  itself (see [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md)).
-* The **Backlinks** plugin can only list the matching notes; it cannot open
-  them, because the plugin contract has no such operation.
+* Attachments are not re-orderable in the UI, and there is no generation of
+  the thumbnails: the panel shows a preview of an image instead.
+* The server answers the whole tree and the whole list of the attachments; the
+  paged listing of the children of a folder exists in the domain and in the
+  store, but it has no route yet.
+* Several storages can be open at the same time, but the server serves one at
+  a time: the state of the other storages lives in the memory of the browser.
+* The notifications and the reminders are the data of the browser: they
+  survive a reload, but the server neither stores nor delivers them.
+* The moment of the creation of the notes that were written before the column
+  `created_at` existed is approximated by the moment of their last change.
 * The name of a note is not length-limited and may contain control characters
   (except NUL) — the validation deliberately stays permissive so that existing
   files are never rejected.
-* The search button in the sidebar still carries the old tooltip
-  "Search (Ctrl+K)"; the shortcut itself is `Ctrl+Shift+F` (or `Ctrl+K` for
-  the command palette, which also offers "Search notes").
-* There is no mobile-native wrapper — Android support is via the installed
-  PWA.
+* The drafts of the notes that were deleted are not purged; they stay in the
+  IndexedDB of the browser until the note is opened and saved.
+* The built-in plugins still run as trusted code in the context of the
+  application; the sandbox (an iframe with a strict CSP) belongs to the
+  plugins that are installed from a disk or from a network. The declared
+  permissions are enforced for the data API, the editor, the UI
+  contributions and the settings, but a plugin can still make network requests
+  itself (see [`docs/PLUGIN_SECURITY.md`](docs/PLUGIN_SECURITY.md)).
+* The mobile answer is the installed PWA: there is no native Android wrapper,
+  and the shell is still the shell of the desktop.
 
 **Roadmap**
 
-* Optional passphrase protection for the whole vault, unlocking the key in
-  the browser.
-* Note version history and a diff view.
-* Tagging and a graph view. The backlinks plugin already lists the incoming
-  links and the mentions of the open note, but it cannot open a note and
-  there is no graph.
-* Server-side pagination and lazy loading of the tree.
-* Full-text search over attachments.
-* Optional end-to-end encryption between the browser and the server.
+* The end-to-end encryption between the browser and the server.
 * A native Android wrapper using the same API.
+* The purge of the drafts, and the paged listing of the tree on the wire.
+
+The complete list of the gaps is in
+[`docs/NOT_IMPLEMENTED.md`](docs/NOT_IMPLEMENTED.md).
 
 ---
 
@@ -1037,10 +1256,15 @@ noto/
 │       ├── restore/          restore logic: checksums, dry run, atomic DB replacement
 │       ├── notes/            domain logic
 │       ├── api/              HTTP layer
+│       ├── auth/             the accounts, the passwords and the sessions
+│       ├── audit/            the journal of the actions of the users
+│       ├── webhooks/         the subscriptions, the outbox and the delivery worker
+│       ├── mcp/              the MCP over HTTP: the tools of the notes
 │       └── web/              embedded frontend assets
 ├── frontend/                 Preact + TypeScript + Vite PWA
 │   ├── public/sw-policy.js   pure service worker policy (testable without a browser)
-│   └── src/plugins/          plugin platform: contract, manifest, registry, host, loader, builtin plugins
+│   └── src/plugins/          plugin platform: contract, manifest, registry, host, loader, sandbox, builtin plugins
+│   └── src/i18n/             the localisation: the catalogue and the language of the user
 │   └── src/core/commands/    built-in commands of the command palette
 ├── scripts/                  PowerShell helper scripts
 ├── docs/
@@ -1049,9 +1273,28 @@ noto/
 │   ├── SECURITY.md           threat model and hardening checklist
 │   ├── PERFORMANCE.md        measurements and the methodology
 │   ├── ARCHITECTURE.md       structure of the application
+│   ├── ENCRYPTION.md         the encrypted storage: the scheme and the guarantees
+│   ├── VAULT.md              the storage of the notes: the modes and the migration
+│   ├── UI_AUDIT.md           the audit of the interface
+│   ├── DESIGN_SYSTEM.md      the visual rules of the application
 │   ├── PLUGIN_API.md         plugin contract reference
 │   ├── PLUGIN_SECURITY.md    plugin trust model and limitations
-│   └── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
+│   ├── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
+│   ├── QUERY_LANGUAGE.md     the query language: the grammar and the fields
+│   ├── API-CHANGELOG.md      the journal of the changes of the API
+│   ├── NOT_IMPLEMENTED.md    what is not written yet, over all the phases
+│   ├── THIRD_PARTY.md        the licences of the third parties
+│   └── design/               the cards of the design of the phases
+├── shared/                   the data shared by the two languages (the golden vectors)
+├── AGENTS.md                 the working agreement of the repository
+├── CONTEXT.md                the vocabulary of the project
+├── PHASE8_PLAN.md            the plan of the phase 8 (the query language)
+├── PHASE10_PLAN.md           the plan of the phase 10 (the shell of the application)
+├── PHASE11_PLAN.md           the plan of the phase 11 (the seven points of the user)
+├── PHASE12_PLAN.md           the plan of the phase 12 (the comfort of the interface)
+├── PHASE13_PLAN.md           the plan of the phase 13 (the calendar, the tabs, the window)
+├── PHASE14_PLAN.md           the plan of the phase 14 (the icons, the signs, the switch)
+├── PHASE15_PLAN.md           the plan of the phase 15 (the drag and drop of the tree)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

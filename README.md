@@ -1096,6 +1096,10 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
 
 ## Known limitations and roadmap
 
+The complete list of what the repository claims and does not deliver, over
+all the phases, is in [`docs/NOT_IMPLEMENTED.md`](docs/NOT_IMPLEMENTED.md):
+every line of it points at the place that declares the gap.
+
 **Limitations**
 
 * No user accounts, no multi-user support, no authentication of any kind.
@@ -1191,6 +1195,7 @@ noto/
 │   ├── PLUGIN_DEVELOPMENT.md how to write, test and debug a plugin
 │   ├── QUERY_LANGUAGE.md     the query language: the grammar and the fields
 │   ├── API-CHANGELOG.md      the journal of the changes of the API
+│   ├── NOT_IMPLEMENTED.md    what is not written yet, over all the phases
 │   ├── THIRD_PARTY.md        the licences of the third parties
 │   └── design/               the cards of the design of the phases
 ├── shared/                   the data shared by the two languages (the golden vectors)
@@ -1202,6 +1207,7 @@ noto/
 ├── PHASE12_PLAN.md           the plan of the phase 12 (the comfort of the interface)
 ├── PHASE13_PLAN.md           the plan of the phase 13 (the calendar, the tabs, the window)
 ├── PHASE14_PLAN.md           the plan of the phase 14 (the icons, the signs, the switch)
+├── PHASE15_PLAN.md           the plan of the phase 15 (the drag and drop of the tree)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

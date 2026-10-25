@@ -652,6 +652,36 @@ editor of a closed tab, which is mounted but hidden
 
 ---
 
+## Phase 15 status (the drag and drop of the tree)
+
+The user came back with one sentence: the drag and drop does not work. The
+function was written and covered by tests, but the tests built the events of
+the browser by hand, and the real mouse behaved differently.
+
+The defect was measured in the browser: the zone of the root appeared at the
+top of the tree when the drag started, so the whole tree slid 32 px down
+under the pointer. The target moved away, and the drop landed on another row
+than the one the user aimed at. A drop that landed nowhere (on a note, on the
+background) was silent: nothing moved and nothing was said.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P15-1 | **The tree does not move under the pointer.** The zone of the root and the banner of a refusal live under the tree; the zone sticks to the bottom of the pane | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/styles/components.css` |
+| P15-2 | **One rule for the moves.** `refusalOfMove` lives in `lib/tree`; the rows take the dragged node instead of its path, so the row and the explorer cannot disagree. A refused target tells the cursor the truth (`dropEffect: none`) | done | `frontend/src/lib/tree.ts`, `frontend/src/components/TreeRow.tsx`, `frontend/src/__tests__/tree-move-rules.test.ts` |
+| P15-3 | **Every drag ends with an answer.** The rows report why the target would refuse, the tree reports that there is no target, and the end of the drag says what happened | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/__tests__/tree.test.tsx` |
+| P15-4 | **The drag is covered with a real mouse.** The old end-to-end tests dispatched the events of the browser by hand and could not see the shift of the tree; the new test drags with the mouse and checks that the tree stays in place | done | `e2e/specs/tree-interaction.spec.ts` |
+
+### The measured effect of the phase 15
+
+| What | Phase 14 | Phase 15 |
+|---|---|---|
+| Frontend unit tests | 923 passed (71 files) | **940 passed (72 files)** |
+| End-to-end tests | 160 passed, 54 skipped | **161 passed, 54 skipped, 0 failed** |
+| The rows that move during a drag | 1 (the zone of the root) | **0** |
+| A drag that ends without an answer | possible | **impossible** |
+
+---
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the

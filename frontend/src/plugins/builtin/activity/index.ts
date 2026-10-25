@@ -248,8 +248,31 @@ export function ActivityView(props: ActivityViewProps) {
   return h(
     'div',
     { class: 'noto-activity', 'data-plugin': 'activity' },
-    h('div', { class: 'noto-activity-grid' }, cells),
-    h('div', { class: 'noto-activity-legend' }, `Notes: ${state.notes}`),
+    h(
+      'div',
+      {
+        class: 'noto-activity-grid',
+        role: 'img',
+        'aria-label': `The calendar of the notes: ${state.notes} notes in ${state.days.length} days`,
+      },
+      cells,
+    ),
+    h(
+      'div',
+      { class: 'noto-activity-legend' },
+      h('span', { class: 'noto-activity-legend-label' }, `Notes: ${state.notes}`),
+      h(
+        'span',
+        { class: 'noto-activity-legend-levels' },
+        [0, 1, 2, 3, 4].map((level) =>
+          h('span', {
+            key: `level:${level}`,
+            class: `noto-activity-cell level-${level}`,
+            'aria-hidden': 'true',
+          }),
+        ),
+      ),
+    ),
   );
 }
 

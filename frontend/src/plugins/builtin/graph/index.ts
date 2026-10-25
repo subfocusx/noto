@@ -328,16 +328,20 @@ export function GraphView(props: GraphViewProps) {
     'div',
     { class: 'noto-graph', 'data-plugin': 'graph' },
     h(
-      'svg',
-      {
-        class: 'noto-graph-svg',
-        viewBox: `0 0 ${GRAPH_SIZE} ${GRAPH_SIZE}`,
-        width: '100%',
-        role: 'img',
-        'aria-label': 'The graph of the links between the notes',
-      },
-      edges,
-      nodes,
+      'div',
+      { class: 'noto-graph-canvas' },
+      h(
+        'svg',
+        {
+          class: 'noto-graph-svg',
+          viewBox: `0 0 ${GRAPH_SIZE} ${GRAPH_SIZE}`,
+          preserveAspectRatio: 'xMidYMid meet',
+          role: 'img',
+          'aria-label': 'The graph of the links between the notes',
+        },
+        edges,
+        nodes,
+      ),
     ),
     h(
       'div',

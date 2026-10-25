@@ -385,6 +385,13 @@ export class BacklinksStore {
 interface BacklinksViewProps {
   /** The shared state of the plugin. */
   store: BacklinksStore;
+  /**
+   * Opens a note in the editor of the application (API 1.3.0).
+   *
+   * The property is absent when the host does not offer the operation: the
+   * panel then says that the note must be opened manually.
+   */
+  onOpen?: (path: string) => void;
 }
 
 /** The content of the panel. */
@@ -414,8 +421,17 @@ export function BacklinksView(props: BacklinksViewProps) {
     h(
       'li',
       { key: `b:${item.path}`, class: 'noto-backlinks-item' },
-      h('span', { class: 'noto-backlinks-name' }, item.name),
-      h('span', { class: 'noto-backlinks-path' }, item.path),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'noto-backlinks-link',
+          'data-path': item.path,
+          onClick: () => props.onOpen?.(item.path),
+        },
+        h('span', { class: 'noto-backlinks-name' }, item.name),
+        h('span', { class: 'noto-backlinks-path' }, item.path),
+      ),
       item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'ambiguous') : null,
     ),
   );
@@ -424,8 +440,17 @@ export function BacklinksView(props: BacklinksViewProps) {
     h(
       'li',
       { key: `u:${item.path}`, class: 'noto-backlinks-item' },
-      h('span', { class: 'noto-backlinks-name' }, item.name),
-      h('span', { class: 'noto-backlinks-path' }, item.path),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'noto-backlinks-link',
+          'data-path': item.path,
+          onClick: () => props.onOpen?.(item.path),
+        },
+        h('span', { class: 'noto-backlinks-name' }, item.name),
+        h('span', { class: 'noto-backlinks-path' }, item.path),
+      ),
       h('span', { class: 'noto-backlinks-badge' }, 'no link'),
       item.ambiguous ? h('span', { class: 'noto-backlinks-badge' }, 'ambiguous') : null,
     ),
@@ -442,11 +467,13 @@ export function BacklinksView(props: BacklinksViewProps) {
     state.unlinked.length === 0
       ? h('div', { class: 'noto-backlinks-empty' }, 'No mentions without a link')
       : h('ul', { class: 'noto-backlinks-list' }, unlinkedItems),
-    h(
-      'div',
-      { class: 'noto-backlinks-hint' },
-      'The plugin cannot open a note — open it manually.',
-    ),
+    props.onOpen
+      ? null
+      : h(
+          'div',
+          { class: 'noto-backlinks-hint' },
+          'The plugin cannot open a note — open it manually.',
+        ),
   );
 }
 
@@ -784,7 +811,13 @@ export function createBacklinksPlugin(): BacklinksPlugin {
       unregisterPanel = ctx.registerPanel({
         id: BACKLINKS_PANEL_ID,
         title: 'Backlinks',
-        render: () => h(BacklinksView, { store }),
+        // The operation that opens a note (API 1.3.0): the panel shows the
+        // backlinks as links when the host offers it.
+        render: () =>
+          h(BacklinksView, {
+            store,
+            onOpen: typeof ctx.openNote === 'function' ? (path) => ctx.openNote?.(path) : undefined,
+          }),
       });
 
       // The plugin does NOT register an item of the sidebar: the backlinks are

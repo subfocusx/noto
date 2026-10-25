@@ -27,11 +27,15 @@ export { PluginPermissionError } from '../core/api/pluginApi';
  * `1.1.0` added the optional `ctx.vault` state (see {@link PluginVaultState}).
  * `1.2.0` added the query capability: `ctx.api.query()` and `ctx.api.tags()`
  * (see {@link PluginQueryResult}), behind the new permission `query.read`.
+ * `1.3.0` added the operation that opens a note (`ctx.openNote()`, see
+ * {@link PluginContext.openNote}), the sandbox of the plugins
+ * (`manifest.sandbox` and {@link Plugin.sandboxSource}) and the audit log of
+ * the actions of the plugins (see {@link PluginAuditEntry}).
  *
  * Every bump so far is additive: a plugin that requires `1.0.0` keeps working
  * unchanged, because the new members are optional.
  */
-export const PLUGIN_API_VERSION = '1.2.0';
+export const PLUGIN_API_VERSION = '1.3.0';
 
 /** Capabilities a plugin may request in its manifest. */
 export type PluginPermission =
@@ -65,6 +69,18 @@ export interface PluginManifest {
   minApiVersion: string;
   permissions: PluginPermission[];
   settings?: PluginSettingSchema[];
+  /**
+   * True when the plugin asks for the sandbox (API 1.3.0).
+   *
+   * A sandboxed plugin does NOT run in the context of the application: its
+   * code runs inside an iframe with a strict Content-Security-Policy and
+   * talks to the host through a narrow, validated bridge (`postMessage`).
+   *
+   * The flag is only a declaration: the host decides how the plugin is run.
+   * A plugin that declares the sandbox but ships no {@link Plugin.sandboxSource}
+   * is refused by the host (it stays in the `failed` state).
+   */
+  sandbox?: boolean;
   /**
    * Version of the plugin's own settings schema. When it grows, the host
    * runs the migrations declared in `settingsMigrations` over the stored
@@ -319,6 +335,7 @@ export interface PluginVaultState {
  * | `editor.getText/getSelection/getCursor`    | `editor.read`  |
  * | `editor.onChange/onSelectionChange`        | `editor.read`  |
  * | `editor.insert/insertAt/replaceSelection`  | `editor.write` |
+ * | `openNote`                                  | `notes.read`  |
  * | `registerCommand` and the other UI hooks   | `ui.contribute`|
  * | `settings.set` / `settings.reset`          | `settings.write`|
  *
@@ -362,6 +379,22 @@ export interface PluginContext {
    * the components) stay valid.
    */
   readonly vault?: PluginVaultState;
+  /**
+   * Opens a note in the editor of the application (API 1.3.0).
+   *
+   * The operation navigates to the note: the path becomes the note of the
+   * editor, the tree follows it and the events of the platform are emitted.
+   * The plugin does NOT get the content of the note — it has to read it with
+   * `ctx.api.getNote()` (the permission `notes.read`).
+   *
+   * The operation requires the permission `notes.read`: a plugin may only
+   * navigate to a note it is allowed to read. A plugin without the permission
+   * gets a {@link PluginPermissionError}.
+   *
+   * The member is optional, so that a context built by hand (in the tests of
+   * the components) stays valid. A host of API 1.3.0 always provides it.
+   */
+  openNote?(path: string): void;
   registerCommand(cmd: PluginCommand): () => void;
   registerPanel(p: PluginPanel): () => void;
   registerSidebarItem(i: PluginSidebarItem): () => void;
@@ -386,6 +419,52 @@ export interface PluginContext {
 /** A plugin implementation. */
 export interface Plugin {
   readonly manifest: PluginManifest;
+  /**
+   * The source of a sandboxed plugin (API 1.3.0).
+   *
+   * The source is the JavaScript that runs inside the iframe of the sandbox.
+   * It is a string, not a module: the plugin of the sandbox imports nothing —
+   * it only uses the bridge that the host publishes in the frame
+   * (`window.notoPlugin`).
+   *
+   * The member is present only when `manifest.sandbox` is true.
+   */
+  readonly sandboxSource?: string;
+  /**
+   * Activates the plugin.
+   *
+   * A sandboxed plugin does not need it: the host never calls the activation
+   * of a plugin that runs inside the sandbox.
+   */
   activate(ctx: PluginContext): void | Promise<void>;
   deactivate?(): void | Promise<void>;
+}
+
+/**
+ * The kind of an action of a plugin that the audit log records.
+ *
+ * * `open` — the plugin asked the application to open a note;
+ * * `read` — the plugin read the data of the vault (a note, the tree, a
+ *   search, a query);
+ * * `write` — the plugin wrote a note;
+ * * `command` — the plugin ran a command.
+ */
+export type PluginAuditAction = 'open' | 'read' | 'write' | 'command';
+
+/**
+ * One record of the audit log of the plugins (API 1.3.0).
+ *
+ * The record carries the id of the plugin, the action, the moment and the
+ * target of the action (the path of a note, the id of a command). It never
+ * carries the content of a note.
+ */
+export interface PluginAuditEntry {
+  /** The id of the plugin that did the action. */
+  pluginId: string;
+  /** The kind of the action. */
+  action: PluginAuditAction;
+  /** The moment of the action, as an ISO 8601 string. */
+  at: string;
+  /** The target of the action (a path, a command id, a kind of query). */
+  target: string;
 }

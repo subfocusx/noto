@@ -89,8 +89,8 @@ async function activateWith(
 }
 
 describe('vault state of the plugin API', () => {
-  it('publishes the API version 1.2.0 and keeps 1.0.0 compatible', () => {
-    expect(PLUGIN_API_VERSION).toBe('1.2.0');
+  it('publishes the API version 1.3.0 and keeps 1.0.0 compatible', () => {
+    expect(PLUGIN_API_VERSION).toBe('1.3.0');
   });
 
   it('gives the plugin the published state of the encrypted storage', async () => {

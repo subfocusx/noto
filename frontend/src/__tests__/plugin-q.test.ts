@@ -72,8 +72,8 @@ function mockApi(overrides: Partial<PluginApi> = {}): PluginApi {
 }
 
 describe('the query capability of the plugin platform', () => {
-  it('publishes the API version 1.2.0', () => {
-    expect(PLUGIN_API_VERSION).toBe('1.2.0');
+  it('publishes the API version 1.3.0', () => {
+    expect(PLUGIN_API_VERSION).toBe('1.3.0');
   });
 
   it('answers a query locally in the sealed mode', async () => {

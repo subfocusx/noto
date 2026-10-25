@@ -261,7 +261,7 @@ describe('plugin slots', () => {
 
     expect(screen.getByText('page content')).toBeTruthy();
     expect(document.querySelector('.noto-plugin-error')).toBeTruthy();
-    expect(document.querySelector('.noto-plugin-error')?.textContent).toContain('Ошибка плагина');
+    expect(document.querySelector('.noto-plugin-error')?.textContent).toContain('Plugin error');
   });
 
   it('filters the context menu items by the path', () => {

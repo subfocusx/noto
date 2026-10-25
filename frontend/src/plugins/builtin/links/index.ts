@@ -240,9 +240,17 @@ export function LinksView(props: LinksViewProps) {
           items.map((card) =>
             h(
               'li',
-              { key: card.path, class: 'noto-links-card', 'data-path': card.path },
-              h('span', { class: 'noto-links-card-title' }, card.title || card.name),
-              h('span', { class: 'noto-links-card-path' }, card.path),
+              { key: card.path, class: 'noto-links-card-item' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'noto-links-card',
+                  'data-path': card.path,
+                },
+                h('span', { class: 'noto-links-card-title' }, card.title || card.name),
+                h('span', { class: 'noto-links-card-path' }, card.path),
+              ),
             ),
           ),
         );

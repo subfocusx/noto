@@ -15,6 +15,25 @@ import {
 } from './contract';
 import { isCompatible, validateManifest } from './manifest';
 
+/** Where a plugin comes from. */
+export type PluginSourceKind = 'builtin' | 'file' | 'url';
+
+/**
+ * The origin of a plugin.
+ *
+ * The built-in plugins come with the application; the others are installed by
+ * the user from a file of the disk or from a URL. The registry keeps the
+ * origin of every plugin, so the manager can show it.
+ */
+export interface PluginSource {
+  /** The kind of the origin. */
+  kind: PluginSourceKind;
+  /** The name of the file or the URL of the origin. */
+  location: string;
+  /** The SHA-256 of the manifest, when the integrity was checked. */
+  integrity?: string;
+}
+
 /** A registry entry as seen by the UI. */
 export interface PluginRegistryEntry {
   plugin: Plugin;
@@ -22,6 +41,8 @@ export interface PluginRegistryEntry {
   error?: string;
   /** True when the plugin is enabled (activation may still be pending). */
   enabled: boolean;
+  /** Where the plugin comes from (absent for an unknown origin). */
+  source?: PluginSource;
 }
 
 /** Callback fired whenever the state of a plugin changes. */
@@ -43,7 +64,7 @@ export class PluginRegistry {
    * the list of validation errors; a plugin that requires a newer API is
    * registered in the `incompatible` state.
    */
-  register(plugin: Plugin): { ok: boolean; error?: string } {
+  register(plugin: Plugin, source?: PluginSource): { ok: boolean; error?: string } {
     const manifest: PluginManifest = plugin.manifest;
     const id = manifest && typeof manifest.id === 'string' ? manifest.id : '';
 
@@ -54,19 +75,19 @@ export class PluginRegistry {
     const validation = validateManifest(manifest);
     if (!validation.ok) {
       const error = validation.errors.join('; ');
-      this.entries.set(id, { plugin, state: 'failed', error, enabled: false });
+      this.entries.set(id, { plugin, state: 'failed', error, enabled: false, source });
       this.notify(id, 'failed', error);
       return { ok: false, error };
     }
 
     if (!isCompatible(manifest.minApiVersion, PLUGIN_API_VERSION)) {
       const error = `plugin requires API ${manifest.minApiVersion}, current API is ${PLUGIN_API_VERSION}`;
-      this.entries.set(id, { plugin, state: 'incompatible', error, enabled: false });
+      this.entries.set(id, { plugin, state: 'incompatible', error, enabled: false, source });
       this.notify(id, 'incompatible', error);
       return { ok: false, error };
     }
 
-    this.entries.set(id, { plugin, state: 'discovered', enabled: false });
+    this.entries.set(id, { plugin, state: 'discovered', enabled: false, source });
     this.notify(id, 'discovered');
     return { ok: true };
   }

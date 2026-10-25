@@ -112,6 +112,22 @@ const CONTRACT_FORBIDDEN_MODULES = [
 /** Source extensions scanned by the checker. */
 const SCAN_EXTENSIONS = ['.ts', '.tsx'];
 
+/**
+ * The constructs a sandboxed plugin may not use in its source (rule R17).
+ *
+ * A sandboxed plugin runs inside an iframe with a strict CSP. The CSP forbids
+ * the network and the evaluation of the code, so a source that uses them is
+ * either broken or hostile: the checker refuses it before it ever runs.
+ */
+const SANDBOX_FORBIDDEN = [
+  { pattern: /\beval\s*\(/, name: 'eval' },
+  { pattern: /new\s+Function\s*\(/, name: 'new Function' },
+  { pattern: /\bimport\s*\(/, name: 'a dynamic import' },
+  { pattern: /\bfetch\s*\(/, name: 'fetch' },
+  { pattern: /XMLHttpRequest/, name: 'XMLHttpRequest' },
+  { pattern: /WebSocket/, name: 'WebSocket' },
+];
+
 // ---------------------------------------------------------------------------
 // Filesystem helpers
 // ---------------------------------------------------------------------------
@@ -413,7 +429,7 @@ function checkImport(fileKey, imp, target) {
 }
 
 // ---------------------------------------------------------------------------
-// The rules of the file (R13–R16)
+// The rules of the file (R13–R17)
 //
 // These rules look at a FILE and not at a single import: they state a
 // property of the module as a whole. Every violation is reported once per
@@ -425,8 +441,15 @@ function checkImport(fileKey, imp, target) {
  *
  * @param {string} fileKey POSIX path relative to the root (no extension)
  * @param {{specifier: string, typeOnly: boolean, line: number, target: string}[]} imports
+ * @param {string} source The text of the file
  */
-function checkFile(fileKey, imports) {
+function checkFile(fileKey, imports, source) {
+  // R17 does not depend on the imports of the file: a sandboxed plugin may
+  // have none at all.
+  if (inLayer(fileKey, LAYERS.plugins)) {
+    checkSandboxSource(fileKey, source);
+  }
+
   if (imports.length === 0) return;
 
   // R13: a built-in plugin is self-contained. It may import the contract and
@@ -495,11 +518,41 @@ function checkFile(fileKey, imports) {
       );
     }
   }
+
+  // R17: the source of a sandboxed plugin runs inside an iframe with a strict
+  // CSP. It may not evaluate the code and it may not reach the network: the
+  // sandbox is the boundary, and the checker proves it before the plugin runs.
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+/**
+ * Checks the source of a sandboxed plugin (rule R17).
+ *
+ * The source of a sandboxed plugin is a string: `sandboxSource`. It is
+ * extracted from the file and searched for the constructs the sandbox
+ * forbids.
+ *
+ * @param {string} fileKey POSIX path relative to the root (no extension)
+ * @param {string} source The text of the file
+ */
+function checkSandboxSource(fileKey, source) {
+  const assignment = /sandboxSource\s*[:=]\s*(['"`])([\s\S]*?)\1/g;
+  let match = assignment.exec(source);
+  while (match !== null) {
+    const body = match[2] ?? '';
+    const line = source.slice(0, match.index).split('\n').length;
+    for (const forbidden of SANDBOX_FORBIDDEN) {
+      if (forbidden.pattern.test(body)) {
+        report(
+          'R17',
+          fileKey,
+          line,
+          `the source of a sandboxed plugin may not use ${forbidden.name}: the sandbox forbids it`,
+        );
+      }
+    }
+    match = assignment.exec(source);
+  }
+}
 
 function main() {
   const files = listSourceFiles(SRC_ROOT);
@@ -516,7 +569,7 @@ function main() {
       checkImport(fileKey, imp, target);
       imports.push({ ...imp, target });
     }
-    checkFile(fileKey, imports);
+    checkFile(fileKey, imports, source);
   }
 
   violations.sort((a, b) =>

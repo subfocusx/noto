@@ -369,7 +369,7 @@ describe('the drag and the drop of the tree', () => {
     onDragStart?: (state: TreeDragState) => void;
     onDragEnd?: () => void;
     onDropOnFolder?: (node: Node, targetParentPath: string) => void;
-    draggingPath?: string | null;
+    draggingNode?: Node | null;
   }) {
     const folders = [
       folder('journal', 'journal', ''),
@@ -389,7 +389,7 @@ describe('the drag and the drop of the tree', () => {
         onSelect={() => undefined}
         onContextMenu={() => undefined}
         onRenameInline={() => undefined}
-        draggingPath={props.draggingPath ?? null}
+        draggingNode={props.draggingNode ?? null}
         onDragStart={props.onDragStart}
         onDragEnd={props.onDragEnd}
         onDropOnFolder={props.onDropOnFolder}
@@ -423,7 +423,9 @@ describe('the drag and the drop of the tree', () => {
   });
 
   it('shows the folder as the target of the drop', () => {
-    const view = renderTree({ draggingPath: 'journal/archive/a.md' });
+    const view = renderTree({
+      draggingNode: file('journal/archive/a.md', 'a.md', 'journal/archive'),
+    });
     const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
 
     fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
@@ -434,7 +436,7 @@ describe('the drag and the drop of the tree', () => {
   });
 
   it('says that the drop is refused when the move is impossible', () => {
-    const view = renderTree({ draggingPath: 'journal' });
+    const view = renderTree({ draggingNode: folder('journal', 'journal', '') });
     const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
 
     fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
@@ -445,13 +447,39 @@ describe('the drag and the drop of the tree', () => {
   });
 
   it('says that the drop is refused when the note is already in the folder', () => {
-    const view = renderTree({ draggingPath: 'journal/archive/a.md' });
+    const view = renderTree({
+      draggingNode: file('journal/archive/a.md', 'a.md', 'journal/archive'),
+    });
     const row = view.getByText('archive').closest('.tree-row') as HTMLElement;
 
     fireEvent.dragOver(row, { dataTransfer: dataTransferMock() });
 
     expect(row.classList.contains('drop-refused')).toBe(true);
     expect(view.getByText('Cannot drop here')).toBeTruthy();
+  });
+
+  it('tells the cursor the truth: a refused target does not look like a target', () => {
+    const refused = dataTransferMock();
+    const view = renderTree({ draggingNode: folder('journal', 'journal', '') });
+
+    fireEvent.dragOver(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: refused,
+    });
+
+    expect(refused.dropEffect).toBe('none');
+  });
+
+  it('lets the cursor move a node into a folder that accepts it', () => {
+    const accepted = dataTransferMock();
+    const view = renderTree({
+      draggingNode: file('journal/archive/a.md', 'a.md', 'journal/archive'),
+    });
+
+    fireEvent.dragOver(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: accepted,
+    });
+
+    expect(accepted.dropEffect).toBe('move');
   });
 
   it('does not drag a row while its name is being renamed', () => {

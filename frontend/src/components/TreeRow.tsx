@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useAppSelector } from '../core/store/hooks';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
-import { parentPathOf } from '../lib/tree';
+import { canMoveInto } from '../lib/tree';
 import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { Icon } from '../ui/icons';
 import type { TreeContextMenuPayload } from './TreeContextMenu';
@@ -48,8 +48,8 @@ export interface TreeFolderRowProps {
   onSelect(path: string): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
-  /** The path of the node that is currently dragged, if any. */
-  draggingPath?: string | null;
+  /** The node that is currently dragged, if any. */
+  draggingNode?: Node | null;
   /** Called when a drag starts. */
   onDragStart?(state: TreeDragState): void;
   /** Called when a drag ends. */
@@ -72,8 +72,8 @@ export interface TreeNoteRowProps {
   onSelect(path: string): void;
   onContextMenu?(payload: TreeContextMenuPayload): void;
   onRenameInline?(node: Node, name: string): void | Promise<void>;
-  /** The path of the node that is currently dragged, if any. */
-  draggingPath?: string | null;
+  /** The node that is currently dragged, if any. */
+  draggingNode?: Node | null;
   /** Called when a drag starts. */
   onDragStart?(state: TreeDragState): void;
   /** Called when a drag ends. */
@@ -298,38 +298,6 @@ function TreeName(props: { name: string }) {
   );
 }
 
-/**
- * Tells whether the node that is dragged may be dropped on a folder.
- *
- * The rules are the ones of the explorer: a folder cannot be moved into itself
- * or into one of its own subfolders, and a node cannot be moved into the
- * folder it already lives in. The row knows the path of the dragged node and
- * the notes of the tree, so it can tell the user *before* the drop that the
- * move is going to be refused.
- */
-export function canDropInto(
-  draggingPath: string,
-  targetPath: string,
-  filesByParent: Map<string, Node[]>,
-): boolean {
-  // The folder is dropped on itself.
-  if (draggingPath === targetPath) return false;
-  // The dragged node lives inside the target folder.
-  if (draggingPath.startsWith(`${targetPath}/`)) {
-    const parent = parentPathOf(draggingPath);
-    const isNote = (filesByParent.get(parent) ?? []).some((note) => note.path === draggingPath);
-    // A note of a subfolder may still be moved up to the target folder; a
-    // folder may not: it would land inside itself.
-    if (!isNote) return false;
-    // The note already lives in the target folder.
-    return parent !== targetPath;
-  }
-  // The target folder is inside the dragged folder: the folder would swallow
-  // itself.
-  if (targetPath.startsWith(`${draggingPath}/`)) return false;
-  return true;
-}
-
 /** A folder of the tree, with its children. */
 export function TreeFolderRow(props: TreeFolderRowProps) {
   const { folder } = props;
@@ -338,18 +306,16 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
   const files = props.filesByParent.get(node.path) ?? [];
   const rename = useInlineRename(node, props.onRenameInline);
   const [over, setOver] = useState(false);
-  const isDragging = props.draggingPath === node.path;
+  const isDragging = props.draggingNode?.path === node.path;
   const count = props.noteCountsByPath?.get(node.path) ?? props.noteCount ?? 0;
   // The drop is only possible when the move is not refused: the row tells the
   // user so before the drop, instead of refusing it afterwards.
-  const canDrop = props.draggingPath
-    ? canDropInto(props.draggingPath, node.path, props.filesByParent)
-    : true;
+  const canDrop = props.draggingNode ? canMoveInto(props.draggingNode, node.path) : true;
 
   // The highlight of a drop target disappears with the drag itself.
   useEffect(() => {
-    if (!props.draggingPath) setOver(false);
-  }, [props.draggingPath]);
+    if (!props.draggingNode) setOver(false);
+  }, [props.draggingNode]);
 
   const handleDragStart = (event: DragEvent): void => {
     // The user who renames a node is selecting a text, not dragging a row.
@@ -366,12 +332,17 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
 
   const handleDragOver = (event: DragEvent): void => {
     event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    // The cursor tells the truth: a refused target does not look like a
+    // target.
+    if (event.dataTransfer) event.dataTransfer.dropEffect = canDrop ? 'move' : 'none';
     setOver(true);
   };
 
   const handleDrop = (event: DragEvent): void => {
     event.preventDefault();
+    // The row answers for itself: the tree must not read the same drop as a
+    // drop that landed nowhere.
+    event.stopPropagation();
     setOver(false);
     props.onDropOnFolder?.(node, node.path);
   };
@@ -452,7 +423,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               onSelect={props.onSelect}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
-              draggingPath={props.draggingPath}
+              draggingNode={props.draggingNode}
               onDragStart={props.onDragStart}
               onDragEnd={props.onDragEnd}
               onDropOnFolder={props.onDropOnFolder}
@@ -469,7 +440,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
               onSelect={props.onSelect}
               onContextMenu={props.onContextMenu}
               onRenameInline={props.onRenameInline}
-              draggingPath={props.draggingPath}
+              draggingNode={props.draggingNode}
               onDragStart={props.onDragStart}
               onDragEnd={props.onDragEnd}
             />
@@ -485,7 +456,7 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
   const { file } = props;
   const selected = file.path === props.currentPath;
   const rename = useInlineRename(file, props.onRenameInline);
-  const isDragging = props.draggingPath === file.path;
+  const isDragging = props.draggingNode?.path === file.path;
   // The list of the favorites lives in the store: the row reads it there, so
   // the star of a note appears and disappears without a new property in the
   // props of the rows. The subscription is narrow: the row is redrawn when

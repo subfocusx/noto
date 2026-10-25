@@ -127,3 +127,34 @@ export function filterTree(
 export function nodeTypeOf(node: Node): NodeType {
   return node.type;
 }
+
+/**
+ * The reason why a node cannot be moved into a folder.
+ *
+ * `into-itself`: the folder would land inside itself. `already-there`: the
+ * node already lives in that folder. `null`: the move is possible.
+ */
+export type MoveRefusal = 'into-itself' | 'already-there' | null;
+
+/**
+ * Tells whether a node may be moved into a folder, and why it may not.
+ *
+ * The rules are the ones of the server: a folder cannot be moved into itself
+ * or into one of its own descendants, and a node cannot be moved into the
+ * folder it already lives in. The rule lives here, once: the row of the tree
+ * (which shows the answer before the drop) and the explorer (which refuses
+ * the move) ask the same question, so they cannot disagree.
+ */
+export function refusalOfMove(node: Node, targetParentPath: string): MoveRefusal {
+  if (node.type === 'folder') {
+    if (targetParentPath === node.path) return 'into-itself';
+    if (targetParentPath.startsWith(`${node.path}/`)) return 'into-itself';
+  }
+  if (parentPathOf(node.path) === targetParentPath) return 'already-there';
+  return null;
+}
+
+/** Tells whether a node may be moved into a folder. */
+export function canMoveInto(node: Node, targetParentPath: string): boolean {
+  return refusalOfMove(node, targetParentPath) === null;
+}

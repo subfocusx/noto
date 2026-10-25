@@ -9,7 +9,7 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
 import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
-import { filterTree } from '../../lib/tree';
+import { filterTree, refusalOfMove } from '../../lib/tree';
 import { Icon } from '../../ui/icons';
 import { IconButton } from '../../ui/tooltip';
 import type { TreeContextMenuPayload } from '../TreeContextMenu';
@@ -98,12 +98,6 @@ export interface ExplorerSectionProps {
   onOpenPalette?(): void;
   /** Opens the manager of the plugins. */
   onOpenPlugins?(): void;
-}
-
-/** The parent of a path, or the empty string for the root. */
-function parentOf(path: string): string {
-  const index = path.lastIndexOf('/');
-  return index === -1 ? '' : path.slice(0, index);
 }
 
 export function ExplorerSection(props: ExplorerSectionProps) {
@@ -216,7 +210,8 @@ export function ExplorerSection(props: ExplorerSectionProps) {
    *
    * The invalid drops are refused here, so the rows stay simple: a folder
    * cannot be moved into itself or into one of its own descendants, and a
-   * node cannot be moved into the folder it already lives in.
+   * node cannot be moved into the folder it already lives in. The rule is the
+   * one of `lib/tree`: the row of the tree and the explorer cannot disagree.
    */
   const dropOn = (targetParentPath: string): void => {
     const path = drag.path;
@@ -225,19 +220,23 @@ export function ExplorerSection(props: ExplorerSectionProps) {
     const node = nodesByPath.get(path);
     if (!node) return;
 
-    if (node.type === 'folder') {
-      if (targetParentPath === node.path || targetParentPath.startsWith(`${node.path}/`)) {
-        setDropHint('A folder cannot be moved into itself.');
-        return;
-      }
+    const refusal = refusalOfMove(node, targetParentPath);
+    if (refusal === 'into-itself') {
+      setDropHint('A folder cannot be moved into itself.');
+      return;
     }
-    if (parentOf(node.path) === targetParentPath) {
-      setDropHint('The note is already here.');
+    if (refusal === 'already-there') {
+      setDropHint(
+        node.type === 'folder' ? 'The folder is already here.' : 'The note is already here.',
+      );
       return;
     }
     setDropHint(null);
     void props.onMoveNode?.(node, targetParentPath);
   };
+
+  /** The node that is dragged, if any: the rows need its kind, not only its path. */
+  const draggingNode = drag.path ? (nodesByPath.get(drag.path) ?? null) : null;
 
   return (
     <section class="column-section" aria-label="Explorer">
@@ -378,7 +377,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 onSelect={props.onSelect}
                 onContextMenu={props.onContextMenu}
                 onRenameInline={props.onRenameInline}
-                draggingPath={drag.path}
+                draggingNode={draggingNode}
                 onDragStart={setDrag}
                 onDragEnd={endDrag}
                 onDropOnFolder={(_node, targetParentPath) => dropOn(targetParentPath)}
@@ -394,7 +393,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 onSelect={props.onSelect}
                 onContextMenu={props.onContextMenu}
                 onRenameInline={props.onRenameInline}
-                draggingPath={drag.path}
+                draggingNode={draggingNode}
                 onDragStart={setDrag}
                 onDragEnd={endDrag}
               />

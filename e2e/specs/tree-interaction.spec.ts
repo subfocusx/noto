@@ -262,6 +262,79 @@ test.describe('the tree of the notes', () => {
       .toBe(true);
   });
 
+  test('a note is dragged with the mouse into a folder, and the tree does not move', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
+
+    await gotoApp(page);
+
+    const suffix = Date.now().toString(36);
+    const source = `mouse-src-${suffix}`;
+    const target = `mouse-dst-${suffix}`;
+    await page.evaluate(async ([a, b]) => {
+      for (const name of [a, b]) {
+        await fetch('/api/folders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentPath: '', name }),
+        });
+      }
+      await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentPath: a, name: 'dragged.md' }),
+      });
+    }, [source, target]);
+    await page.reload();
+    await expect(page.getByTestId('file-tree')).toBeVisible();
+
+    const expand = page.getByRole('button', { name: `Expand ${source}`, exact: true });
+    if (await expand.count()) await expand.click();
+    await expect(treeFile(page, 'dragged.md')).toBeVisible();
+
+    const note = treeFile(page, 'dragged.md');
+    const folder = folderRow(page, target);
+    // The drag starts on the name of the note: the browser starts a native
+    // drag of a row reliably from the text of the row.
+    const noteBox = await note.locator('.tree-name').boundingBox();
+    const folderBox = await folder.boundingBox();
+    expect(noteBox).not.toBeNull();
+    expect(folderBox).not.toBeNull();
+
+    // The drag of the mouse: the events of the browser are the real ones.
+    await page.mouse.move(noteBox!.x + noteBox!.width / 2, noteBox!.y + noteBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(noteBox!.x + noteBox!.width / 2 + 3, noteBox!.y + noteBox!.height / 2 + 3, {
+      steps: 2,
+    });
+    await page.mouse.move(noteBox!.x + noteBox!.width / 2 + 16, noteBox!.y + noteBox!.height / 2 + 16, {
+      steps: 8,
+    });
+
+    // The tree must not move under the pointer: the target of the drop is the
+    // row the user aimed at, not the row that slid under the pointer.
+    const duringBox = await folder.boundingBox();
+    expect(Math.round(duringBox!.y)).toBe(Math.round(folderBox!.y));
+
+    await page.mouse.move(folderBox!.x + 40, folderBox!.y + folderBox!.height / 2, { steps: 12 });
+    // The target of the row answers: the user sees where the node will land.
+    await expect(page.locator('.tree-drop-badge')).toHaveText('Drop here');
+    await page.mouse.up();
+
+    // The note is now in the target folder: the server knows it.
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get('/api/tree');
+          const tree = (await res.json()) as { files?: { path: string }[] };
+          return (tree.files ?? []).some((file) => file.path === `${target}/dragged.md`);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+  });
+
   test('a folder can be dropped into another folder', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'the tree is a drawer on mobile');
 

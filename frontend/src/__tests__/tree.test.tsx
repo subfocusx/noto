@@ -552,4 +552,21 @@ describe('the drag and the drop of the explorer', () => {
     );
     expect(onMoveNode).not.toHaveBeenCalled();
   });
+
+  it('keeps the tree in place when the drag starts', async () => {
+    const view = renderExplorer();
+
+    fireEvent.dragStart(view.getByText('journal').closest('.tree-row') as HTMLElement, {
+      dataTransfer: dataTransferMock(),
+    });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    // The target of the root comes after the tree: a row that appears while
+    // the user drags would push the tree away under the pointer.
+    const tree = view.getByTestId('file-tree');
+    const root = view.getByText('Move to the root');
+    expect(
+      tree.compareDocumentPosition(root) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

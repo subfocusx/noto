@@ -365,43 +365,6 @@ export function ExplorerSection(props: ExplorerSectionProps) {
             <p class="explorer-hint">Drag a note onto a folder to move it.</p>
           )}
 
-          {drag.path ? (
-            <div
-              class={`tree-row${rootOver ? ' drop-target' : ''}`}
-              role="button"
-              tabIndex={0}
-              aria-label="Move to the root"
-              title="Move to the root"
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-                setRootOver(true);
-              }}
-              onDragLeave={() => setRootOver(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setRootOver(false);
-                dropOn('');
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                event.preventDefault();
-                dropOn('');
-              }}
-            >
-              <span class="tree-icon">
-                <Icon name="folder" size={15} />
-              </span>
-              <span class="nav-item-label">Move to the root</span>
-            </div>
-          ) : null}
-
-          {dropHint ? (
-            <p class="tree-drop-hint" role="status">
-              {dropHint}
-            </p>
-          ) : null}
-
           <ul class="tree" data-testid="file-tree">
             {view.folders.map((folder) => (
               <TreeFolderRow
@@ -440,6 +403,49 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               <li class="tree-empty">No notes yet. Create one with the new note button.</li>
             ) : null}
           </ul>
+
+          {/*
+            The refusal of a move and the target of the root live *under* the
+            tree: a row that appears while the user drags would push the tree
+            away under the pointer, and the drop would land on another row.
+          */}
+          {dropHint ? (
+            <p class="tree-drop-hint" role="status">
+              {dropHint}
+            </p>
+          ) : null}
+
+          {drag.path ? (
+            <div
+              class={`tree-root-drop${rootOver ? ' drop-target' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-label="Move to the root"
+              title="Move to the root"
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+                setRootOver(true);
+              }}
+              onDragLeave={() => setRootOver(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setRootOver(false);
+                dropOn('');
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                dropOn('');
+              }}
+            >
+              <span class="tree-icon">
+                <Icon name="folder" size={15} />
+              </span>
+              <span class="nav-item-label">Move to the root</span>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

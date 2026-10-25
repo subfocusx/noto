@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"noto/backend/internal/audit"
 	"noto/backend/internal/model"
 	"noto/backend/internal/notes"
 )
@@ -63,9 +65,40 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleTreePage serves one page of the children of a folder.
+//
+// The tree of the interface is loaded lazily: the client asks for the
+// children of a folder and follows the cursor of the answer. Without the
+// parameters the whole tree is returned (the answer of `GET /api/tree`).
+//
+//	GET /api/tree/children?parent=<path>&cursor=<path>&limit=<n>
+//
+// The answer is `{"items":[Node],"nextCursor":"<path>"}`; the cursor is empty
+// when the page is the last one.
+func (s *Server) handleTreePage(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the limit must be a positive number", notes.ErrBadRequest))
+			return
+		}
+		limit = parsed
+	}
+	page, err := s.service().Children(r.Context(), q.Get("parent"), q.Get("cursor"), limit)
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":      page.Items,
+		"nextCursor": page.NextCursor,
+	})
+}
+
 // parentOfPath returns the parent path of a slash separated relative path.
-func parentOfPath(rel string) string {
-	i := strings.LastIndex(rel, "/")
+func parentOfPath(rel string) string {	i := strings.LastIndex(rel, "/")
 	if i < 0 {
 		return ""
 	}
@@ -87,9 +120,11 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	node, err := s.service().CreateFolder(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
+		s.recordAudit(r, audit.ActionFolderCreated, req.Name, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionFolderCreated, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -102,9 +137,11 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 	}
 	node, err := s.service().CreateFile(r.Context(), req.ParentPath, req.Name)
 	if err != nil {
+		s.recordAudit(r, audit.ActionFileCreated, req.Name, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionFileCreated, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -143,9 +180,11 @@ func (s *Server) handlePutNote(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.service().Write(r.Context(), req.Path, req.Content, req.Revision)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteUpdated, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteUpdated, res.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -164,9 +203,11 @@ func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
 	}
 	node, err := s.service().Rename(r.Context(), req.Path, req.NewName)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteRenamed, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteRenamed, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -185,9 +226,11 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 	node, err := s.service().Move(r.Context(), req.Path, req.NewParentPath)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteMoved, req.Path, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteMoved, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -199,9 +242,11 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.service().Delete(r.Context(), p); err != nil {
+		s.recordAudit(r, audit.ActionNoteDeleted, p, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteDeleted, p, audit.ResultOK)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -219,9 +264,11 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	node, err := s.service().Restore(r.Context(), req.TrashPath)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteRestored, req.TrashPath, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteRestored, node.Path, audit.ResultOK)
 	writeJSON(w, http.StatusOK, node)
 }
 

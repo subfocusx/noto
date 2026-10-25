@@ -281,7 +281,16 @@ func runServer(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	apiServer, err := newAPIServer(ctx, baseCfg, cfg, logger, sealedStore, sealedMode, vaultPath)
+	svcs, err := openServices(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	defer svcs.cleanup()
+	if svcs.worker != nil {
+		go svcs.worker.Run(ctx)
+	}
+
+	apiServer, err := newAPIServer(ctx, baseCfg, cfg, logger, sealedStore, sealedMode, vaultPath, svcs.api)
 	if err != nil {
 		return err
 	}
@@ -303,8 +312,8 @@ func runServer(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("server started", "addr", listenAddr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Info("server started", "addr", listenAddr, "tls", cfg.TLSEnabled())
+		if err := serveHTTP(srv, cfg); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
 		}
@@ -333,7 +342,7 @@ func runServer(ctx context.Context) error {
 // that can change the vault. In the sealed mode the database is never opened:
 // the notes service is wired to the blocked store, so that an accidental call
 // of the open pipeline fails loudly instead of writing a plaintext file.
-func newAPIServer(ctx context.Context, baseCfg, cfg config.Config, logger *slog.Logger, sealedStore *sealed.Store, sealedMode bool, vaultPath string) (*api.Server, error) {
+func newAPIServer(ctx context.Context, baseCfg, cfg config.Config, logger *slog.Logger, sealedStore *sealed.Store, sealedMode bool, vaultPath string, svcs api.Services) (*api.Server, error) {
 	if sealedMode {
 		svc, err := notes.NewService(sealedServiceConfig(cfg), sealed.NewBlockedStore())
 		if err != nil {
@@ -342,7 +351,7 @@ func newAPIServer(ctx context.Context, baseCfg, cfg config.Config, logger *slog.
 		// The factory is left out on purpose: a sealed vault cannot be
 		// changed at runtime, because a new vault would need the open
 		// pipeline of the notes.
-		apiServer, err := api.NewWithFactory(cfg, svc, logger, nil)
+		apiServer, err := api.NewWithServices(cfg, svc, logger, nil, svcs)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create the API server: %w", err)
 		}
@@ -364,13 +373,22 @@ func newAPIServer(ctx context.Context, baseCfg, cfg config.Config, logger *slog.
 		logger.Info("search index is up to date", "indexed", count)
 	}
 
-	apiServer, err := api.NewWithFactory(cfg, svc, logger, factory)
+	apiServer, err := api.NewWithServices(cfg, svc, logger, factory, svcs)
 	if err != nil {
 		closer()
 		return nil, fmt.Errorf("cannot create the API server: %w", err)
 	}
 	apiServer.SetServiceCloser(closer)
 	return apiServer, nil
+}
+
+// serveHTTP starts the HTTP server. The server serves HTTPS when the
+// certificate and the key are configured.
+func serveHTTP(srv *http.Server, cfg config.Config) error {
+	if cfg.TLSEnabled() {
+		return srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
+	return srv.ListenAndServe()
 }
 
 // sealedServiceConfig returns the configuration of the notes service of a

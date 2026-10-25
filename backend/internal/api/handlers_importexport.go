@@ -4,8 +4,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
+	"noto/backend/internal/audit"
 	"noto/backend/internal/notes"
 )
 
@@ -43,9 +45,11 @@ func (s *Server) handleImportFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.service().ImportFiles(r.Context(), uploads, target, conflict)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteImported, target, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteImported, target, audit.ResultOK)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -79,9 +83,11 @@ func (s *Server) handleImportZip(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.service().ImportZip(r.Context(), data, target, conflict)
 	if err != nil {
+		s.recordAudit(r, audit.ActionNoteImported, target, audit.ResultError)
 		writeError(w, s.log, err)
 		return
 	}
+	s.recordAudit(r, audit.ActionNoteImported, target, audit.ResultOK)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -117,36 +123,63 @@ func (s *Server) handleExportNote(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleExportFolder serves a folder as a ZIP download.
+//
+// The archive is written to a temporary file and served from it: the memory of
+// the server does not grow with the size of the vault, and a failure of the
+// export is still reported with the proper error code instead of an empty
+// download.
 func (s *Server) handleExportFolder(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if strings.TrimSpace(p) == "" {
 		writeError(w, s.log, notes.NewError(notes.CodeBadRequest, "the path parameter is required", notes.ErrBadRequest))
 		return
 	}
-	// The archive is built before the status code is written, so that a
-	// failure is reported with the proper error code instead of an empty
-	// download.
-	data, err := s.service().ExportFolderBytes(r.Context(), p)
+	file, err := os.CreateTemp("", "noto-export-*.zip")
 	if err != nil {
+		writeError(w, s.log, notes.NewError(notes.CodeInternal, "could not create the archive", err))
+		return
+	}
+	name := file.Name()
+	defer func() { _ = os.Remove(name) }()
+	defer func() { _ = file.Close() }()
+	if err := s.service().ExportFolderToFile(r.Context(), p, name); err != nil {
 		writeError(w, s.log, err)
 		return
 	}
-	name := notes.BaseName(p) + ".zip"
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		writeError(w, s.log, notes.NewError(notes.CodeInternal, "could not read the archive", err))
+		return
+	}
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", contentDisposition(name))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	w.Header().Set("Content-Disposition", contentDisposition(notes.BaseName(p)+".zip"))
+	http.ServeContent(w, r, notes.BaseName(p)+".zip", info.ModTime(), file)
 }
 
 // handleExportAll serves the whole library as a ZIP download.
+//
+// The archive is written to a temporary file and served from it: the memory of
+// the server does not grow with the size of the vault.
 func (s *Server) handleExportAll(w http.ResponseWriter, r *http.Request) {
-	data, err := s.service().ExportAllBytes(r.Context())
+	file, err := os.CreateTemp("", "noto-export-*.zip")
 	if err != nil {
+		writeError(w, s.log, notes.NewError(notes.CodeInternal, "could not create the archive", err))
+		return
+	}
+	name := file.Name()
+	defer func() { _ = os.Remove(name) }()
+	defer func() { _ = file.Close() }()
+	if err := s.service().ExportAllToFile(r.Context(), name); err != nil {
 		writeError(w, s.log, err)
+		return
+	}
+	info, err := file.Stat()
+	if err != nil {
+		writeError(w, s.log, notes.NewError(notes.CodeInternal, "could not read the archive", err))
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", contentDisposition("notes.zip"))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	http.ServeContent(w, r, "notes.zip", info.ModTime(), file)
 }

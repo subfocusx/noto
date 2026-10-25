@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"noto/backend/internal/notes"
@@ -91,4 +93,75 @@ func contentDisposition(name string) string {
 		name = "download"
 	}
 	return fmt.Sprintf("attachment; filename=%q", name)
+}
+
+// attachmentSearchRequest is the body of the search inside the text of the
+// attachments.
+type attachmentSearchRequest struct {
+	// Query is the text to look for.
+	Query string `json:"query"`
+	// Limit is the biggest number of the hits (50 by default).
+	Limit int `json:"limit"`
+}
+
+// handleSearchAttachments searches the text of the attachments.
+//
+// The search uses the index of the text that was extracted from the
+// attachments. An empty query is refused with the code bad_request.
+func (s *Server) handleSearchAttachments(w http.ResponseWriter, r *http.Request) {
+	var req attachmentSearchRequest
+	if err := decodeJSON(w, r, maxJSONBody, &req); err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	hits, err := s.service().SearchAttachments(r.Context(), req.Query, req.Limit)
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+}
+
+// handleAttachmentContent serves the bytes of an attachment with the real
+// content type of the file.
+//
+// The bytes are served inline: the interface uses the url as the source of an
+// image and as a blob.
+func (s *Server) handleAttachmentContent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	att, data, err := s.service().AttachmentContent(r.Context(), id)
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	mime := att.MIME
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Disposition", "inline; filename="+strconv.Quote(att.Name))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// handleAttachmentPreview answers with the metadata of the preview of an
+// attachment: the content type, the size of the image and the url of the
+// bytes.
+//
+// The size is read from the bytes of the file: a file that is not an image
+// has a width and a height of 0.
+func (s *Server) handleAttachmentPreview(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	preview, err := s.service().AttachmentPreview(r.Context(), id)
+	if err != nil {
+		writeError(w, s.log, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mime":   preview.MIME,
+		"width":  preview.Width,
+		"height": preview.Height,
+		"url":    "/api/attachments/" + url.PathEscape(id) + "/content",
+	})
 }

@@ -7,10 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"noto/backend/internal/audit"
+	"noto/backend/internal/auth"
 	"noto/backend/internal/config"
+	"noto/backend/internal/mcp"
 	"noto/backend/internal/notes"
 	"noto/backend/internal/sealed"
 	"noto/backend/internal/web"
+	"noto/backend/internal/webhooks"
 )
 
 // Version is the version of the API reported by the health endpoint.
@@ -62,6 +66,19 @@ type Server struct {
 	// stores only ciphertext.
 	sealedMode bool
 
+	// authStore holds the accounts and the sessions of the server. It is nil
+	// when the authentication is disabled, which is the default: the local
+	// single user mode works exactly as before.
+	authStore *auth.Store
+	// auditLog is the append only log of the write operations. It is nil
+	// when the log is disabled.
+	auditLog *audit.Log
+	// webhookStore holds the subscriptions of the webhooks and the outbox of
+	// the deliveries. It is nil when the webhooks are disabled.
+	webhookStore *webhooks.Store
+	// mcpServer answers the requests of the Model Context Protocol.
+	mcpServer *mcp.Server
+
 	log *slog.Logger
 	mux *http.ServeMux
 }
@@ -74,14 +91,47 @@ func New(cfg config.Config, svc *notes.Service, logger *slog.Logger) (*Server, e
 // NewWithFactory creates the HTTP server of the application with a factory
 // that can build a service for another vault.
 func NewWithFactory(cfg config.Config, svc *notes.Service, logger *slog.Logger, factory ServiceFactory) (*Server, error) {
+	return NewWithServices(cfg, svc, logger, factory, Services{})
+}
+
+// Services holds the optional services of the server. They are the parts of
+// the backend that keep their own storage: the accounts of the users, the
+// audit log and the webhooks.
+type Services struct {
+	// Auth holds the accounts and the sessions. When it is nil the
+	// authentication is disabled and the server works in the local single
+	// user mode.
+	Auth *auth.Store
+	// Audit holds the append only log of the write operations. When it is
+	// nil the operations are not logged.
+	Audit *audit.Log
+	// Webhooks holds the subscriptions and the outbox of the deliveries.
+	// When it is nil no event is delivered.
+	Webhooks *webhooks.Store
+}
+
+// NewWithServices creates the HTTP server of the application with the
+// optional services of the server.
+func NewWithServices(cfg config.Config, svc *notes.Service, logger *slog.Logger, factory ServiceFactory, services Services) (*Server, error) {
 	if svc == nil {
 		return nil, notes.NewError(notes.CodeInternal, "the notes service is required", notes.ErrInternal)
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	s := &Server{cfg: cfg, svc: svc, factory: factory, log: logger, mux: http.NewServeMux()}
+	s := &Server{
+		cfg:          cfg,
+		svc:          svc,
+		factory:      factory,
+		log:          logger,
+		mux:          http.NewServeMux(),
+		authStore:    services.Auth,
+		auditLog:     services.Audit,
+		webhookStore: services.Webhooks,
+	}
+	s.mcpServer = mcp.New(mcpNotes{server: s})
 	s.routes()
+	s.registerNoteHooks(svc)
 	return s, nil
 }
 
@@ -104,6 +154,9 @@ func (s *Server) setService(svc *notes.Service, closer func()) {
 	if old != nil {
 		time.AfterFunc(closeGrace, old)
 	}
+	// The hooks of the notes are registered on every service: the vault can
+	// change while the server runs.
+	s.registerNoteHooks(svc)
 }
 
 // SetVaultPath remembers the vault the server is currently serving. An empty
@@ -188,6 +241,7 @@ func (s *Server) routes() {
 	// stores only ciphertext in the sealed mode and must never write a
 	// plaintext file.
 	s.mux.HandleFunc("GET /api/tree", s.openRoute(s.handleTree))
+	s.mux.HandleFunc("GET /api/tree/children", s.openRoute(s.handleTreePage))
 	s.mux.HandleFunc("POST /api/folders", s.openRoute(s.handleCreateFolder))
 	s.mux.HandleFunc("POST /api/files", s.openRoute(s.handleCreateFile))
 	s.mux.HandleFunc("GET /api/notes", s.openRoute(s.handleGetNote))
@@ -197,6 +251,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/notes/duplicate", s.openRoute(s.handleDuplicate))
 	s.mux.HandleFunc("DELETE /api/notes", s.openRoute(s.handleDelete))
 	s.mux.HandleFunc("POST /api/notes/restore", s.openRoute(s.handleRestore))
+	s.mux.HandleFunc("GET /api/notes/versions", s.openRoute(s.handleListVersions))
+	s.mux.HandleFunc("GET /api/notes/versions/diff", s.openRoute(s.handleVersionDiff))
+	s.mux.HandleFunc("POST /api/notes/versions/restore", s.openRoute(s.handleRestoreVersion))
 	s.mux.HandleFunc("GET /api/trash", s.openRoute(s.handleTrash))
 	s.mux.HandleFunc("GET /api/search", s.openRoute(s.handleSearch))
 	s.mux.HandleFunc("POST /api/search/reindex", s.openRoute(s.handleReindex))
@@ -210,6 +267,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/attachments", s.openRoute(s.handleUploadAttachment))
 	s.mux.HandleFunc("GET /api/attachments", s.openRoute(s.handleListAttachments))
 	s.mux.HandleFunc("GET /api/attachments/{id}/raw", s.openRoute(s.handleRawAttachment))
+	s.mux.HandleFunc("GET /api/attachments/{id}/content", s.openRoute(s.handleAttachmentContent))
+	s.mux.HandleFunc("POST /api/attachments/{id}/preview", s.openRoute(s.handleAttachmentPreview))
+	s.mux.HandleFunc("POST /api/attachments/search", s.openRoute(s.handleSearchAttachments))
 	s.mux.HandleFunc("DELETE /api/attachments/{id}", s.openRoute(s.handleDeleteAttachment))
 	s.mux.HandleFunc("GET /api/vault", s.handleGetVault)
 	// The vault cannot be changed while it is sealed: a new vault would
@@ -242,6 +302,29 @@ func (s *Server) routes() {
 		s.mux.HandleFunc("POST /api/maintenance/reconcile", s.handleReconcile)
 	}
 
+	// The authentication. The login is the only public endpoint of the
+	// accounts: everything else needs a session.
+	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /api/auth/logout", s.requireAuth(s.handleLogout))
+	s.mux.HandleFunc("GET /api/auth/me", s.requireAuth(s.handleMe))
+	s.mux.HandleFunc("GET /api/users", s.requireAdmin(s.handleListUsers))
+	s.mux.HandleFunc("POST /api/users", s.requireAdmin(s.handleCreateUser))
+	s.mux.HandleFunc("DELETE /api/users/{id}", s.requireAdmin(s.handleDeleteUser))
+	s.mux.HandleFunc("POST /api/users/{id}/role", s.requireAdmin(s.handleSetUserRole))
+
+	// The audit log of the write operations. Only an administrator reads it.
+	s.mux.HandleFunc("GET /api/audit", s.requireAdmin(s.handleAuditLog))
+
+	// The webhooks: the subscriptions of the user and the deliveries.
+	s.mux.HandleFunc("GET /api/webhooks", s.requireAuth(s.handleListWebhooks))
+	s.mux.HandleFunc("POST /api/webhooks", s.requireAuth(s.handleCreateWebhook))
+	s.mux.HandleFunc("DELETE /api/webhooks/{id}", s.requireAuth(s.handleDeleteWebhook))
+	s.mux.HandleFunc("GET /api/webhooks/deliveries", s.requireAuth(s.handleListDeliveries))
+	s.mux.HandleFunc("POST /api/webhooks/deliveries/{id}/redeliver", s.requireAuth(s.handleRedeliver))
+
+	// The Model Context Protocol over HTTP (JSON-RPC 2.0).
+	s.mux.HandleFunc("POST /api/mcp", s.requireAuth(s.handleMCP))
+
 	// Unknown API routes return the JSON error envelope.
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.log, notes.NewError(notes.CodeNotFound, "unknown endpoint", notes.ErrNotFound))
@@ -273,7 +356,7 @@ func (s *Server) routes() {
 
 // middleware wraps the router with the security and logging middleware.
 func (s *Server) middleware(next http.Handler) http.Handler {
-	return s.recoverer(s.securityHeaders(s.hostCheck(s.originCheck(s.logger(next)))))
+	return s.recoverer(s.securityHeaders(s.hostCheck(s.originCheck(s.logger(s.authGate(next))))))
 }
 
 // allowedOrigins returns the set of allowed CORS origins.

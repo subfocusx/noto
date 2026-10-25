@@ -42,6 +42,31 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	// LogLevel is one of debug, info, warn, error.
 	LogLevel string
+
+	// AuthEnabled turns the authentication on. It is off by default, so that
+	// the local single user mode keeps working exactly as before.
+	AuthEnabled bool
+	// CredentialsPath is the SQLite file that holds the accounts and the
+	// sessions. It lives in the data directory of the vault.
+	CredentialsPath string
+	// SessionTTL is the lifetime of a session.
+	SessionTTL time.Duration
+	// AuditPath is the SQLite file of the append only audit log.
+	AuditPath string
+	// WebhooksPath is the SQLite file of the webhook subscriptions and of the
+	// outbox of the deliveries.
+	WebhooksPath string
+
+	// TLSCertFile is the path of the certificate of the server. When it and
+	// TLSKeyFile are set, the server serves HTTPS.
+	TLSCertFile string
+	// TLSKeyFile is the path of the private key of the certificate.
+	TLSKeyFile string
+}
+
+// TLSEnabled reports whether the server must serve HTTPS.
+func (c Config) TLSEnabled() bool {
+	return c.TLSCertFile != "" && c.TLSKeyFile != ""
 }
 
 // Load reads the configuration from the environment.
@@ -62,6 +87,15 @@ func Load() (Config, error) {
 		RequestTimeout:  time.Duration(envInt("NOTO_REQUEST_TIMEOUT_SEC", 60)) * time.Second,
 		ShutdownTimeout: time.Duration(envInt("NOTO_SHUTDOWN_TIMEOUT_SEC", 15)) * time.Second,
 		LogLevel:        envString("NOTO_LOG_LEVEL", "info"),
+
+		AuthEnabled:     envBool("NOTO_AUTH_ENABLED", false),
+		CredentialsPath: envString("NOTO_CREDENTIALS_PATH", filepath.Join(dataDir, "credentials.db")),
+		SessionTTL:      time.Duration(envInt("NOTO_SESSION_TTL_SEC", 24*60*60)) * time.Second,
+		AuditPath:       envString("NOTO_AUDIT_PATH", filepath.Join(dataDir, "audit.db")),
+		WebhooksPath:    envString("NOTO_WEBHOOKS_PATH", filepath.Join(dataDir, "webhooks.db")),
+
+		TLSCertFile: envString("NOTO_TLS_CERT_FILE", ""),
+		TLSKeyFile:  envString("NOTO_TLS_KEY_FILE", ""),
 	}
 	return c, nil
 }

@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS — Noto (Markdown Notes PWA)
 
-Last updated: 2026-10-24 (phase 10). Status legend: **done** (implemented and
+Last updated: 2026-10-25 (phase 17). Status legend: **done** (implemented and
 verified here) · **partial** (implemented, some part unverified) · **planned**.
 
 ## Architecture
@@ -71,6 +71,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 14 | Phase 14: the icons, the signs and the switch | done | see "Phase 14 status" below |
 | 15 | Phase 15: the drag and drop of the tree | done | see "Phase 15 status" below |
 | 16 | The batch of the features of 2026-10-25: the versions of the notes, the regular expressions of the query language, the authentication, the webhooks, the MCP, the localisation, the offline queue | done | see "Phase 16 status" below |
+| 17 | Phase 17: the sound as an element of the interface, the toolbar of the editor, the window of the search in the middle of the screen | done | see "Phase 17 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -761,6 +762,33 @@ Russian strings («Предпросмотр недоступен», «Ошибк
 interface answers in English since the localisation was introduced
 (`frontend/src/__tests__/preview-lazy.test.tsx`,
 `frontend/src/__tests__/plugin-ui.test.tsx`). The whole suite is green.
+
+---
+
+## Phase 17 status (the sound, the toolbar, the window of the search)
+
+Three defects of the interface were reported by the user: the recording of the
+sound was a plain link in the Markdown, the editor had no panel of the work
+with the text, and the window of the search opened over one of the columns.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P17-1 | **The server accepts the sound.** The recorder of the editor saves a recording as an attachment of the note, but the sniffer of the standard library knows nothing about the containers of the sound, and the server answered «this file type is not allowed». The upload now detects WebM, Ogg, WAV, MP4 and MP3 on the bytes | done | `backend/internal/notes/attachments.go`, `backend/internal/notes/notes_test.go`, `docs/CONTRACT.md` |
+| P17-2 | **The recording is a chip in the editor.** The reference of a recording is shown as a chip (the icon of the microphone, the name, the length, the button of the play) instead of a bare link; the chip plays the sound right in the editor. The text of the note on the disk keeps the plain Markdown — the chip is a view of it | done | `frontend/src/components/editor/audioChips.ts`, `frontend/src/lib/audioReferences.ts`, `frontend/src/__tests__/editor-audio-chip.test.tsx` |
+| P17-3 | **The sound plays in the preview and in the panel of the attachments.** The preview shows a player instead of a broken picture, and the panel of the attachments marks the sounds with the badge and plays them | done | `frontend/src/lib/markdown.ts`, `frontend/src/components/AttachmentsPanel.tsx`, `frontend/src/__tests__/markdown.test.ts` |
+| P17-4 | **The toolbar of the editor.** The headings, the inline formats, the links, the lists and the size of the font are reachable from a panel above the text; the formatting is computed on the text of the note, so the note on the disk stays plain Markdown | done | `frontend/src/components/EditorToolbar.tsx`, `frontend/src/core/editor/formatting.ts`, `frontend/src/__tests__/editor-toolbar.test.tsx` |
+| P17-5 | **The window of the search opens in the middle of the screen.** The anchor of the column of the tree is gone: the search and the filters are the instrument of the whole application, so they open where the eye already is | done | `frontend/src/core/find/panel.ts`, `frontend/src/components/FindPanel.tsx`, `frontend/src/__tests__/find-panel-position.test.ts` |
+
+### The defect that the phase 17 found in the browser
+
+The first version of the chip did not change its state when the sound was
+played: the listeners of `play` and `pause` hung on the node that CodeMirror
+had drawn, and the widget is drawn again on every change of the text. The
+players and the drawn chips now live in one registry (`players` and `views` in
+`frontend/src/components/editor/audioChips.ts`), and the state is painted on
+every chip of the sound at once. The `play()` was not broken: the test note
+referred to a file of eight bytes, and the browser answered `NotSupportedError`
+— the chips work with a real recording.
 
 ---
 

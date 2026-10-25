@@ -631,11 +631,13 @@ Returns the whole notes tree as a `application/zip` attachment.
 | `file` | file | the binary to store |
 | `notePath` | string | optional note the attachment belongs to |
 
-The content type is sniffed from the bytes with `http.DetectContentType`; only
-`image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`,
-`application/pdf` and `text/plain` are accepted. The stored file name and the
-stored mime type are generated server side — the client values are not
-trusted. The size limit is `NOTO_MAX_UPLOAD_MB`.
+The content type is sniffed from the bytes — `http.DetectContentType` for the
+documents and the images, a dedicated sniffer for the containers of the
+sound; only `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
+`image/svg+xml`, `application/pdf`, `text/plain`, `audio/webm`, `audio/ogg`,
+`audio/mp4`, `audio/mpeg` and `audio/wav` are accepted. The stored file name
+and the stored mime type are generated server side — the client values are
+not trusted. The size limit is `NOTO_MAX_UPLOAD_MB`.
 
 Response `200` with the `Attachment`:
 

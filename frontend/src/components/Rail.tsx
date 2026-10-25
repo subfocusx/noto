@@ -13,13 +13,22 @@
 // button and in its tooltip. The sections are grouped in two — the notes and
 // the life of the storage — and a thin line separates the groups.
 import { Fragment } from 'preact';
-import type { RailSection } from '../core/store/types';
+import type { FindMode, RailSection } from '../core/store/types';
 import { RAIL_SECTIONS } from '../core/commands/appCommands';
 import { Icon } from '../ui/icons';
 
 export interface RailProps {
   /** The section that is open in the column. */
   section: RailSection;
+  /**
+   * The module of the window of the search that is open, `null` when the
+   * window is closed.
+   *
+   * The search and the filters are not sections of the column any more: they
+   * live in one window over the application. The sign that opened the window
+   * stays pressed while the window is open.
+   */
+  findMode?: FindMode | null;
   /** Called when the user presses the icon of a section. */
   onSelect(section: RailSection): void;
   /** The theme that is applied to the interface. */
@@ -51,7 +60,9 @@ export function Rail(props: RailProps) {
           // The line between the groups stands in front of the first section of
           // the second group.
           const startsGroup = previous !== undefined && previous.group !== entry.group;
-          const active = props.section === entry.id;
+          const active =
+            props.section === entry.id ||
+            (props.findMode !== null && props.findMode !== undefined && entry.id === props.findMode);
           const showBadge = entry.id === 'notifications' && unread > 0;
 
           return (

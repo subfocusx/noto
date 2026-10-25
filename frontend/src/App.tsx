@@ -19,7 +19,7 @@ import {
   PluginToolbarSlot,
 } from './components/PluginSlots';
 import type { PluginManagerEntry, PluginManagerPanelProps, PluginManagerStatus } from './components/PluginManagerPanel';
-import type { SearchPanelProps } from './components/SearchPanel';
+import type { FindPanelProps } from './components/FindPanel';
 import type { VaultPickerProps } from './components/VaultPicker';
 import type { SettingsDialogProps } from './components/SettingsDialog';
 import type { ShortcutHelpProps } from './components/ShortcutHelp';
@@ -279,7 +279,10 @@ export function App() {
       createFolder: () =>
         appStore.actions.openDialog({ kind: 'create-folder', parentPath: '', value: '' }),
       dailyNote: () => appStore.actions.openOrCreateDailyNote(),
-      openSearch: () => appStore.actions.setSearchOpen(true),
+      openSearch: () => {
+        appStore.actions.setFindMode('search');
+        appStore.actions.setFindOpen(true);
+      },
       toggleTheme: () => appStore.actions.toggleTheme(),
       openTrash: () => appStore.actions.openDialog({ kind: 'trash' }),
       renameNote: () => {
@@ -303,7 +306,16 @@ export function App() {
       },
       openSettings: () => appStore.actions.setSettingsOpen(true),
       openShortcuts: () => appStore.actions.setShortcutHelpOpen(true),
-      openSection: (section) => appStore.actions.setRailSection(section),
+      openSection: (section) => {
+        // The search and the filters are not sections of the column any more:
+        // they live in one window over the application.
+        if (section === 'search' || section === 'filters') {
+          appStore.actions.setFindMode(section);
+          appStore.actions.setFindOpen(true);
+          return;
+        }
+        appStore.actions.setRailSection(section);
+      },
       duplicateNote: () => {
         const { note } = appStore.getSnapshot();
         if (!note.path) {
@@ -627,9 +639,9 @@ export function App() {
           actions.setPaletteOpen(false);
           return;
         }
-        if (snapshot.ui.searchOpen) {
+        if (snapshot.ui.findOpen) {
           event.preventDefault();
-          actions.setSearchOpen(false);
+          actions.setFindOpen(false);
           return;
         }
         if (snapshot.ui.settingsOpen) {
@@ -656,7 +668,8 @@ export function App() {
             return;
           case 'search':
             event.preventDefault();
-            actions.setSearchOpen(true);
+            actions.setFindMode('search');
+            actions.setFindOpen(true);
             return;
           case 'shortcutHelp':
             event.preventDefault();
@@ -742,7 +755,7 @@ export function App() {
   }, [needLazyPanels, lazyPanels]);
 
   const [lazyOverlays, setLazyOverlays] = useState<{
-    SearchPanel: ComponentType<SearchPanelProps>;
+    FindPanel: ComponentType<FindPanelProps>;
     VaultPicker: ComponentType<VaultPickerProps>;
     VaultSetupDialog: ComponentType<VaultSetupDialogProps>;
     VaultMigrationDialog: ComponentType<VaultMigrationDialogProps>;
@@ -754,7 +767,7 @@ export function App() {
     // overlays: they drag the crypto core with them, and an open storage must
     // not pay for it.
     const needed =
-      ui.searchOpen ||
+      ui.findOpen ||
       vaultPickerOpen ||
       vaultSetupOpen ||
       vaultMigrationOpen ||
@@ -764,7 +777,7 @@ export function App() {
     void import('./components/LazyOverlays').then((module) => {
       if (cancelled) return;
       setLazyOverlays({
-        SearchPanel: module.SearchPanel,
+        FindPanel: module.FindPanel,
         VaultPicker: module.VaultPicker,
         VaultSetupDialog: module.VaultSetupDialog,
         VaultMigrationDialog: module.VaultMigrationDialog,
@@ -775,7 +788,7 @@ export function App() {
       cancelled = true;
     };
   }, [
-    ui.searchOpen,
+    ui.findOpen,
     vaultPickerOpen,
     vaultSetupOpen,
     vaultMigrationOpen,
@@ -1063,7 +1076,17 @@ export function App() {
         ) : null}
         <Rail
           section={ui.railSection}
+          findMode={ui.findOpen ? ui.findMode : null}
           onSelect={(section) => {
+            // The search and the filters are not sections of the column: they
+            // live in one window over the application, and the sign that was
+            // pressed says which module the window opens. The column of the
+            // explorer keeps the tree.
+            if (section === 'search' || section === 'filters') {
+              actions.setFindMode(section);
+              actions.setFindOpen(true);
+              return;
+            }
             actions.setRailSection(section);
             // On a narrow screen the column is a drawer over the editor: the
             // section that was chosen comes with it, otherwise the click on
@@ -1096,10 +1119,6 @@ export function App() {
             onDelete={(node) => actions.openDialog({ kind: 'delete', node })}
             onOpenPalette={() => actions.setPaletteOpen(true)}
             onOpenPlugins={() => setPluginsOpen(true)}
-            // The state of the backend is measured by the monitor, not guessed
-            // from the network of the browser.
-            connection={env.connection}
-            onRetryConnection={() => void connectionMonitor.check()}
             onOpenTransfer={() => actions.openDialog({ kind: 'transfer' })}
             onRefresh={() => void actions.refreshTree()}
             loading={tree.loading}
@@ -1120,7 +1139,6 @@ export function App() {
             onResizeWidth={actions.setSidebarWidth}
             recentCollapsed={ui.recentCollapsed}
             onToggleRecent={() => actions.setRecentCollapsed(!ui.recentCollapsed)}
-            onOpenSearchResult={(path) => void openNote(path)}
             onRestored={() => void actions.refreshTree()}
             hasPluginItems={pluginSidebarItems.length > 0}
             files={tree.files}
@@ -1129,7 +1147,6 @@ export function App() {
             onCalendarMonthChange={actions.setCalendarMonth}
             onCalendarDayChange={actions.setCalendarDay}
             onCreateDailyNote={(day) => void actions.openOrCreateDailyNote(localDateOf(day))}
-            onOpenFilters={() => actions.setRailSection('filters')}
           >
             {pluginSidebarItems.length > 0 ? <PluginSidebarSlot items={pluginSidebarItems} /> : null}
           </Sidebar>
@@ -1144,6 +1161,9 @@ export function App() {
               actions.closeTab(path);
               const rest = ui.openPaths.filter((item) => item !== path);
               if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
+              // The last tab closes the note with it: a closed tab must not
+              // leave the note (and its name) on the screen.
+              if (path === note.path && rest.length === 0) void actions.closeNote();
             }}
           />
 
@@ -1229,6 +1249,8 @@ export function App() {
         statusLabel={statusLabel}
         currentPath={note.path ?? ''}
         onRetrySave={actions.explicitSave}
+        connection={env.connection}
+        onRetryConnection={() => void connectionMonitor.check()}
         wordCount={wordCount}
         characterCount={note.content.length}
         cursor={cursor}
@@ -1248,10 +1270,12 @@ export function App() {
         drawerOpen={ui.drawerOpen}
       />
 
-      {lazyOverlays && ui.searchOpen ? (
-        <lazyOverlays.SearchPanel
-          open={ui.searchOpen}
-          onClose={() => actions.setSearchOpen(false)}
+      {lazyOverlays && ui.findOpen ? (
+        <lazyOverlays.FindPanel
+          open={ui.findOpen}
+          mode={ui.findMode}
+          onModeChange={actions.setFindMode}
+          onClose={() => actions.setFindOpen(false)}
           onOpenNote={(path) => void openNote(path)}
         />
       ) : null}

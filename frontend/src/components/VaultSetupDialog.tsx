@@ -15,6 +15,11 @@ import {
   enableRecoveryKey,
 } from '../core/vault/session';
 import { DEFAULT_KDF_PARAMS, LIGHT_KDF_PARAMS, estimateKdfMilliseconds, type KdfParams } from '../core/crypto/kdf';
+import {
+  VAULT_MIN_PASSWORD_LENGTH,
+  VAULT_PASSWORD_MISMATCH,
+  VAULT_PASSWORD_TOO_SHORT,
+} from '../core/vault/password';
 import { Icon } from '../ui/icons';
 import { IconButton } from '../ui/tooltip';
 
@@ -35,15 +40,6 @@ export interface VaultSetupDialogProps {
 
 /** The steps of the wizard. */
 type SetupStep = 'choice' | 'password' | 'warning' | 'recovery' | 'done';
-
-/** The shortest master password the wizard accepts. */
-export const VAULT_MIN_PASSWORD_LENGTH = 10;
-
-/** The message of a password that is too short. */
-export const VAULT_PASSWORD_TOO_SHORT = `The master password must have at least ${VAULT_MIN_PASSWORD_LENGTH} characters.`;
-
-/** The message of two different passwords. */
-export const VAULT_PASSWORD_MISMATCH = 'The passwords do not match.';
 
 /** The message of a failed creation. */
 export const VAULT_CREATE_FAILED = 'The encrypted storage could not be created. Try again.';

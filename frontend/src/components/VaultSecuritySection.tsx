@@ -20,6 +20,10 @@ import {
   type VaultSessionState,
 } from '../core/vault/session';
 import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs, savePrefs } from '../core/settings/prefs';
+import {
+  VAULT_MIN_PASSWORD_LENGTH,
+  VAULT_PASSWORD_TOO_SHORT,
+} from '../core/vault/password';
 import { Icon } from '../ui/icons';
 
 /** The number of minutes the user can choose for the auto-lock. */
@@ -111,6 +115,12 @@ export function VaultSecuritySection(props: VaultSecuritySectionProps) {
   };
 
   const changeThePassword = async () => {
+    // The same rules as the wizard of the encrypted storage: a master password
+    // that is too short is refused here too.
+    if (newPassword.length < VAULT_MIN_PASSWORD_LENGTH) {
+      setPasswordError(VAULT_PASSWORD_TOO_SHORT);
+      return;
+    }
     if (!newPassword || newPassword !== newPassword2) {
       setPasswordError('The new passwords do not match.');
       return;

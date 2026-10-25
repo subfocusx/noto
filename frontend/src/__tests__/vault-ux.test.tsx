@@ -27,7 +27,13 @@ vi.mock('../core/vault/session', () => session);
 
 import { VaultSetupDialog } from '../components/VaultSetupDialog';
 import { VaultUnlockScreen } from '../components/VaultUnlockScreen';
-import { VaultSecuritySection } from '../components/VaultSecuritySection';
+import {
+  VaultSecuritySection,
+  SECURITY_CHANGE_FAILED,
+  SECURITY_CHECK_FAILED,
+  SECURITY_RECOVERY_FAILED,
+} from '../components/VaultSecuritySection';
+import { AUTO_LOCK_MINUTES_DEFAULT, loadPrefs } from '../core/settings/prefs';
 import { AutoLock } from '../core/vault/autoLock';
 import { DEFAULT_KDF_PARAMS, LIGHT_KDF_PARAMS } from '../core/crypto/kdf';
 import { KeyUnlockError } from '../core/crypto/errors';
@@ -246,6 +252,237 @@ describe('the section of the security in the settings', () => {
   });
 });
 
+describe('the section of the security of an encrypted storage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    session.getVaultSessionState.mockReturnValue({
+      mode: 'sealed',
+      locked: false,
+      detecting: false,
+      formatVersion: 3,
+    });
+    session.subscribeVaultSession.mockReturnValue(() => undefined);
+    session.refreshVaultStatus.mockResolvedValue({
+      mode: 'sealed',
+      format: 3,
+      objectCount: 0,
+      generations: [],
+    });
+    session.hasRecoveryKey.mockResolvedValue(false);
+    session.changePassword.mockResolvedValue(undefined);
+    session.integrityCheck.mockResolvedValue({ checked: 0, broken: [] as string[] });
+    session.createRecoveryKey.mockResolvedValue('RECOVERY-KEY-0001');
+    session.enableRecoveryKey.mockResolvedValue(undefined);
+  });
+
+  /** Opens the form of the change of the password. */
+  function openPasswordForm() {
+    fireEvent.click(screen.getByTestId('vault-security-change-password'));
+  }
+
+  /** Fills the three fields of the form of the change of the password. */
+  function fillPasswordForm(oldPassword: string, newPassword: string, repeat: string) {
+    fireEvent.input(screen.getByLabelText('The current password'), { target: { value: oldPassword } });
+    fireEvent.input(screen.getByLabelText('The new password'), { target: { value: newPassword } });
+    fireEvent.input(screen.getByLabelText('Repeat the new password'), { target: { value: repeat } });
+  }
+
+  /** Submits the form of the change of the password. */
+  function submitPasswordForm() {
+    const form = screen.getByLabelText('The current password').closest('form') as HTMLFormElement;
+    fireEvent.submit(form);
+  }
+
+  it('opens the form of the change of the password and closes it again', () => {
+    render(<VaultSecuritySection />);
+
+    expect(screen.queryByLabelText('The current password')).toBeNull();
+
+    openPasswordForm();
+    expect(screen.getByLabelText('The current password')).not.toBeNull();
+    expect(screen.getByTestId('vault-security-change-password').textContent).toBe('Cancel');
+
+    // The button closes the form again, and nothing is sent to the backend.
+    fireEvent.click(screen.getByTestId('vault-security-change-password'));
+    expect(screen.queryByLabelText('The current password')).toBeNull();
+    expect(screen.getByTestId('vault-security-change-password').textContent).toBe('Change the password');
+    expect(session.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('refuses two different new passwords', () => {
+    render(<VaultSecuritySection />);
+    openPasswordForm();
+
+    fillPasswordForm('the old master password', 'the new master password', 'another new password');
+    submitPasswordForm();
+
+    expect(screen.getByTestId('vault-security-password-error').textContent).toBe(
+      'The new passwords do not match.',
+    );
+    expect(session.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new password that is too short', () => {
+    render(<VaultSecuritySection />);
+    openPasswordForm();
+
+    // The wizard of the encrypted storage refuses a master password that is
+    // shorter than ten characters: the form of the change refuses it too.
+    fillPasswordForm('the old master password', 'short', 'short');
+    submitPasswordForm();
+
+    expect(screen.getByTestId('vault-security-password-error').textContent).toBe(
+      'The master password must have at least 10 characters.',
+    );
+    expect(session.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('changes the master password with the old one and the new one', async () => {
+    render(<VaultSecuritySection />);
+    openPasswordForm();
+
+    fillPasswordForm('the old master password', 'the new master password', 'the new master password');
+    submitPasswordForm();
+
+    await waitFor(() => expect(session.changePassword).toHaveBeenCalledTimes(1));
+    expect(session.changePassword).toHaveBeenCalledWith(
+      'the old master password',
+      'the new master password',
+    );
+
+    // The form is closed, the fields are empty again and the success is told.
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('The master password was changed.'));
+    openPasswordForm();
+    expect((screen.getByLabelText('The current password') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('The new password') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Repeat the new password') as HTMLInputElement).value).toBe('');
+  });
+
+  it('shows the error of a refused change of the password', async () => {
+    session.changePassword.mockRejectedValue(new Error('wrong password'));
+    render(<VaultSecuritySection />);
+    openPasswordForm();
+
+    fillPasswordForm('the old master password', 'the new master password', 'the new master password');
+    submitPasswordForm();
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-password-error')).not.toBeNull());
+    expect(screen.getByTestId('vault-security-password-error').textContent).toBe(SECURITY_CHANGE_FAILED);
+  });
+
+  it('offers the limits of the auto-lock and writes the chosen one into the preferences', () => {
+    render(<VaultSecuritySection />);
+
+    const select = screen.getByTestId('vault-security-auto-lock') as HTMLSelectElement;
+    const choices = Array.from(select.options).map((option) => option.value);
+    expect(choices).toEqual(['1', '5', '15', '30', '60', '120']);
+    expect(select.value).toBe(String(AUTO_LOCK_MINUTES_DEFAULT));
+
+    fireEvent.change(select, { target: { value: '30' } });
+
+    expect(loadPrefs().autoLockMinutes).toBe(30);
+    expect((screen.getByTestId('vault-security-auto-lock') as HTMLSelectElement).value).toBe('30');
+  });
+
+  it('shows the error of a refused integrity check', async () => {
+    session.integrityCheck.mockRejectedValue(new Error('the backend is down'));
+    render(<VaultSecuritySection />);
+
+    fireEvent.click(screen.getByTestId('vault-security-check'));
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-check-error')).not.toBeNull());
+    expect(screen.getByTestId('vault-security-check-error').textContent).toBe(SECURITY_CHECK_FAILED);
+    expect(screen.queryByTestId('vault-security-check-result')).toBeNull();
+  });
+
+  it('shows the progress of the integrity check while the request is pending', () => {
+    // The request never answers: the button must stay in the state of the work.
+    session.integrityCheck.mockReturnValue(
+      new Promise<{ checked: number; broken: string[] }>(() => undefined),
+    );
+    render(<VaultSecuritySection />);
+
+    fireEvent.click(screen.getByTestId('vault-security-check'));
+
+    const button = screen.getByTestId('vault-security-check') as HTMLButtonElement;
+    expect(button.textContent).toBe('Checking…');
+    expect(button.disabled).toBe(true);
+  });
+
+  it('shows the state of the recovery key', async () => {
+    session.hasRecoveryKey.mockResolvedValue(true);
+    render(<VaultSecuritySection />);
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery').textContent).toBe('enabled'));
+  });
+
+  it('says that the recovery key is not enabled', async () => {
+    session.hasRecoveryKey.mockResolvedValue(false);
+    render(<VaultSecuritySection />);
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery').textContent).toBe('not enabled'));
+  });
+
+  it('does not know the state of the recovery key while the backend does not answer', () => {
+    session.hasRecoveryKey.mockReturnValue(new Promise<boolean>(() => undefined));
+    render(<VaultSecuritySection />);
+
+    expect(screen.getByTestId('vault-security-recovery').textContent).toBe('unknown');
+  });
+
+  it('creates a recovery key and enables it with the master password', async () => {
+    render(<VaultSecuritySection />);
+
+    fireEvent.click(screen.getByTestId('vault-security-new-recovery'));
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery-key').textContent).toBe('RECOVERY-KEY-0001'));
+    expect(session.createRecoveryKey).toHaveBeenCalledTimes(1);
+
+    fireEvent.input(screen.getByLabelText('The master password'), { target: { value: 'the master password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable the recovery key' }));
+
+    await waitFor(() => expect(session.enableRecoveryKey).toHaveBeenCalledTimes(1));
+    expect(session.enableRecoveryKey).toHaveBeenCalledWith('RECOVERY-KEY-0001', 'the master password');
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery').textContent).toBe('enabled'));
+    expect(screen.queryByTestId('vault-security-recovery-key')).toBeNull();
+  });
+
+  it('shows the error of a refused recovery key', async () => {
+    session.enableRecoveryKey.mockRejectedValue(new Error('wrong password'));
+    render(<VaultSecuritySection />);
+
+    fireEvent.click(screen.getByTestId('vault-security-new-recovery'));
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery-key')).not.toBeNull());
+
+    fireEvent.input(screen.getByLabelText('The master password'), { target: { value: 'wrong password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enable the recovery key' }));
+
+    await waitFor(() => expect(screen.getByTestId('vault-security-recovery-error')).not.toBeNull());
+    expect(screen.getByTestId('vault-security-recovery-error').textContent).toBe(SECURITY_RECOVERY_FAILED);
+  });
+
+  it('does not enable a recovery key that was never created', () => {
+    render(<VaultSecuritySection />);
+
+    // Without a key there is no form at all: the button cannot be pressed.
+    expect(screen.queryByRole('button', { name: 'Enable the recovery key' })).toBeNull();
+    expect(session.enableRecoveryKey).not.toHaveBeenCalled();
+  });
+
+  it('says that the version of the format is unknown', () => {
+    session.getVaultSessionState.mockReturnValue({
+      mode: 'sealed',
+      locked: false,
+      detecting: false,
+      formatVersion: 0,
+    });
+    render(<VaultSecuritySection />);
+
+    expect(screen.getByTestId('vault-security-format').textContent).toBe('unknown');
+  });
+});
+
 describe('the settings of an open storage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -286,6 +523,14 @@ describe('the settings of an open storage', () => {
 
     expect(session.refreshVaultStatus).not.toHaveBeenCalled();
     expect(session.hasRecoveryKey).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the shell offers no wizard of the encryption', () => {
+    // The handler is optional: the section must survive a shell that does not
+    // offer the wizard yet.
+    render(<VaultSecuritySection />);
+
+    expect(() => fireEvent.click(screen.getByTestId('vault-security-setup'))).not.toThrow();
   });
 });
 

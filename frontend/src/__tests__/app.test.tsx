@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/preact';
 import { App } from '../App';
+import { setVault } from '../api/client';
 
 vi.mock('../api/client', () => ({
   ApiError: class ApiError extends Error {},
@@ -89,5 +90,24 @@ describe('app shell', () => {
     const view = render(<App />);
     expect(view.queryByLabelText('View mode')).toBeNull();
     expect(view.queryByText('View mode')).toBeNull();
+  });
+
+  it('keeps the dialog of the storage open when the switch fails', async () => {
+    // The store shows the reason in a banner and rethrows: the interface must
+    // not let the refusal become an unhandled rejection.
+    vi.mocked(setVault).mockRejectedValueOnce(new Error('the folder cannot be used'));
+    const view = render(<App />);
+    await waitFor(() => expect(view.getByTestId('file-tree')).toBeTruthy());
+
+    fireEvent.click(view.getByRole('button', { name: 'Change the storage of the notes' }));
+    fireEvent.click(view.getByRole('menuitem', { name: /Choose another folder/ }));
+    await waitFor(() => expect(view.getByTestId('vault-picker')).toBeTruthy());
+
+    fireEvent.click(view.getByTestId('vault-picker-confirm'));
+    await waitFor(() =>
+      expect(view.getByRole('alert').textContent).toContain('the folder cannot be used'),
+    );
+    // The dialog stays open: the user may choose another folder.
+    expect(view.getByTestId('vault-picker')).toBeTruthy();
   });
 });

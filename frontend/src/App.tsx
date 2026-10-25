@@ -1148,7 +1148,10 @@ export function App() {
             vaultRecents={ui.vaultRecents}
             vaultMenuOpen={ui.vaultMenuOpen}
             onVaultMenuToggle={actions.setVaultMenuOpen}
-            onSwitchVault={(path) => void actions.chooseVault(path)}
+            onSwitchVault={(path) => {
+              // The failure is already shown by the store as a banner.
+              void actions.chooseVault(path).catch(() => undefined);
+            }}
             vaultMode={vaultSession.mode}
             vaultLocked={vaultSession.locked}
             onVaultLock={() => {
@@ -1490,7 +1493,12 @@ export function App() {
           fixed={ui.vaultFixed}
           busy={ui.vaultBusy}
           onChoose={(path) => {
-            void actions.chooseVault(path).then(() => setVaultPickerOpen(false));
+            // The dialog stays open when the switch fails: the banner of the
+            // store tells the reason.
+            void actions
+              .chooseVault(path)
+              .then(() => setVaultPickerOpen(false))
+              .catch(() => undefined);
           }}
           onClose={() => {
             // The picker may be skipped: the application then works with the

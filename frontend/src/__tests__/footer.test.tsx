@@ -115,4 +115,24 @@ describe('the status bar', () => {
     expect(screen.queryByRole('button', { name: 'Graph' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
+
+  it('says that a filter is active and lets the user drop it', () => {
+    const onClearFilter = vi.fn();
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 12, onClearFilter });
+
+    // The tree shows only the matching notes: the permanent bar says so.
+    expect(screen.getByTestId('filter-chip')).toBeTruthy();
+    expect(screen.getByText('Filter: tag:work')).toBeTruthy();
+    expect(screen.getByText('12 notes')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the active filter' }));
+    expect(onClearFilter).toHaveBeenCalled();
+  });
+
+  it('shows no chip when no filter is active', () => {
+    renderFooter({ filterQuery: '', filterTotal: 0 });
+
+    expect(screen.queryByTestId('filter-chip')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear the active filter' })).toBeNull();
+  });
 });

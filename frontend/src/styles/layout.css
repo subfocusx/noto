@@ -295,6 +295,45 @@
   flex: 1;
 }
 
+/* The chip of the active filter: the tree shows only the matching notes, and
+   the bar says so. The chip is neutral: the dot of the connection is the only
+   coloured element of the shell. */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+  max-width: 40%;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--fg-secondary);
+}
+
+.filter-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-chip-count {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.filter-chip .icon-button {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  color: var(--fg-muted);
+}
+
+.filter-chip .icon-button:hover {
+  color: var(--fg);
+}
+
 /* The global actions of the status bar. */
 .app-footer-actions {
   display: flex;

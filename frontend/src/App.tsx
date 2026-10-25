@@ -1268,6 +1268,9 @@ export function App() {
         theme={env.effectiveTheme}
         onToggleDrawer={actions.toggleDrawer}
         drawerOpen={ui.drawerOpen}
+        filterQuery={ui.query.trim() || null}
+        filterTotal={ui.queryTotal}
+        onClearFilter={actions.clearQuery}
       />
 
       {lazyOverlays && ui.findOpen ? (

@@ -46,6 +46,17 @@ export interface AppFooterProps {
   onToggleTheme?(): void;
   /** The theme that is really active. */
   theme?: 'light' | 'dark';
+  /**
+   * The text of the query that filters the tree, when one is active.
+   *
+   * The bar is permanent, so the state of the filter is always known: the user
+   * sees that the tree shows only the matching notes, and can drop the filter.
+   */
+  filterQuery?: string | null;
+  /** The number of the notes that match the query. */
+  filterTotal?: number;
+  /** Drops the filter and shows the whole tree again. */
+  onClearFilter?(): void;
 }
 
 /** Groups the digits of a number with a thin space: `1 248`. */
@@ -112,6 +123,23 @@ export function AppFooter(props: AppFooterProps) {
       <span class="muted" title={props.vaultPath ?? props.currentPath}>
         {props.currentPath}
       </span>
+      {props.filterQuery ? (
+        <span class="filter-chip" data-testid="filter-chip">
+          <span class="filter-chip-name">Filter: {props.filterQuery}</span>
+          {props.filterTotal !== undefined ? (
+            <span class="filter-chip-count">
+              {props.filterTotal} {props.filterTotal === 1 ? 'note' : 'notes'}
+            </span>
+          ) : null}
+          <IconButton
+            label="Clear the active filter"
+            icon="x"
+            size={12}
+            class="filter-chip-x"
+            onClick={() => props.onClearFilter?.()}
+          />
+        </span>
+      ) : null}
       <span class="app-footer-spacer" />
       {props.cursor ? (
         <span class="tabular">

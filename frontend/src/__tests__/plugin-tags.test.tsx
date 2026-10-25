@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/preact';
-import { TagsStore, TagsView } from '../plugins/builtin/tags/index';
+import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import type { PluginContext, PluginPanel } from '../plugins/contract';
+import {
+  TagsStore,
+  TagsView,
+  tagsManifest,
+  tagsPlugin,
+} from '../plugins/builtin/tags/index';
 
 // The panel of the tags is tested through its own view: the plugin reads the
 // vault through the contract, and the view only shows what the store holds.
@@ -78,5 +84,82 @@ describe('the panel of the tags', () => {
 
     expect(screen.getByText('The vault has no tags')).toBeTruthy();
     expect(document.querySelector('.noto-tags-list')).toBeNull();
+  });
+});
+
+describe('the plugin of the tags', () => {
+  /** A fake context that records the listeners of the events. */
+  function makeFakeContext(tags: { tag: string; count: number }[]) {
+    const listeners = new Map<string, Array<(payload: unknown) => void>>();
+    const panels: PluginPanel[] = [];
+    const readTags = vi.fn(async () => tags);
+
+    const ctx = {
+      id: 'tags',
+      version: '1.0.0',
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      permissions: tagsManifest.permissions,
+      api: {
+        getNote: vi.fn(),
+        getTree: vi.fn(async () => ({ folders: [], files: [] })),
+        search: vi.fn(async () => []),
+        saveNote: vi.fn(),
+        query: vi.fn(async () => ({ hits: [], total: 0, partial: false })),
+        tags: { call: readTags },
+      },
+      editor: null,
+      settings: {
+        get: vi.fn(async () => undefined),
+        all: vi.fn(async () => ({})),
+        set: vi.fn(async () => undefined),
+        reset: vi.fn(async () => undefined),
+      },
+      registerCommand: vi.fn(() => () => undefined),
+      registerPanel: vi.fn((panel: PluginPanel) => {
+        panels.push(panel);
+        return () => undefined;
+      }),
+      registerSidebarItem: vi.fn(() => () => undefined),
+      registerContextMenuItem: vi.fn(() => () => undefined),
+      registerToolbarItem: vi.fn(() => () => undefined),
+      registerSettingsSection: vi.fn(() => () => undefined),
+      on: vi.fn((event: string, cb: (payload: unknown) => void) => {
+        const list = listeners.get(event) ?? [];
+        list.push(cb);
+        listeners.set(event, list);
+        return () => undefined;
+      }),
+      onEditor: vi.fn(() => () => undefined),
+      onDeactivate: vi.fn(),
+    } as unknown as PluginContext;
+
+    return { ctx, panels, readTags, listeners };
+  }
+
+  it('reads the tags again when a note was saved', async () => {
+    const tags: { tag: string; count: number }[] = [{ tag: 'journal', count: 1 }];
+    const fake = makeFakeContext(tags);
+
+    await tagsPlugin.activate(fake.ctx);
+
+    // The list of the tags is read at the activation.
+    expect(fake.readTags).toHaveBeenCalledTimes(1);
+
+    // A saved note can carry a new tag: the list must follow it.
+    tags.push({ tag: 'work', count: 1 });
+    const saved = fake.listeners.get('editor.saved');
+    expect(saved).toBeTruthy();
+    saved?.forEach((cb) => cb({ path: 'journal.md', revision: 2 }));
+
+    await waitFor(() => expect(fake.readTags).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows the tags of the vault in the panel', async () => {
+    const fake = makeFakeContext([{ tag: 'journal', count: 3 }]);
+
+    await tagsPlugin.activate(fake.ctx);
+
+    render(fake.panels[0].render());
+    await waitFor(() => expect(screen.getByText('#journal')).toBeTruthy());
   });
 });

@@ -256,6 +256,10 @@ export const tagsPlugin: Plugin = {
       ctx.on('note.updated', () => void refresh()),
       ctx.on('note.deleted', () => void refresh()),
       ctx.on('note.renamed', () => void refresh()),
+      // A saved note can carry a new tag. Without this the panel would keep
+      // the list it read when the note was opened: the tag of a note that was
+      // just written would never show up.
+      ctx.on('editor.saved', () => void refresh()),
     ];
 
     ctx.onDeactivate(() => {

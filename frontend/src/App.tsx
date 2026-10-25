@@ -6,6 +6,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ColumnResizer } from './components/ColumnResizer';
 import { Dialog } from './components/Dialog';
 import { EditorTabs } from './components/EditorTabs';
+import { EditorToolbar } from './components/EditorToolbar';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
 import { NoteConflictDialog } from './components/NoteConflictDialog';
@@ -542,6 +543,9 @@ export function App() {
 
   /** The position of the cursor in the editor; it is shown in the status bar. */
   const [cursor, setCursor] = useState<{ line: number; column: number } | null>(null);
+
+  /** The handle of the editor; the toolbar of the editor works through it. */
+  const [editorHandle, setEditorHandle] = useState<EditorHandle | null>(null);
 
   /** The line of the cursor, counted from one. */
   const cursorLine = cursor?.line ?? null;
@@ -1289,6 +1293,7 @@ export function App() {
 
           <div class="workspace-panes">
           <div class="pane pane-editor">            <PluginToolbarSlot items={pluginToolbarItems} />
+            <EditorToolbar handle={editorHandle} />
             <MarkdownEditor
               value={note.content}
               path={note.path ?? ''}
@@ -1299,6 +1304,7 @@ export function App() {
               onSave={actions.explicitSave}
               onHandle={(handle) => {
                 editorRef.current = handle;
+                setEditorHandle(handle);
                 // The position of the cursor is shown in the status bar and
                 // marks the active heading of the outline.
                 const unsubscribe = handle.onSelectionChange((range) => {

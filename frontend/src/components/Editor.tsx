@@ -70,6 +70,15 @@ export interface EditorHandle {
   insertAt(text: string, from: number, to: number): void;
   /** Replaces the current selection with `text` and reports the change. */
   replaceSelection(text: string): void;
+  /**
+   * Applies an edit to the whole text of the note and puts the selection at
+   * the range of the edit.
+   *
+   * The method is used by the toolbar of the editor: the formatting is
+   * computed on the text of the note, so the edit carries the new text and
+   * the new range of the selection.
+   */
+  applyEdit(edit: { text: string; from: number; to: number }): void;
   /** Subscribes to document changes; returns the unsubscribe function. */
   onChange(cb: (text: string) => void): () => void;
   /** Subscribes to selection changes; returns the unsubscribe function. */
@@ -535,6 +544,15 @@ export function MarkdownEditor(props: EditorProps) {
         instance.dispatch({
           changes: { from, to, insert: text },
           selection: { anchor: cursor },
+        });
+      },
+      applyEdit: (edit: { text: string; from: number; to: number }) => {
+        const max = instance.state.doc.length;
+        const from = Math.max(0, Math.min(edit.from, max));
+        const to = Math.max(from, Math.min(edit.to, max));
+        instance.dispatch({
+          changes: { from: 0, to: max, insert: edit.text },
+          selection: { anchor: from, head: to },
         });
       },
       onChange: (cb: (text: string) => void) => {

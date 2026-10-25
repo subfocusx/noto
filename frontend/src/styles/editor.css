@@ -15,6 +15,56 @@
   min-height: 0;
 }
 
+/* The toolbar of the editor: the panel of the work with the text. */
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-app);
+}
+
+.editor-toolbar-button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-toolbar-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.editor-toolbar-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.editor-toolbar-separator {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.editor-toolbar-size {
+  min-width: 22px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+}
+
 /* The matches of the query of the filter. */
 .noto-match {
   background-color: var(--warning-subtle);

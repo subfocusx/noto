@@ -576,12 +576,38 @@ so an encrypted storage shows the screen of the password instead of the notes
 of the storage that was open before
 (`frontend/src/core/vault/session.ts`, `frontend/src/core/store/actions.ts`).
 
+Two more defects were found by the visual check of the header: the menu of the
+quick switch was wider than the column of the explorer, so its left part was cut
+off, and a refused switch of the storage left an unhandled rejection behind
+(the reason is in a banner, and the dialog of the picker stays open)
+(`frontend/src/styles/components.css`, `frontend/src/App.tsx`,
+`frontend/src/__tests__/app.test.tsx`).
+
+A third defect was found by the end-to-end suite of a narrow screen: the status
+bar is 24 px high, but it holds buttons of 28 px, and its labels break into two
+lines when the screen is narrow. The bar overflowed the window by five or six
+pixels, the browser scrolled the shell (an `overflow: hidden` container) to reveal
+the focused element, and the headers of the columns moved apart — the test of the
+rail failed at random. The bar now grows to fit its content, its labels never
+break, and a narrow screen gives up the format of the file and the position of the
+cursor
+(`frontend/src/styles/layout.css`, `frontend/src/components/AppFooter.tsx`,
+`frontend/src/__tests__/footer.test.tsx`).
+
+A fourth defect was a regression of the phase itself: the rule `position:
+relative` of the header of the explorer (added for the menu of the storage) overrode
+the sticky header of the column, so the header scrolled away with the tree and
+left its line on a narrow screen. A sticky element is a positioned one, so the
+menu keeps its place without the rule, and the header sticks again
+(`frontend/src/styles/components.css`).
+
 ### The measured effect of the phase 14
 
 | What | Phase 13 | Phase 14 |
 |---|---|---|
-| Entry chunk of the bundle | 43,58 kB gzip | **45,00 kB gzip** (the budget is 46 kB) |
-| Frontend unit tests | 773 passed (63 files) | **802 passed (67 files)** |
+| Entry chunk of the bundle | 43,58 kB gzip | **44,98 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 773 passed (63 files) | **804 passed (67 files)** |
+| End-to-end tests | 152 passed, 46 skipped | **152 passed, 46 skipped, 0 failed** |
 | Icons of the registry | 41 | **45** (`rotate-ccw`, `chevrons-down-up`, `chevrons-up-down`, `lock`, `lock-open`) |
 | The sections of the column | 6 | **6** (unchanged) |
 

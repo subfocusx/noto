@@ -9,6 +9,7 @@ import './styles/tabs.css';
 import './styles/tags.css';
 import './styles/components.css';
 import './styles/palette.css';
+import './styles/find.css';
 import './styles/calendar.css';
 import './styles/notifications.css';
 import './styles/favorites.css';

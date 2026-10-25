@@ -9,7 +9,7 @@
 // first time, so they stay out of the entry chunk.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren, ComponentType } from 'preact';
-import type { ConnectionState, Node } from '../types';
+import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import type { RailSection } from '../core/store/types';
 import { Icon } from '../ui/icons';
@@ -19,17 +19,14 @@ import { ExplorerSection } from './sections/ExplorerSection';
 import type { CalendarSectionProps } from './sections/CalendarSection';
 import type { FavoritesSectionProps } from './sections/FavoritesSection';
 import type { HistorySectionProps } from './sections/HistorySection';
-import type { SearchSectionProps } from './sections/SearchSection';
 import type { TrashSectionProps } from './sections/TrashSection';
 
 /** The sections that are loaded on demand. */
 interface LazySections {
   CalendarSection: ComponentType<CalendarSectionProps>;
   FavoritesSection: ComponentType<FavoritesSectionProps>;
-  FiltersSection: ComponentType;
   HistorySection: ComponentType<HistorySectionProps>;
   NotificationsSection: ComponentType;
-  SearchSection: ComponentType<SearchSectionProps>;
   TrashSection: ComponentType<TrashSectionProps>;
 }
 
@@ -55,10 +52,6 @@ export interface SidebarProps {
   onOpenPalette?(): void;
   /** Opens the manager of the plugins. */
   onOpenPlugins?(): void;
-  /** The state of the connection with the backend. */
-  connection?: ConnectionState;
-  /** Called when the user asks the application to check the backend again. */
-  onRetryConnection?(): void;
   onOpenTransfer(): void;
   onRefresh(): void;
   loading: boolean;
@@ -119,8 +112,6 @@ export interface SidebarProps {
    * stay visible.
    */
   filterPaths?: Set<string> | null;
-  /** Called when the user opens a note from the section of the search. */
-  onOpenSearchResult?: (path: string) => void;
   /** Called after a note was restored from the trash. */
   onRestored?: () => void;
   /**
@@ -145,8 +136,6 @@ export interface SidebarProps {
   onCalendarDayChange?: (day: string | null) => void;
   /** Called when the user asks for the note of a day. */
   onCreateDailyNote?: (day: string) => void;
-  /** Called when the user wants to see the section of the filters. */
-  onOpenFilters?: () => void;
 }
 
 /** The smallest width of the sidebar, in pixels. */
@@ -174,10 +163,8 @@ export function Sidebar(props: SidebarProps) {
       setSections({
         CalendarSection: module.CalendarSection,
         FavoritesSection: module.FavoritesSection,
-        FiltersSection: module.FiltersSection,
         HistorySection: module.HistorySection,
         NotificationsSection: module.NotificationsSection,
-        SearchSection: module.SearchSection,
         TrashSection: module.TrashSection,
       });
     });
@@ -254,8 +241,6 @@ export function Sidebar(props: SidebarProps) {
           onOpenArchive={props.onOpenArchive}
           onOpenPalette={props.onOpenPalette}
           onOpenPlugins={props.onOpenPlugins}
-          connection={props.connection}
-          onRetryConnection={props.onRetryConnection}
         />
       );
     }
@@ -264,14 +249,6 @@ export function Sidebar(props: SidebarProps) {
       return <p class="section-hint">Loading…</p>;
     }
 
-    if (props.section === 'search') {
-      return (
-        <sections.SearchSection
-          onOpenNote={(path) => (props.onOpenSearchResult ?? props.onSelect)(path)}
-          onOpenFilters={props.onOpenFilters}
-        />
-      );
-    }
     if (props.section === 'calendar') {
       return (
         <sections.CalendarSection
@@ -295,9 +272,6 @@ export function Sidebar(props: SidebarProps) {
     }
     if (props.section === 'notifications') {
       return <sections.NotificationsSection />;
-    }
-    if (props.section === 'filters') {
-      return <sections.FiltersSection />;
     }
     if (props.section === 'history') {
       return (

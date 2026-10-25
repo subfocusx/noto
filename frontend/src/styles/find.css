@@ -1,0 +1,149 @@
+/* ==========================================================================
+   The window of the search and the filters.
+
+   The window is a modal card over the application, like the command palette:
+   a dimmed backdrop and a card in the upper third of the screen. The model is
+   `palette.css`; the rules live in their own file, because they belong to a
+   single component and not to the shell.
+
+   The column of the explorer stays where it is: the window lives over it and
+   never replaces it.
+
+   Every colour, size and duration comes from the tokens of the design system.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- backdrop */
+
+.find-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-palette);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: rgb(0 0 0 / 55%);
+}
+
+/* ------------------------------------------------------------------- card */
+
+.find-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(620px, 100%);
+  max-height: 70dvh;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------- tabs */
+
+/* The two modules of the window. The active one is a raised pill, the other
+   one is quiet: the window answers one question at a time. */
+.find-tabs {
+  display: flex;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.find-tab {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.find-tab:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.find-tab.active {
+  background: var(--bg-selected);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+/* ----------------------------------------------------------------- module */
+
+.find-module {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ------------------------------------------------------------------- field */
+
+.find-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.find-input {
+  width: 100%;
+  min-height: var(--control-lg);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.find-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* ------------------------------------------------------------------- list */
+
+.find-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+/* A note that matched the query: the name, the path and the snippet. */
+.find-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.find-result:hover {
+  background: var(--bg-hover);
+}
+
+.find-result-name {
+  font-size: var(--text-md);
+  color: var(--fg);
+}
+
+.find-result-path {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}

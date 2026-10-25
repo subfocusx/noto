@@ -18,6 +18,9 @@ func (s *Service) CreateFolder(ctx context.Context, parentPath, name string) (mo
 	if err != nil {
 		return model.Node{}, err
 	}
+	// The NUL bytes of a name are stripped, the other control characters
+	// are rejected.
+	name = stripNUL(name)
 	if err := validateName(name); err != nil {
 		return model.Node{}, err
 	}
@@ -54,6 +57,9 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 	}
 	// The raw name is validated before the Markdown suffix is appended, so
 	// that a name like ".." cannot be turned into a valid name.
+	// The NUL bytes of a name are stripped, the other control characters
+	// are rejected.
+	name = stripNUL(name)
 	if err := validateName(name); err != nil {
 		return model.Node{}, err
 	}
@@ -94,6 +100,8 @@ func (s *Service) CreateFile(ctx context.Context, parentPath, name string) (mode
 	if err := s.indexFile(ctx, rel, ""); err != nil {
 		return model.Node{}, err
 	}
+	// The note starts its history: the empty text is its first version.
+	s.appendVersion(ctx, rel, "", node.Revision, node.UpdatedAt)
 	synced, err := s.syncNode(ctx, node)
 	if err != nil {
 		return model.Node{}, err
@@ -402,6 +410,9 @@ func (s *Service) Write(ctx context.Context, rel, content string, revision int64
 	if err := s.store.UpsertNote(ctx, node); err != nil {
 		return WriteResult{}, newErr(ErrInternal, "cannot persist the note metadata")
 	}
+	// The write of a note appends a version to its history: the history is
+	// append only and never rewritten.
+	s.appendVersion(ctx, norm, content, node.Revision, node.UpdatedAt)
 	res := WriteResult{Path: norm, Revision: node.Revision, UpdatedAt: node.UpdatedAt}
 	op := NoteOpUpdated
 	if !existed {

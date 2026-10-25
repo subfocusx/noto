@@ -5,6 +5,13 @@
 // The IR is the contract with the sealed (browser) implementation, so the
 // canonical JSON of every node is part of the public API and is covered by
 // the golden vectors in shared/query-vectors.json.
+//
+// The operator of the regular expressions is `matches` (the form
+// `field matches "..."`) and its prefix form `match:<expression>`. The engine
+// of the backend is RE2, the one of Go: the expression is linear and it is
+// bounded in size. The SQL of that operator needs the function
+// `regexp(pattern, value)`, which the package `sqlitestore` registers for the
+// driver of SQLite.
 package query
 
 import (

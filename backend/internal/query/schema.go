@@ -34,6 +34,9 @@ const (
 	OpContains    = "contains"
 	OpStartsWith  = "startsWith"
 	OpEndsWith    = "endsWith"
+	// OpMatches is the operator of the regular expressions: the text of the
+	// field matches the expression.
+	OpMatches = "matches"
 )
 
 // fields is the schema of the query language (docs/QUERY_LANGUAGE.md, section 2).
@@ -58,13 +61,13 @@ var fields = map[string]Field{
 // fieldOperators lists the operators that fit every field
 // (docs/QUERY_LANGUAGE.md, section 3).
 var fieldOperators = map[string][]string{
-	"path":   {OpEQ, OpNE, OpStartsWith, OpEndsWith},
-	"name":   {OpEQ, OpNE, OpContains, OpStartsWith, OpEndsWith},
-	"title":  {OpEQ, OpNE, OpStartsWith, OpEndsWith},
-	"tag":    {OpEQ, OpNE, OpIn},
-	"folder": {OpEQ, OpNE, OpStartsWith, OpEndsWith},
-	"ext":    {OpEQ, OpNE},
-	"content": {OpEQ, OpNE, OpContains},
+	"path":   {OpEQ, OpNE, OpStartsWith, OpEndsWith, OpMatches},
+	"name":   {OpEQ, OpNE, OpContains, OpStartsWith, OpEndsWith, OpMatches},
+	"title":  {OpEQ, OpNE, OpStartsWith, OpEndsWith, OpMatches},
+	"tag":    {OpEQ, OpNE, OpIn, OpMatches},
+	"folder": {OpEQ, OpNE, OpStartsWith, OpEndsWith, OpMatches},
+	"ext":    {OpEQ, OpNE, OpMatches},
+	"content": {OpEQ, OpNE, OpContains, OpMatches},
 	"has_task_list":       {OpEQ, OpNE},
 	"has_incomplete_tasks": {OpEQ, OpNE},
 	"has_code":            {OpEQ, OpNE},
@@ -87,6 +90,7 @@ var knownOperators = map[string]bool{
 	OpContains:   true,
 	OpStartsWith: true,
 	OpEndsWith:   true,
+	OpMatches:    true,
 }
 
 // LookupField returns the field with the given name.

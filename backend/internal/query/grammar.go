@@ -17,6 +17,8 @@ const (
 	tokString
 	tokNumber
 	tokSymbol
+	// tokRegex is the expression of the prefix form `match:`.
+	tokRegex
 )
 
 // token is one lexical token.
@@ -66,6 +68,17 @@ func tokenize(src string) ([]token, error) {
 					break
 				}
 				i += size2
+			}
+			// The prefix form of the regular expression: `match:<expression>`.
+			if src[start:i] == matchPrefix && i < len(src) && src[i] == ':' {
+				i++
+				tok, n, err := scanRegex(src[i:])
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, tok)
+				i += n
+				continue
 			}
 			out = append(out, token{kind: tokIdent, text: src[start:i]})
 		default:
@@ -128,6 +141,41 @@ func scanNumber(src string) (token, int, error) {
 	}
 	unit := src[unitStart:i]
 	return token{kind: tokNumber, text: src[:i], num: num, unit: unit}, i, nil
+}
+
+// matchPrefix is the prefix form of the operator of the regular expressions:
+// `match:<expression>` looks for the expression in the title, in the text, in
+// the path and in the tags of a note.
+const matchPrefix = "match"
+
+// scanRegex reads the expression of the prefix form `match:`.
+//
+// The expression is either a quoted string, or a raw text that ends at the
+// first space: a raw expression cannot hold a space, and the logical
+// operators must be separated from it by a space.
+func scanRegex(src string) (token, int, error) {
+	if src == "" {
+		return token{}, 0, errf("expected a value")
+	}
+	if src[0] == '\'' || src[0] == '"' {
+		s, n, err := scanString(src)
+		if err != nil {
+			return token{}, 0, err
+		}
+		return token{kind: tokRegex, text: s}, n, nil
+	}
+	i := 0
+	for i < len(src) {
+		r, size := utf8.DecodeRuneInString(src[i:])
+		if unicode.IsSpace(r) {
+			break
+		}
+		i += size
+	}
+	if i == 0 {
+		return token{}, 0, errf("expected a value")
+	}
+	return token{kind: tokRegex, text: src[:i]}, i, nil
 }
 
 // scanSymbol reads an operator or a punctuation mark.
@@ -262,7 +310,33 @@ func (p *parser) parsePrimary() (Expr, error) {
 		p.next()
 		return e, nil
 	}
+	// The prefix form of the regular expression: `match:<expression>`.
+	if p.peek().kind == tokRegex {
+		t := p.next()
+		return matchExpr(t.text)
+	}
 	return p.parseComparison()
+}
+
+// matchExpr builds the expression of the prefix form `match:`.
+//
+// The expression is looked for in the title, in the text, in the path and in
+// the tags of the note: the four fields that hold the text of a note.
+func matchExpr(pattern string) (Expr, error) {
+	if _, err := CompileRegex(pattern); err != nil {
+		return nil, err
+	}
+	fields := []string{"title", "content", "path", "tag"}
+	var out Expr
+	for _, field := range fields {
+		cmp := Cmp{F: field, Op: OpMatches, V: Str{V: pattern}}
+		if out == nil {
+			out = cmp
+			continue
+		}
+		out = Or{L: out, R: cmp}
+	}
+	return out, nil
 }
 
 // parseComparison parses "field operator value" or a lone boolean field.
@@ -310,7 +384,7 @@ func (p *parser) parseComparison() (Expr, error) {
 			return nil, errf("expected )")
 		}
 		p.next()
-		return Cmp{F: field.Name, Op: opTok.text, V: v}, nil
+		return p.makeCmp(field.Name, opTok.text, v)
 	}
 
 	// The operator form.
@@ -326,7 +400,7 @@ func (p *parser) parseComparison() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return Cmp{F: field.Name, Op: nt.text, V: v}, nil
+		return p.makeCmp(field.Name, nt.text, v)
 	case nt.kind == tokIdent:
 		p.next()
 		if err := checkOperator(field, nt.text); err != nil {
@@ -336,7 +410,7 @@ func (p *parser) parseComparison() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return Cmp{F: field.Name, Op: nt.text, V: v}, nil
+		return p.makeCmp(field.Name, nt.text, v)
 	case nt.kind == tokSymbol && (nt.text == "~" || nt.text == "@" || nt.text == "#" ||
 		nt.text == "$" || nt.text == "^" || nt.text == "?"):
 		return nil, errf("unknown operator: %s", nt.text)
@@ -358,6 +432,23 @@ func checkOperator(field Field, op string) error {
 		return errf("operator %s does not fit the field %s", op, field.Name)
 	}
 	return nil
+}
+
+// makeCmp builds the comparison of a field with a value.
+//
+// The expression of the operator `matches` is compiled here: a broken
+// expression is a typed error, never a panic at the execution of the query.
+func (p *parser) makeCmp(field, op string, v Value) (Expr, error) {
+	if op == OpMatches {
+		s, ok := v.(Str)
+		if !ok {
+			return nil, errf("expected a value")
+		}
+		if _, err := CompileRegex(s.V); err != nil {
+			return nil, err
+		}
+	}
+	return Cmp{F: field, Op: op, V: v}, nil
 }
 
 // parseValue parses the right hand side of a comparison.

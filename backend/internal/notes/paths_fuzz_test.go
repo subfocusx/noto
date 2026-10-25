@@ -3,6 +3,7 @@ package notes
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // This file contains the property based tests of the path helpers. The
@@ -27,15 +28,13 @@ import (
 //     normalised. A parent that is not a clean relative path is therefore
 //     rejected by the normalisation step.
 //   - validateName rejects the empty name, "." and "..", a NUL byte, every
-//     character of invalidNameChars ("/\:*?"<>|"), a name with leading or
+//     character of invalidNameChars ("/\:*?"<>|"), a control character (the C0
+//     range and the delete character), a name with leading or
 //     trailing whitespace and a name with a trailing dot. It rejects the
 //     Windows device names (reservedNames) case insensitively; the device
 //     name is the part before the first dot, with trailing dots and spaces
-//     removed, so "con.txt", "CON.md" and "con .md" are all rejected.
-//
-// Two gaps of the current implementation are documented (and pinned) at the
-// end of this file: validateName has no length limit and it does not reject
-// control characters other than NUL.
+//     removed, so "con.txt", "CON.md" and "con .md" are all rejected. A name
+//     longer than maxNameRunes characters is rejected as well.
 
 // hasDotSegment reports whether the path contains a "." or ".." segment.
 func hasDotSegment(p string) bool {
@@ -193,10 +192,12 @@ func FuzzJoinRel(f *testing.F) {
 //
 //  1. the error code is invalid_name;
 //  2. the name is not empty, not "." and not "..";
-//  3. the name contains no NUL byte and no character of invalidNameChars;
+//  3. the name contains no NUL byte, no character of invalidNameChars and no
+//     control character;
 //  4. the name has no leading or trailing whitespace;
 //  5. the name does not end with a dot;
-//  6. the name is not a reserved Windows device name.
+//  6. the name is not a reserved Windows device name;
+//  7. the name is at most maxNameRunes characters long.
 func FuzzValidateName(f *testing.F) {
 	seeds := []string{
 		"note.md", "a", "file name.md", "кириллица.md", "файл.md",
@@ -232,6 +233,12 @@ func FuzzValidateName(f *testing.F) {
 		}
 		if strings.ContainsAny(name, invalidNameChars) {
 			t.Fatalf("validateName accepted the invalid character in %q", name)
+		}
+		if _, ok := controlRune(name); ok {
+			t.Fatalf("validateName accepted a control character in %q", name)
+		}
+		if utf8.RuneCountInString(name) > maxNameRunes {
+			t.Fatalf("validateName accepted a name of %d characters", utf8.RuneCountInString(name))
 		}
 		if strings.TrimSpace(name) != name {
 			t.Fatalf("validateName accepted the surrounding whitespace in %q", name)
@@ -317,22 +324,61 @@ func TestValidateNameAcceptsValidNames(t *testing.T) {
 	}
 }
 
-// TestValidateNameDocumentedGaps pins the two documented gaps of the
-// current implementation. Both of them are limitations, not features: when
-// the implementation is hardened, this test must be updated together with
-// the implementation.
+// TestValidateNameLimitsAndControlCharacters pins the limits of a name: the
+// length limit and the control characters.
 //
-//   - there is no length limit: an arbitrarily long name is accepted;
-//   - the control characters below 0x20 are only rejected when they are
-//     the NUL byte. A control character in the middle of a name is
-//     accepted, and a trailing control character is rejected only because
-//     it is a whitespace character (TrimSpace).
-func TestValidateNameDocumentedGaps(t *testing.T) {
-	long := strings.Repeat("a", 4096)
-	if err := validateName(long); err != nil {
-		t.Fatalf("validateName(<4096 chars>) = %v, want no error (no length limit today)", err)
+// The two gaps that the implementation documented are closed: a name that is
+// too long is rejected, and a control character is rejected everywhere in the
+// name, not only when it is a whitespace character.
+func TestValidateNameLimitsAndControlCharacters(t *testing.T) {
+	// The longest name that is accepted.
+	longest := strings.Repeat("a", maxNameRunes)
+	if err := validateName(longest); err != nil {
+		t.Fatalf("validateName(<%d chars>) = %v, want no error", maxNameRunes, err)
 	}
-	if err := validateName("a\x01b"); err != nil {
-		t.Fatalf("validateName(%q) = %v, want no error (control characters are not rejected today)", "a\x01b", err)
+	// One character more is rejected.
+	tooLong := strings.Repeat("a", maxNameRunes+1)
+	err := validateName(tooLong)
+	if err == nil {
+		t.Fatalf("validateName(<%d chars>) accepted the name", maxNameRunes+1)
+	}
+	if Code(err) != CodeInvalidName {
+		t.Fatalf("validateName(<%d chars>) failed with %q, want %q", maxNameRunes+1, Code(err), CodeInvalidName)
+	}
+
+	// The limit counts the characters, not the bytes.
+	multibyte := strings.Repeat("é", maxNameRunes)
+	if err := validateName(multibyte); err != nil {
+		t.Fatalf("validateName(<%d multibyte chars>) = %v, want no error", maxNameRunes, err)
+	}
+
+	// The control characters are rejected everywhere in the name.
+	for _, name := range []string{"a\x01b", "a\nb", "a\tb", "a\rb", "a\x1fb", "a\x7fb", "\x01"} {
+		err := validateName(name)
+		if err == nil {
+			t.Fatalf("validateName(%q) accepted the control character", name)
+		}
+		if Code(err) != CodeInvalidName {
+			t.Fatalf("validateName(%q) failed with %q, want %q", name, Code(err), CodeInvalidName)
+		}
+	}
+}
+
+// TestStripNUL pins the rule of the NUL byte: it is stripped from a name
+// instead of rejecting the name.
+func TestStripNUL(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"note.md", "note.md"},
+		{"no\x00nul.md", "nonul.md"},
+		{"\x00", ""},
+		{"a\x00b\x00c", "abc"},
+	}
+	for _, c := range cases {
+		if got := stripNUL(c.name); got != c.want {
+			t.Fatalf("stripNUL(%q) = %q, want %q", c.name, got, c.want)
+		}
 	}
 }

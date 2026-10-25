@@ -13,9 +13,30 @@ import (
 // ---------------------------------------------------------------- notes ---
 
 // UpsertNote inserts or updates the metadata of a note or folder.
+//
+// The creation time never changes: when the incoming node carries no creation
+// time, the stored one is kept. The creation time of a note is written once,
+// when the note is created.
 func (s *Store) UpsertNote(ctx context.Context, n model.Node) error {
 	if n.Path == "" {
 		return errors.New("sqlitestore: empty path")
+	}
+	created := millis(n.CreatedAt)
+	if created == 0 {
+		// The creation time is immutable: the stored one wins when the
+		// incoming node does not carry one.
+		var stored int64
+		err := s.db.QueryRowContext(ctx, "SELECT created_at FROM notes WHERE path = ?", n.Path).Scan(&stored)
+		switch {
+		case err == nil:
+			created = stored
+		case errors.Is(err, sql.ErrNoRows):
+			// A new note without a creation time: the modification time
+			// is the best approximation.
+			created = millis(n.UpdatedAt)
+		default:
+			return fmt.Errorf("sqlitestore: read the creation time of %q: %w", n.Path, err)
+		}
 	}
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO notes (path, name, type, parent_path, size, revision, mod_time, created_at, updated_at)
@@ -30,7 +51,7 @@ ON CONFLICT(path) DO UPDATE SET
   created_at = excluded.created_at,
   updated_at = excluded.updated_at`,
 		n.Path, n.Name, string(n.Type), n.ParentPath, n.Size, n.Revision,
-		millis(n.ModTime), millis(n.CreatedAt), millis(n.UpdatedAt))
+		millis(n.ModTime), created, millis(n.UpdatedAt))
 	if err != nil {
 		return fmt.Errorf("sqlitestore: upsert note %q: %w", n.Path, err)
 	}
@@ -163,6 +184,43 @@ FROM notes ORDER BY path`)
 		return nil, fmt.Errorf("sqlitestore: iterate notes: %w", err)
 	}
 	return out, nil
+}
+
+// ListChildrenPaged returns one page of the children of a folder.
+//
+// The children are ordered by path. The cursor is the path of the last item
+// of the previous page: the page starts at the first child that follows it.
+// The next cursor of the answer is empty when the page is the last one.
+func (s *Store) ListChildrenPaged(ctx context.Context, parentPath, cursor string, limit int) (model.NodePage, error) {
+	if limit <= 0 {
+		limit = defaultPageLimit
+	}
+	// One row more than requested tells whether a next page exists.
+	rows, err := s.db.QueryContext(ctx, `
+SELECT path, name, type, parent_path, size, revision, mod_time, created_at, updated_at
+FROM notes WHERE parent_path = ? AND path > ? ORDER BY path LIMIT ?`,
+		parentPath, cursor, limit+1)
+	if err != nil {
+		return model.NodePage{}, fmt.Errorf("sqlitestore: list the children of %q: %w", parentPath, err)
+	}
+	defer rows.Close()
+
+	page := model.NodePage{Items: []model.Node{}}
+	for rows.Next() {
+		n, err := scanNode(rows)
+		if err != nil {
+			return model.NodePage{}, fmt.Errorf("sqlitestore: scan a child of %q: %w", parentPath, err)
+		}
+		page.Items = append(page.Items, n)
+	}
+	if err := rows.Err(); err != nil {
+		return model.NodePage{}, fmt.Errorf("sqlitestore: iterate the children of %q: %w", parentPath, err)
+	}
+	if len(page.Items) > limit {
+		page.Items = page.Items[:limit]
+		page.NextCursor = page.Items[len(page.Items)-1].Path
+	}
+	return page, nil
 }
 
 // scanner is implemented by *sql.Row and *sql.Rows.

@@ -89,6 +89,12 @@ func (s *Service) Reindex(ctx context.Context) (int, error) {
 		if err := s.indexFile(ctx, rel, string(data)); err != nil {
 			return err
 		}
+		// The rebuild of the index repairs the cache of the derived
+		// properties: the notes are read from the disk, so their
+		// properties are known again.
+		if _, err := s.RecomputeDerived(ctx, rel, string(data)); err != nil {
+			return err
+		}
 		count++
 		return nil
 	})

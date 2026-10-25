@@ -73,6 +73,38 @@ func (b blockedStore) MoveNote(ctx context.Context, fromPath, toPath string) err
 // ListNotes refuses to list the metadata of the notes.
 func (b blockedStore) ListNotes(ctx context.Context) ([]model.Node, error) { return nil, err() }
 
+// ListChildrenPaged refuses to list the children of a folder.
+func (b blockedStore) ListChildrenPaged(ctx context.Context, parentPath, cursor string, limit int) (model.NodePage, error) {
+	return model.NodePage{}, err()
+}
+
+// AppendVersion refuses to append a version of a note.
+func (b blockedStore) AppendVersion(ctx context.Context, v model.NoteVersion) error { return err() }
+
+// ListVersions refuses to list the history of a note.
+func (b blockedStore) ListVersions(ctx context.Context, path string) ([]model.NoteVersion, error) {
+	return nil, err()
+}
+
+// GetVersion refuses to return a version of a note.
+func (b blockedStore) GetVersion(ctx context.Context, path string, revision int64) (model.NoteVersion, bool, error) {
+	return model.NoteVersion{}, false, err()
+}
+
+// PutDerivedProps refuses to store the derived properties of a note.
+func (b blockedStore) PutDerivedProps(ctx context.Context, d model.DerivedProps) error { return err() }
+
+// GetDerivedProps refuses to return the derived properties of a note.
+func (b blockedStore) GetDerivedProps(ctx context.Context, path string) (model.DerivedProps, bool, error) {
+	return model.DerivedProps{}, false, err()
+}
+
+// MarkDerivedPropsStale refuses to mark the derived properties as stale.
+func (b blockedStore) MarkDerivedPropsStale(ctx context.Context, path string) error { return err() }
+
+// DeleteDerivedProps refuses to drop the derived properties of a note.
+func (b blockedStore) DeleteDerivedProps(ctx context.Context, path string) error { return err() }
+
 // IndexContent refuses to index the content of a note.
 func (b blockedStore) IndexContent(ctx context.Context, path, name, content string) error {
 	return err()
@@ -104,6 +136,11 @@ func (b blockedStore) GetAttachment(ctx context.Context, id string) (model.Attac
 
 // DeleteAttachment refuses to remove the metadata of an attachment.
 func (b blockedStore) DeleteAttachment(ctx context.Context, id string) error { return err() }
+
+// IndexAttachmentText refuses to index the text of an attachment.
+func (b blockedStore) IndexAttachmentText(ctx context.Context, id, notePath, name, body string) error {
+	return err()
+}
 
 // PutTrash refuses to record a deleted entry.
 func (b blockedStore) PutTrash(ctx context.Context, originalPath, trashPath string, kind model.NodeType, size int64) error {

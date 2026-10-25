@@ -230,6 +230,16 @@ func (r *renderer) renderTag(c Cmp) (string, error) {
 			parts = append(parts, r.tagLike(s.V))
 		}
 		return "(" + strings.Join(parts, " OR ") + ")", nil
+	case OpMatches:
+		s, ok := c.V.(Str)
+		if !ok {
+			return "", fmt.Errorf("query: the field tag does not accept the value %s", describeValue(c.V))
+		}
+		// The expression is applied to every tag of the note, one by one: the
+		// tags are stored as a JSON list.
+		r.args = append(r.args, s.V)
+		return "(EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(" + colTags +
+			") THEN " + colTags + " ELSE '[]' END) WHERE regexp(?, value)))", nil
 	}
 	return "", fmt.Errorf("query: the operator %s does not fit the field tag", c.Op)
 }
@@ -276,6 +286,12 @@ func (r *renderer) renderString(c Cmp) (string, error) {
 	case OpEndsWith:
 		r.args = append(r.args, "%"+escapeLike(s.V))
 		return "(lower(" + col + ") LIKE ? ESCAPE '\\')", nil
+	case OpMatches:
+		// The function `regexp(pattern, value)` is registered by the package
+		// `sqlitestore`, which is the only one that runs the SQL of the
+		// language.
+		r.args = append(r.args, s.V)
+		return "(regexp(?, " + col + "))", nil
 	}
 	return "", fmt.Errorf("query: the operator %s does not fit the field %s", c.Op, c.F)
 }

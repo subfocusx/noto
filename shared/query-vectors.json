@@ -296,8 +296,8 @@
     },
     {
       "name": "an unknown operator on a known field is an error",
-      "source": "name matches \"a.*\"",
-      "error": "unknown operator: matches"
+      "source": "name ~ \"a.*\"",
+      "error": "unknown operator: ~"
     }
   ],
   "metadata": [

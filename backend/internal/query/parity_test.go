@@ -103,6 +103,15 @@ var theParityQuestions = []string{
 	"has_task_list && !has_incomplete_tasks",
 	"(has_code || has_image) && tag == 'work'",
 	"tag == 'work' && folder == 'notes'",
+	// The regular expressions.
+	"title matches '^A'",
+	"title matches '^[A-Z]'",
+	"content matches 'pineapple'",
+	"path matches '^notes/'",
+	"tag matches '^w'",
+	"tag matches '^z'",
+	"match:pineapple",
+	"match:^notes/",
 }
 
 // openParityVault fills a SQLite store with the vault of the test and returns

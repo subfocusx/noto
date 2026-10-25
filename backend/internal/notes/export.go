@@ -61,8 +61,82 @@ func (s *Service) ExportFolder(ctx context.Context, rel string, w io.Writer) err
 }
 
 // ExportAll writes a ZIP archive of the whole notes directory to w.
+//
+// The archive is a stream: it is written to w by parts, and the memory of the
+// export does not grow with the size of the vault.
 func (s *Service) ExportAll(ctx context.Context, w io.Writer) error {
 	return s.zipTree(ctx, s.notesRoot, "", w)
+}
+
+// ExportAllToFile writes a ZIP archive of the whole notes directory to the
+// file at path.
+//
+// The file is created and filled by parts: the archive never sits in the
+// memory, so a vault of any size can be exported.
+func (s *Service) ExportAllToFile(ctx context.Context, path string) error {
+	return s.exportToFile(ctx, s.notesRoot, "", path)
+}
+
+// ExportFolderToFile writes a ZIP archive of the folder to the file at path.
+//
+// The file is created and filled by parts: the archive never sits in the
+// memory, so a vault of any size can be exported.
+func (s *Service) ExportFolderToFile(ctx context.Context, rel, path string) error {
+	norm, err := normalizeRel(rel)
+	if err != nil {
+		return err
+	}
+	if norm == "" {
+		return newErr(ErrInvalidPath, "a folder path is required")
+	}
+	abs, err := s.resolve(norm)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return newErr(ErrNotFound, "folder not found")
+	}
+	if !info.IsDir() {
+		return newErr(ErrBadRequest, "the path is not a folder")
+	}
+	return s.exportToFile(ctx, abs, norm, path)
+}
+
+// exportToFile writes the archive of a tree into a file, part by part.
+func (s *Service) exportToFile(ctx context.Context, abs, prefix, path string) error {
+	if strings.TrimSpace(path) == "" {
+		return newErr(ErrBadRequest, "a file path is required")
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return newErr(ErrInternal, "cannot create the directory of the archive")
+		}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return newErr(ErrInternal, "cannot create the archive")
+	}
+	if err := s.zipTree(ctx, abs, prefix, file); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return newErr(ErrInternal, "cannot write the archive")
+	}
+	return nil
+}
+
+// copyFileInto copies a file into the archive, by parts: the memory of the
+// export does not grow with the size of the file.
+func copyFileInto(dst io.Writer, path string) error {
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 // zipTree writes a ZIP archive of a directory tree.
@@ -98,18 +172,15 @@ func (s *Service) zipTree(ctx context.Context, abs, prefix string, w io.Writer) 
 		if !strings.HasSuffix(strings.ToLower(name), ".md") {
 			return nil
 		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
 		hdr := &zip.FileHeader{Name: name, Method: zip.Deflate}
 		hdr.Modified = info.ModTime()
 		fw, err := zw.CreateHeader(hdr)
 		if err != nil {
 			return err
 		}
-		_, err = fw.Write(data)
-		return err
+		// The file is copied into the archive by parts: the memory of the
+		// export does not grow with the size of the note.
+		return copyFileInto(fw, p)
 	})
 	if err != nil {
 		zw.Close()

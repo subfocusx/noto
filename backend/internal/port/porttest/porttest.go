@@ -108,6 +108,10 @@ func (s *suite) run() {
 	s.runCase("a query of the query language selects the notes", s.caseQueryNotes)
 	s.runCase("attachments are stored, listed, read and deleted", s.caseAttachments)
 	s.runCase("trash entries are stored, listed and deleted", s.caseTrash)
+	s.runCase("the history of the versions of a note is stored and read", s.caseVersions)
+	s.runCase("the derived properties are stored, invalidated and deleted", s.caseDerivedProps)
+	s.runCase("the children of a folder are listed page by page", s.casePagedChildren)
+	s.runCase("the text of the attachments is searchable", s.caseAttachmentText)
 }
 
 // runCase runs a single case of the suite in its own subtest.

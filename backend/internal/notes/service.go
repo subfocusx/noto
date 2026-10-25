@@ -178,6 +178,12 @@ func (s *Service) indexFile(ctx context.Context, rel, content string) error {
 	// The properties of the note are derived from its text: they are
 	// recalculated with the index, so that they never lag behind the file.
 	s.refreshNoteProps(ctx, rel, baseOf(rel), content)
+	// The cache of the derived properties is invalidated, not recomputed:
+	// the note changed, so the cached properties are only known to be out
+	// of date.
+	if err := s.store.MarkDerivedPropsStale(ctx, rel); err != nil {
+		return newErr(ErrInternal, "cannot mark the derived properties as stale")
+	}
 	return nil
 }
 
@@ -185,6 +191,7 @@ func (s *Service) indexFile(ctx context.Context, rel, content string) error {
 func (s *Service) removeFromIndex(ctx context.Context, rel string) {
 	_ = s.store.RemoveContent(ctx, rel)
 	_ = s.store.DeleteNoteProps(ctx, rel)
+	_ = s.store.DeleteDerivedProps(ctx, rel)
 }
 
 // walkNotes walks the notes root and calls fn for every file and folder.

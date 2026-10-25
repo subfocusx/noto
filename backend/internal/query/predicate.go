@@ -1,6 +1,7 @@
 package query
 
 import (
+	"regexp"
 	"strings"
 	"time"
 )
@@ -83,28 +84,70 @@ func valueSeconds(v Value, now time.Time) (int64, bool) {
 //
 // The moment of the execution is frozen for the whole query: it is given
 // once, at the compilation, and never changes.
+//
+// The regular expressions of the query are compiled once too, at the same
+// moment: an expression that the engine refuses makes the predicate answer
+// false instead of panicking.
 func CompilePredicate(e Expr, now time.Time) Predicate {
 	if e == nil {
 		return func(Note) bool { return false }
 	}
+	regexes := compileRegexes(e)
 	return func(note Note) bool {
-		return evaluate(e, note, now)
+		return evaluate(e, note, now, regexes)
 	}
 }
 
+// compileRegexes compiles every regular expression of an expression. The
+// patterns are the keys of the map.
+func compileRegexes(e Expr) map[string]*regexp.Regexp {
+	out := map[string]*regexp.Regexp{}
+	var walk func(Expr)
+	walk = func(node Expr) {
+		switch n := node.(type) {
+		case And:
+			walk(n.L)
+			walk(n.R)
+		case Or:
+			walk(n.L)
+			walk(n.R)
+		case Not:
+			walk(n.E)
+		case Cmp:
+			if n.Op != OpMatches {
+				return
+			}
+			s, ok := n.V.(Str)
+			if !ok {
+				return
+			}
+			if _, seen := out[s.V]; seen {
+				return
+			}
+			re, err := CompileRegex(s.V)
+			if err != nil {
+				return
+			}
+			out[s.V] = re
+		}
+	}
+	walk(e)
+	return out
+}
+
 // evaluate applies one node of the IR to a note.
-func evaluate(e Expr, note Note, now time.Time) bool {
+func evaluate(e Expr, note Note, now time.Time, regexes map[string]*regexp.Regexp) bool {
 	switch node := e.(type) {
 	case And:
-		return evaluate(node.L, note, now) && evaluate(node.R, note, now)
+		return evaluate(node.L, note, now, regexes) && evaluate(node.R, note, now, regexes)
 	case Or:
-		return evaluate(node.L, note, now) || evaluate(node.R, note, now)
+		return evaluate(node.L, note, now, regexes) || evaluate(node.R, note, now, regexes)
 	case Not:
-		return !evaluate(node.E, note, now)
+		return !evaluate(node.E, note, now, regexes)
 	case Truthy:
 		return flagOf(note, node.F)
 	case Cmp:
-		return compare(node, note, now)
+		return compare(node, note, now, regexes)
 	default:
 		return false
 	}
@@ -151,9 +194,9 @@ func textOf(note Note, field string) string {
 }
 
 // compare applies a comparison to a note.
-func compare(c Cmp, note Note, now time.Time) bool {
+func compare(c Cmp, note Note, now time.Time, regexes map[string]*regexp.Regexp) bool {
 	if c.F == "tag" {
-		return compareTag(c, note)
+		return compareTag(c, note, regexes)
 	}
 	if c.F == "created_at" || c.F == "updated_at" {
 		return compareTimestamp(c, note, now)
@@ -161,14 +204,30 @@ func compare(c Cmp, note Note, now time.Time) bool {
 	if isFlagField(c.F) {
 		return compareFlag(c, note)
 	}
-	return compareText(c, note)
+	return compareText(c, note, regexes)
 }
 
 // compareTag compares the tags of a note.
-func compareTag(c Cmp, note Note) bool {
+func compareTag(c Cmp, note Note, regexes map[string]*regexp.Regexp) bool {
 	tags := make([]string, 0, len(note.Tags))
 	for _, tag := range note.Tags {
 		tags = append(tags, strings.ToLower(tag))
+	}
+	if c.Op == OpMatches {
+		s, ok := c.V.(Str)
+		if !ok {
+			return false
+		}
+		re := regexes[s.V]
+		if re == nil {
+			return false
+		}
+		for _, tag := range tags {
+			if re.MatchString(tag) {
+				return true
+			}
+		}
+		return false
 	}
 	if c.Op == "in" {
 		list, ok := c.V.(List)
@@ -257,9 +316,21 @@ func compareFlag(c Cmp, note Note) bool {
 }
 
 // compareText compares a text field of a note with a value.
-func compareText(c Cmp, note Note) bool {
+func compareText(c Cmp, note Note, regexes map[string]*regexp.Regexp) bool {
 	actual := textOf(note, c.F)
 	switch c.Op {
+	case OpMatches:
+		s, ok := c.V.(Str)
+		if !ok {
+			return false
+		}
+		re := regexes[s.V]
+		if re == nil {
+			return false
+		}
+		// The expression is case sensitive: it is written by the user, who
+		// knows the text of the notes.
+		return re.MatchString(actual)
 	case "contains":
 		str, ok := c.V.(Str)
 		if !ok {

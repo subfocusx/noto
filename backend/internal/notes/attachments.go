@@ -78,6 +78,14 @@ func (s *Service) UploadAttachment(ctx context.Context, filename string, content
 		_ = os.Remove(target)
 		return model.Attachment{}, newErr(ErrInternal, "cannot store the attachment metadata")
 	}
+	// The text of a plain text attachment is indexed, so that it is
+	// searchable like the content of a note. The text of the other kinds of
+	// attachment cannot be read by the server.
+	if text, ok := ExtractAttachmentText(att.Name, att.MIME, content); ok && att.NotePath != "" {
+		if err := s.store.IndexAttachmentText(ctx, att.ID, att.NotePath, att.Name, text); err != nil {
+			return model.Attachment{}, newErr(ErrInternal, "cannot index the attachment")
+		}
+	}
 	return att, nil
 }
 

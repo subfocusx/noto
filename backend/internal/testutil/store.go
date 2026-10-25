@@ -31,12 +31,22 @@ type MemStore struct {
 	attachments map[string]model.Attachment
 	trash       map[string]TrashRow
 	props       map[string]model.NoteProps
+	versions    map[string]model.NoteVersion
+	derived     map[string]model.DerivedProps
+	attachText  map[string]attachmentText
 	closed      bool
 }
 
 type indexEntry struct {
 	name string
 	body string
+}
+
+// attachmentText is the text extracted from an attachment.
+type attachmentText struct {
+	notePath string
+	name     string
+	body     string
 }
 
 // NewMemStore creates an empty in-memory store.
@@ -47,6 +57,9 @@ func NewMemStore() *MemStore {
 		attachments: map[string]model.Attachment{},
 		trash:       map[string]TrashRow{},
 		props:       map[string]model.NoteProps{},
+		versions:    map[string]model.NoteVersion{},
+		derived:     map[string]model.DerivedProps{},
+		attachText:  map[string]attachmentText{},
 	}
 }
 
@@ -329,9 +342,25 @@ func (s *MemStore) Search(_ context.Context, query string, limit int) ([]model.S
 	sort.Slice(nameHits, func(i, j int) bool { return nameHits[i].Path < nameHits[j].Path })
 	sort.Slice(contentHits, func(i, j int) bool { return contentHits[i].Path < contentHits[j].Path })
 
+	// The text extracted from the attachments is searched as well, like the
+	// SQLite store does.
+	attachHits := []model.SearchHit{}
+	for _, text := range s.attachText {
+		if !matchesTokens(text.body, tokens) && !matchesTokens(text.name, tokens) {
+			continue
+		}
+		attachHits = append(attachHits, model.SearchHit{
+			Path:    text.notePath,
+			Name:    baseOf(text.notePath),
+			Kind:    "content",
+			Snippet: text.name + ": " + snippet(text.body, tokens),
+		})
+	}
+	sort.Slice(attachHits, func(i, j int) bool { return attachHits[i].Path < attachHits[j].Path })
+
 	out := []model.SearchHit{}
 	seen := map[string]bool{}
-	for _, h := range append(nameHits, contentHits...) {
+	for _, h := range append(append(nameHits, contentHits...), attachHits...) {
 		key := h.Path + "\x00" + h.Kind
 		if seen[key] {
 			continue
@@ -381,10 +410,27 @@ func (s *MemStore) GetAttachment(_ context.Context, id string) (model.Attachment
 }
 
 // DeleteAttachment implements port.Store.
+//
+// The text that was extracted from the attachment is dropped with it.
 func (s *MemStore) DeleteAttachment(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.attachments, id)
+	delete(s.attachText, id)
+	return nil
+}
+
+// IndexAttachmentText implements port.Store.
+func (s *MemStore) IndexAttachmentText(_ context.Context, id, notePath, name, body string) error {
+	if id == "" {
+		return errors.New("testutil: empty attachment id")
+	}
+	if notePath == "" {
+		return errors.New("testutil: an indexed attachment needs a note")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.attachText[id] = attachmentText{notePath: notePath, name: name, body: body}
 	return nil
 }
 

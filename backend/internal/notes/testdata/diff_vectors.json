@@ -1,0 +1,105 @@
+{
+  "comment": "The golden vectors of the line diff of the notes. The very same file is read by the test of the diff (backend/internal/notes/diff_test.go). Every case holds the old text, the new text and the expected diff.",
+  "cases": [
+    {
+      "name": "two identical texts",
+      "old": "one\ntwo\n",
+      "new": "one\ntwo\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "equal", "text": "two" }
+      ]
+    },
+    {
+      "name": "an added line",
+      "old": "one\ntwo\n",
+      "new": "one\ntwo\nthree\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "equal", "text": "two" },
+        { "op": "add", "text": "three" }
+      ]
+    },
+    {
+      "name": "a removed line",
+      "old": "one\ntwo\nthree\n",
+      "new": "one\nthree\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "remove", "text": "two" },
+        { "op": "equal", "text": "three" }
+      ]
+    },
+    {
+      "name": "a changed line",
+      "old": "one\ntwo\nthree\n",
+      "new": "one\nsecond\nthree\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "remove", "text": "two" },
+        { "op": "add", "text": "second" },
+        { "op": "equal", "text": "three" }
+      ]
+    },
+    {
+      "name": "an empty old text",
+      "old": "",
+      "new": "one\n",
+      "expected": [
+        { "op": "add", "text": "one" }
+      ]
+    },
+    {
+      "name": "an empty new text",
+      "old": "one\n",
+      "new": "",
+      "expected": [
+        { "op": "remove", "text": "one" }
+      ]
+    },
+    {
+      "name": "two empty texts",
+      "old": "",
+      "new": "",
+      "expected": []
+    },
+    {
+      "name": "two reordered lines",
+      "old": "one\ntwo\n",
+      "new": "two\none\n",
+      "expected": [
+        { "op": "remove", "text": "one" },
+        { "op": "equal", "text": "two" },
+        { "op": "add", "text": "one" }
+      ]
+    },
+    {
+      "name": "the line breaks of windows and of unix",
+      "old": "one\r\ntwo\r\n",
+      "new": "one\ntwo\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "equal", "text": "two" }
+      ]
+    },
+    {
+      "name": "a trailing line break",
+      "old": "one\ntwo",
+      "new": "one\ntwo\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "equal", "text": "two" }
+      ]
+    },
+    {
+      "name": "an empty line in the middle",
+      "old": "one\n\ntwo\n",
+      "new": "one\ntwo\n",
+      "expected": [
+        { "op": "equal", "text": "one" },
+        { "op": "remove", "text": "" },
+        { "op": "equal", "text": "two" }
+      ]
+    }
+  ]
+}

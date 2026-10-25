@@ -15,7 +15,7 @@ import (
 
 // schemaUserVersion is the schema version of the current database format.
 // A database with a greater version must be rejected.
-const schemaUserVersion = 2
+const schemaUserVersion = 3
 
 // openSchemaStore opens a store in a temporary file.
 func openSchemaStore(t *testing.T, path string) *sqlitestore.Store {

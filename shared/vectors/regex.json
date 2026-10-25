@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "note": "Golden vectors of the regular expressions of the query language. The Go and the TypeScript implementations read THIS file and must produce exactly the same canonical JSON. The engine of the backend is RE2 (the one of Go) and the engine of the browser is the RegExp of JavaScript: the expressions below are the ones both engines understand. See docs/QUERY_LANGUAGE.md.",
+  "astFormat": {
+    "cmp": { "k": "cmp", "f": "<field>", "op": "matches", "v": { "k": "str", "v": "<expression>" } },
+    "or": { "k": "or", "l": "<node>", "r": "<node>" },
+    "and": { "k": "and", "l": "<node>", "r": "<node>" },
+    "truthy": { "k": "truthy", "f": "<field>" }
+  },
+  "queries": [
+    {
+      "name": "the operator form of the regular expression",
+      "source": "title matches \"^A\"",
+      "ast": { "k": "cmp", "f": "title", "op": "matches", "v": { "k": "str", "v": "^A" } }
+    },
+    {
+      "name": "the method form of the regular expression",
+      "source": "title.matches(\"^A\")",
+      "ast": { "k": "cmp", "f": "title", "op": "matches", "v": { "k": "str", "v": "^A" } }
+    },
+    {
+      "name": "the regular expression of the tags",
+      "source": "tag matches \"^w\"",
+      "ast": { "k": "cmp", "f": "tag", "op": "matches", "v": { "k": "str", "v": "^w" } }
+    },
+    {
+      "name": "the regular expression of the text of a note",
+      "source": "content matches \"(foo|bar)\"",
+      "ast": { "k": "cmp", "f": "content", "op": "matches", "v": { "k": "str", "v": "(foo|bar)" } }
+    },
+    {
+      "name": "the prefix form of the regular expression",
+      "source": "match:^#\\w+$",
+      "ast": {
+        "k": "or",
+        "l": {
+          "k": "or",
+          "l": {
+            "k": "or",
+            "l": { "k": "cmp", "f": "title", "op": "matches", "v": { "k": "str", "v": "^#\\w+$" } },
+            "r": { "k": "cmp", "f": "content", "op": "matches", "v": { "k": "str", "v": "^#\\w+$" } }
+          },
+          "r": { "k": "cmp", "f": "path", "op": "matches", "v": { "k": "str", "v": "^#\\w+$" } }
+        },
+        "r": { "k": "cmp", "f": "tag", "op": "matches", "v": { "k": "str", "v": "^#\\w+$" } }
+      }
+    },
+    {
+      "name": "the prefix form with a quoted expression",
+      "source": "match:\"^#\"",
+      "ast": {
+        "k": "or",
+        "l": {
+          "k": "or",
+          "l": {
+            "k": "or",
+            "l": { "k": "cmp", "f": "title", "op": "matches", "v": { "k": "str", "v": "^#" } },
+            "r": { "k": "cmp", "f": "content", "op": "matches", "v": { "k": "str", "v": "^#" } }
+          },
+          "r": { "k": "cmp", "f": "path", "op": "matches", "v": { "k": "str", "v": "^#" } }
+        },
+        "r": { "k": "cmp", "f": "tag", "op": "matches", "v": { "k": "str", "v": "^#" } }
+      }
+    },
+    {
+      "name": "the prefix form and a flag",
+      "source": "match:^a && has_code",
+      "ast": {
+        "k": "and",
+        "l": {
+          "k": "or",
+          "l": {
+            "k": "or",
+            "l": {
+              "k": "or",
+              "l": { "k": "cmp", "f": "title", "op": "matches", "v": { "k": "str", "v": "^a" } },
+              "r": { "k": "cmp", "f": "content", "op": "matches", "v": { "k": "str", "v": "^a" } }
+            },
+            "r": { "k": "cmp", "f": "path", "op": "matches", "v": { "k": "str", "v": "^a" } }
+          },
+          "r": { "k": "cmp", "f": "tag", "op": "matches", "v": { "k": "str", "v": "^a" } }
+        },
+        "r": { "k": "truthy", "f": "has_code" }
+      }
+    },
+    {
+      "name": "the operator does not fit the field",
+      "source": "created_at matches \"2020\"",
+      "error": "operator matches does not fit the field created_at"
+    },
+    {
+      "name": "the expression must be a string",
+      "source": "title matches 42",
+      "error": "expected a value"
+    }
+  ]
+}

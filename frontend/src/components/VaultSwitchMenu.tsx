@@ -31,9 +31,15 @@ export interface VaultSwitchMenuProps {
   onClose(): void;
 }
 
-/** The name of the folder: the last segment of the path. */
+/**
+ * The name of the folder: the last segment of the path.
+ *
+ * The path of a storage is a path of the operating system: on Windows it is
+ * cut at the backslash, otherwise the whole path would be the name of the
+ * folder.
+ */
 function nameOf(path: string): string {
-  const segments = path.split('/');
+  const segments = path.split(/[/\\]/);
   return segments[segments.length - 1] || path;
 }
 

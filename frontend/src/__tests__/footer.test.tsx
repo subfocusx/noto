@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/preact';
 import type { ComponentProps } from 'preact';
 import { AppFooter } from '../components/AppFooter';
+import { Icon } from '../ui/icons';
 
 function renderFooter(overrides: Partial<ComponentProps<typeof AppFooter>> = {}) {
   const props = {
@@ -157,5 +158,63 @@ describe('the status bar', () => {
 
     // The counters and the state of the file stay: they are what the user needs.
     expect(screen.getByText('Writable').className).not.toContain('app-footer-format');
+  });
+
+  it('counts a single match in the singular', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 1 });
+
+    // One match is one note: the plural would be wrong.
+    expect(screen.getByText('1 note')).toBeTruthy();
+    expect(screen.queryByText('1 notes')).toBeNull();
+  });
+
+  it('shows the query alone when the number of the matches is unknown', () => {
+    renderFooter({ filterQuery: 'tag:work' });
+
+    // The counter is not always known: the chip says what it knows.
+    expect(screen.getByText('Filter: tag:work')).toBeTruthy();
+    expect(document.querySelector('.filter-chip-count')).toBeNull();
+  });
+
+  it('keeps the count free of the tooltip about the limit of the tree', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 12, filterTruncated: false });
+
+    // The tree holds every match: there is nothing to explain.
+    const count = screen.getByText('12 notes');
+    expect(count.getAttribute('title')).toBeNull();
+  });
+
+  it('survives a click on the cross when no handler is given', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 12 });
+
+    // The chip may be rendered before the application knows how to drop the
+    // filter: the click is then a no-op, not a crash.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the active filter' }));
+    expect(screen.getByTestId('filter-chip')).toBeTruthy();
+  });
+
+  it('draws the cross of the registry on the chip', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 12 });
+
+    // The cross belongs to the chip: the class is the contract with the
+    // stylesheet, and the icon comes from the registry of the application.
+    const button = screen.getByRole('button', { name: 'Clear the active filter' });
+    expect(button.className).toContain('filter-chip-x');
+
+    const drawn = button.querySelector('svg');
+    const { container } = render(<Icon name="x" size={12} />);
+    const expected = container.querySelector('svg');
+    expect(drawn).not.toBeNull();
+    expect(expected).not.toBeNull();
+    expect(drawn?.outerHTML).toBe(expected?.outerHTML);
+  });
+
+  it('keeps the chip of the filter in the permanent bar', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 12 });
+
+    // The bar is permanent: the state of the filter is always known.
+    const footer = document.querySelector('.app-footer');
+    expect(footer).not.toBeNull();
+    expect(footer?.querySelector('.filter-chip')).not.toBeNull();
   });
 });

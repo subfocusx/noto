@@ -135,4 +135,18 @@ describe('the status bar', () => {
     expect(screen.queryByTestId('filter-chip')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Clear the active filter' })).toBeNull();
   });
+
+  it('marks the labels that give up their place on a narrow screen', () => {
+    renderFooter({ cursor: { line: 3, column: 7 }, encoding: 'UTF-8' });
+
+    // The status bar of a phone has no room for the format of the file and for
+    // the position of the cursor: the rule of the narrow screen hides them.
+    // The classes are the contract between the component and the stylesheet.
+    expect(screen.getByText('Markdown').className).toContain('app-footer-format');
+    expect(screen.getByText('UTF-8').className).toContain('app-footer-format');
+    expect(screen.getByText('Ln 3, Col 7').className).toContain('app-footer-cursor');
+
+    // The counters and the state of the file stay: they are what the user needs.
+    expect(screen.getByText('Writable').className).not.toContain('app-footer-format');
+  });
 });

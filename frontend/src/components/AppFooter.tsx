@@ -142,7 +142,7 @@ export function AppFooter(props: AppFooterProps) {
       ) : null}
       <span class="app-footer-spacer" />
       {props.cursor ? (
-        <span class="tabular">
+        <span class="tabular app-footer-cursor">
           Ln {props.cursor.line}, Col {props.cursor.column}
         </span>
       ) : null}
@@ -152,8 +152,8 @@ export function AppFooter(props: AppFooterProps) {
       {props.characterCount !== undefined ? (
         <span class="tabular">{group(props.characterCount)} chars</span>
       ) : null}
-      <span class="tabular">Markdown</span>
-      <span class="tabular">{props.encoding ?? 'UTF-8'}</span>
+      <span class="tabular app-footer-format">Markdown</span>
+      <span class="tabular app-footer-format">{props.encoding ?? 'UTF-8'}</span>
       <span class="tabular">{props.writable === false ? 'Read only' : 'Writable'}</span>
     </footer>
   );

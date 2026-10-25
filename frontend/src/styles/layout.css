@@ -131,7 +131,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--footer-height);
+  /* The bar of the column grows like the bar of the application: its content
+     must never spill out of the column. */
+  min-height: var(--footer-height);
+  overflow: hidden;
   padding: 0 var(--space-2);
   border-top: 1px solid var(--border);
   color: var(--fg-muted);
@@ -275,7 +278,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  height: var(--footer-height);
+  /*
+   * The bar grows instead of cutting its content: the buttons of the actions
+   * are taller than the height of the bar. A bar that overflows makes the
+   * shell overflow the window too, and the browser then scrolls the shell to
+   * reveal the focused element — the headers of the columns move.
+   */
+  min-height: var(--footer-height);
+  overflow: hidden;
   padding: 0 var(--space-3);
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border);
@@ -288,6 +298,11 @@
 .app-footer .muted {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A label of the bar is a label: it never breaks into two lines. */
+.app-footer .tabular {
   white-space: nowrap;
 }
 
@@ -376,6 +391,21 @@
 @media (max-width: 820px) {
   .app .icon-button.menu-button {
     display: inline-flex;
+  }
+
+  /*
+   * The status bar of a narrow screen holds what the user needs: the actions,
+   * the state of the save, the path and the counters of the note. The format of
+   * the file and the position of the cursor give up their place, so that every
+   * label stays on one line and nothing is cut off.
+   */
+  .app-footer {
+    gap: var(--space-2);
+  }
+
+  .app-footer-format,
+  .app-footer-cursor {
+    display: none;
   }
 
   /*

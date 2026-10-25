@@ -1,6 +1,6 @@
 # D4 — Сохранённые представления
 
-**Status:** Draft
+**Status:** Implemented
 
 **Связанные документы:** `docs/QUERY_LANGUAGE.md`, `docs/API-CHANGELOG.md`,
 `frontend/src/core/settings/`, `docs/CONTRACT.md` §7.
@@ -95,4 +95,5 @@ Folders» в Obsidian, «представления» в Joplin и memos. Иде
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — статус `Draft` → `Implemented`: представления (имя, запрос, иконка)
+живут в `frontend/src/core/views/types.ts` и показываются в блоке «Filter».

@@ -57,7 +57,8 @@ Stable error codes:
 | `invalid_name` | illegal characters or a reserved name |
 | `payload_too_large` | body exceeds `NOTO_MAX_UPLOAD_MB` / `NOTO_MAX_ARCHIVE_MB` |
 | `unsupported_media_type` | unsupported upload or archive content |
-| `forbidden` | rejected by the origin/host checks (CSRF guard) |
+| `forbidden` | rejected by the origin/host checks (CSRF guard), or the role of the user is not enough (HTTP `403`) |
+| `unauthenticated` | the credentials are missing, wrong or expired (HTTP `401`) |
 | `vault_sealed` | the vault is sealed: the request needs the open pipeline of the notes, which the server does not use in this mode (HTTP `409`) |
 | `internal` | unexpected server error; details are logged, never returned |
 
@@ -152,6 +153,24 @@ the number of the notes below every folder (counted recursively).
 show them any more: the counters of the section were removed in the redesign of
 the phase 7, the counters of the folders stayed. The fields are kept so that an
 older client keeps working against a newer server.
+
+### `GET /api/tree/children?parent=<path>&cursor=<path>&limit=<n>`
+
+One page of the children of a folder — the lazy loading of the tree.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `parent` | string | the folder; the empty path is the root of the notes |
+| `cursor` | string | optional; the path of the last child of the previous page |
+| `limit` | number | optional; 100 by default, must be a positive number |
+
+```json
+{ "items": [ { "path": "journal/note.md", "name": "note.md", "type": "file", "parentPath": "journal" } ], "nextCursor": "journal/note.md" }
+```
+
+`nextCursor` is empty when the page is the last one. The page of a folder that
+does not exist is empty. A `limit` that is not a positive number is refused
+with `400 bad_request`.
 
 ### `POST /api/folders`
 
@@ -543,6 +562,12 @@ An empty query answers `{"hits":[],"total":0,"partial":false}` with status
 message of the parser (`unknown field: colour`, `unknown operator: ~`,
 `expected a value`, …).
 
+The operator `matches` (and the prefix form `match:`) looks for a regular
+expression in the text of a note. A broken expression answers `400` with the
+message `invalid regular expression: <reason>`. The backend compiles it with
+RE2, the browser with the `RegExp` of JavaScript — the grammar, the fields
+and the limits are in [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md) §3.
+
 ### `GET /api/tags`
 
 Response `200`:
@@ -635,6 +660,105 @@ Response `200`:
 ```json
 { "ok": true }
 ```
+
+### `POST /api/attachments/search`
+
+The full-text search over the text inside the attachments (the text of a
+`text/plain`, a `text/markdown`, a `.md` and a `.txt` file is indexed when the
+file is uploaded).
+
+Request:
+
+```json
+{ "query": "release notes", "limit": 50 }
+```
+
+Response `200`:
+
+```json
+{
+  "hits": [
+    { "noteId": "…", "notePath": "journal/a.md", "attachmentId": "3f9a…", "name": "notes.txt", "mime": "text/plain", "snippet": "…release notes…" }
+  ]
+}
+```
+
+An empty query is refused with `400 bad_request`.
+
+### `GET /api/attachments/{id}/content`
+
+The raw bytes with the real content type — the source of the preview of an
+image.
+
+### `POST /api/attachments/{id}/preview`
+
+Response `200`:
+
+```json
+{ "mime": "image/png", "width": 1280, "height": 720, "url": "/api/attachments/3f9a…/content" }
+```
+
+The size of an image is read from the bytes; a file that is not an image gives
+`0` and `0`.
+
+## The versions of a note
+
+### `GET /api/notes/versions?path=journal/a.md`
+
+```json
+{ "versions": [ { "path": "journal/a.md", "revision": 3, "title": "A", "content": "…", "createdAt": "2026-01-02T10:00:00Z" } ] }
+```
+
+### `GET /api/notes/versions/diff?path=journal/a.md&from=2&to=3`
+
+```json
+{ "path": "journal/a.md", "from": 2, "to": 3, "lines": [ { "kind": "context", "text": "…", "fromLine": 12, "toLine": 12 } ] }
+```
+
+The kinds are `context`, `added` and `removed`. The line numbers are 1-based;
+`0` means that the line does not exist on that side.
+
+### `POST /api/notes/versions/restore`
+
+Request `{"path": "journal/a.md", "revision": 3}` → the note content. The
+restore is a new write, so the revision grows. The restore is written into the
+audit log.
+
+## Authentication, accounts, audit, webhooks, MCP
+
+These endpoints exist when the authentication is enabled
+(`NOTO_AUTH_ENABLED=true`). Without it the local single-user mode keeps
+working and every request is served as the local user `local` (role `admin`).
+
+| Method and path | Body | Answer |
+| --- | --- | --- |
+| `POST /api/auth/login` | `{"name":"…","password":"…"}` | `{"token":"…","user":User,"expiresAt":"RFC3339"}` |
+| `POST /api/auth/logout` | — | `{"ok":true}` |
+| `GET /api/auth/me` | — | `{"user":User,"authenticated":bool}` |
+| `GET /api/users` | — | `{"users":[User]}` (administrator) |
+| `POST /api/users` | `{"name":"…","password":"…","role":"admin\|user"}` | `User` (administrator) |
+| `DELETE /api/users/{id}` | — | `{"ok":true}` (administrator) |
+| `POST /api/users/{id}/role` | `{"role":"admin\|user"}` | `User` (administrator) |
+| `GET /api/audit?limit=100` | — | `{"entries":[Entry]}` (administrator) |
+| `GET /api/webhooks` | — | `{"subscriptions":[Subscription]}` |
+| `POST /api/webhooks` | `{"url":"https://…","events":["note.created"]}` | `Subscription` (with the secret) |
+| `DELETE /api/webhooks/{id}` | — | `{"ok":true}` |
+| `GET /api/webhooks/deliveries?limit=100` | — | `{"deliveries":[Delivery]}` |
+| `POST /api/webhooks/deliveries/{id}/redeliver` | — | `{"ok":true}` |
+| `POST /api/mcp` | a JSON-RPC 2.0 request | the raw JSON of the protocol |
+
+`User` is `{"id","name","role","createdAt"}`. `Entry` is
+`{"id","time","user","action","target","result"}` — never the content of a
+note. `Subscription` is `{"id","owner","url","events","secret","createdAt"}`;
+the secret is empty in every answer but the creation. `Delivery` is
+`{"id","subscriptionId","event","payload","state","attempts","nextAttempt","lastError","createdAt"}`.
+
+The credentials travel with the header `Authorization: Bearer <token>` or with
+the cookie `noto_session`.
+
+The MCP endpoint speaks JSON-RPC 2.0: the methods are `initialize`,
+`tools/list` and `tools/call`, the tools are `notes.list`, `notes.read`,
+`notes.create`, `notes.update`, `notes.delete` and `notes.search`.
 
 ## Maintenance
 

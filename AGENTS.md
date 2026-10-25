@@ -44,20 +44,25 @@ file in the code, in the commits and in the documentation.
 | `backend/internal/backuppkg/` | The archive format: the manifest, the SHA-256 checksums, create/open. | `internal/config` |
 | `backend/internal/restore/` | The restore logic: checksums, dry run, the atomic replacement of the database, the rollback. | `internal/backuppkg`, `internal/config` |
 | `backend/internal/sealed/` | The blind object store of the sealed vault: bytes without a key. | `internal/port`, `internal/model` |
+| `backend/internal/auth/` | The accounts, the passwords (Argon2id) and the sessions. It keeps its own SQLite file and knows nothing about the notes. | nothing inside `backend/` (leaf) |
+| `backend/internal/audit/` | The journal of the actions of the users. It keeps its own SQLite file and never holds the content of a note. | nothing inside `backend/` (leaf) |
+| `backend/internal/webhooks/` | The subscriptions, the outbox and the worker of the delivery. It keeps its own SQLite file. | nothing inside `backend/` (leaf) |
+| `backend/internal/mcp/` | The MCP over HTTP: the envelope of JSON-RPC 2.0 and the tools of the notes. It talks to the domain through the interface it declares. | nothing inside `backend/` (leaf) |
 | `backend/internal/vault/` | The location of the storage on the machine: the config file, the layout, the validation. | `internal/config` |
 | `backend/internal/web/` | The serving of the SPA (the embedded `dist` or `NOTO_STATIC_DIR`). | nothing inside `backend/` (leaf) |
 | `backend/internal/testutil/` | The in-memory store and the helpers of the tests. Never used by the production code. | `internal/port`, `internal/model`, `internal/notes`, `internal/config` |
-| `frontend/src/core/` | The app-agnostic core: the store, the API facade, the events, the commands, the settings, the crypto core, the sealed vault, the query core. | `src/api`, `src/lib`, `src/core/**` — **never** `src/components/**` and **never** `src/plugins/**` |
+| `frontend/src/core/` | The app-agnostic core: the store, the API facade, the events, the commands, the settings, the crypto core, the sealed vault, the query core, the queue of the offline writes (`core/sync/`), the registry of the storages (`core/storages/`). | `src/api`, `src/lib`, `src/core/**`, `src/i18n` — **never** `src/components/**` and **never** `src/plugins/**` |
+| `frontend/src/i18n/` | The localisation: the catalogue of the strings, the language of the user and the hook of the interface. It is used by the core and by the components, and it never imports a component and never imports the plugin platform. | `src/core/settings/prefs` (the language is a preference) |
 | `frontend/src/components/` | The interface: the shell, the tree, the editor, the panels, the dialogs. | `src/core`, `src/api`, `src/lib`, `src/ui`, and only `src/plugins/contract.ts` + `src/plugins/{host,registry}.ts` |
 | `frontend/src/api/` | The single HTTP client (`client.ts`) and the typed modules over it. | `src/lib`, `src/core` (types only) — never `src/plugins/**` |
-| `frontend/src/lib/` | Small, pure helpers: debounce, formatting, ordering, the lazy loaders. | `src/lib` — never `src/plugins/**` |
-| `frontend/src/plugins/` | The plugin platform: `contract.ts`, the manifest, the registry, the host, the loader and the built-in plugins. | `src/plugins/contract.ts` only from a built-in plugin; the platform itself may import `src/core` **type-only** |
+| `frontend/src/lib/` | Small, pure helpers: debounce, formatting, ordering, the lazy loaders. | `src/lib`, `src/i18n` (the strings of the interface) — never `src/plugins/**` |
+| `frontend/src/plugins/` | The plugin platform: `contract.ts`, the manifest, the registry, the host, the loader, the sandbox and the built-in plugins. | `src/plugins/contract.ts` only from a built-in plugin; the platform itself may import `src/core` **type-only** |
 | `frontend/src/ui/` | The shared presentational primitives (the tooltip and the like). | `src/lib`, `src/ui` |
 | `frontend/src/styles/` | The CSS of the design system (the tokens, the layout, the components). | — (CSS only) |
 | `frontend/src/__tests__/` | The unit tests of the frontend (Vitest). | everything under `src/` (only in tests) |
 | `frontend/scripts/` | The tools: `check-boundaries.mjs`, `measure-bundle.mjs`, `copy-dist.mjs`, `gen-icons.mjs`. | — (Node scripts) |
 | `e2e/` | The end-to-end suite (Playwright): the specs, the helpers, the global setup. | the built application over HTTP |
-| `shared/` | The data shared by the two languages (today: the golden vectors of the query language). | — (JSON) |
+| `shared/` | The data shared by the two languages (today: the golden vectors of the query language and of the regular expressions). | — (JSON) |
 | `docs/` | The documentation. `CONTRACT.md` is authoritative for the API, `ARCHITECTURE.md` for the structure. | — (Markdown) |
 | `scripts/` | The PowerShell helpers: `dev`, `build`, `test`, `verify`, `backup`, `smoke`, `measure-perf`, `restore-smoke`. | — (PowerShell) |
 
@@ -69,12 +74,16 @@ file in the code, in the commits and in the documentation.
 
 ```
 components ──▶ core ──▶ api ──▶ lib
-     │           │
+     │           │        │
+     │           └── i18n ┘
      └── plugins (contract only)
 ```
 
 * `frontend/src/core/**` must not import `frontend/src/components/**`, and must
   not import `frontend/src/plugins/**` at all.
+* `frontend/src/i18n/**` is shared by the core and by the components: it holds
+  the strings and nothing else, it never imports a component, and it never
+  imports the plugin platform.
 * `frontend/src/plugins/**` (a built-in plugin) imports **only**
   `frontend/src/plugins/contract.ts` and its own files. It never imports the
   core, the API client or another plugin.
@@ -88,12 +97,19 @@ components ──▶ core ──▶ api ──▶ lib
 
 ```
 api ──▶ notes ──▶ port.Store ◀── sqlitestore
+ │  ╲
+ │   └──▶ auth · audit · webhooks · mcp   (their own SQLite files, leaves)
 ```
 
 * `backend/internal/port/**` is the **only** way to the storage. The domain
   layer never imports the SQLite driver, so the engine stays replaceable and
   testable.
 * `backend/internal/api/**` never touches the file system directly.
+* `backend/internal/auth/**`, `backend/internal/audit/**` and
+  `backend/internal/webhooks/**` keep their own SQLite files and import
+  nothing inside `backend/`: they are leaves under the HTTP layer.
+  `backend/internal/mcp/**` is a leaf too — it reaches the notes through the
+  interface it declares, never through the database.
 * `backend/internal/model/**` and `backend/internal/config/**` are frozen
   contracts: read them, import them, do not change them silently.
 
@@ -122,6 +138,7 @@ concern it, in the same change.
 | A new rule of the boundaries | `frontend/scripts/check-boundaries.mjs`, `docs/PLUGIN_DEVELOPMENT.md` | `npm run check:boundaries` must fail without the new rule and pass with it |
 | A new command of the CLI | `backend/cmd/<name>/main.go`, `docs/CONTRACT.md` §3.1 | `go run ./cmd/<name> -h` |
 | A change of the format of the backup | `backend/internal/backuppkg/manifest.go`, `docs/CONTRACT.md`, `scripts/restore-smoke.ps1` | `scripts/restore-smoke.ps1` |
+| A new string of the interface | `frontend/src/i18n/catalog/<area>.ts` (in **every** language of the file) | `npm test` (the test of the catalogue walks the sources) |
 | A new document | the index of `README.md`, the link in the section "Documentation" | the links are checked by reading |
 | Any change of the behaviour | the status of the phase in `IMPLEMENTATION_STATUS.md`, the live plan `PHASE8_PLAN.md` | the real output of the verification is quoted |
 

@@ -1,4 +1,4 @@
-# Noto — Plugin API (v1.2.0)
+# Noto — Plugin API (v1.3.0)
 
 Справочник публичного контракта плагинов. Источник истины — код:
 
@@ -17,8 +17,17 @@
 
 ```ts
 // frontend/src/plugins/contract.ts
-export const PLUGIN_API_VERSION = '1.2.0';
+export const PLUGIN_API_VERSION = '1.3.0';
 ```
+
+Версия `1.3.0` добавила три вещи:
+
+* **операцию открытия заметки** — `ctx.openNote(path)` (§4.2);
+* **песочницу плагинов** — `manifest.sandbox` и `plugin.sandboxSource` (§4.3);
+* **журнал аудита действий плагинов** — `PluginAuditEntry` (§13).
+
+Изменение аддитивное: новые члены необязательны в типе, поэтому плагин,
+объявивший `minApiVersion: '1.0.0'`, продолжает работать без единой правки.
 
 Версия `1.2.0` добавила **возможность запроса**: `ctx.api.query()` и
 `ctx.api.tags()` за новым правом `query.read` (§3, §5.1). Изменение
@@ -77,6 +86,7 @@ minApiVersion: '1.0.0'
 | `settings` | `PluginSettingSchema[]` | нет | Схема пользовательских настроек плагина. |
 | `settingsVersion` | `number` | нет | Версия схемы настроек (неотрицательное целое). |
 | `settingsMigrations` | `Record<string, (value: unknown) => unknown>` | нет | Миграции настроек: ключ — номер исходной версии строкой (`"1"`), значение — функция `N → N+1`. |
+| `sandbox` | `boolean` | нет | Плагин просит песочницу (API 1.3.0): его код выполняется внутри iframe со строгой CSP и общается с хостом через мост (см. §4.3). Плагин без `sandboxSource` отвергается хостом (состояние `failed`). |
 
 Схема одной настройки (`PluginSettingSchema`):
 
@@ -102,7 +112,7 @@ minApiVersion: '1.0.0'
 
 | Право | Что оно означает по смыслу | Что даёт на практике сейчас |
 | --- | --- | --- |
-| `notes.read` | Чтение содержимого заметок | `ctx.api.getNote(path)` возвращает тело заметки вместе с ревизией. |
+| `notes.read` | Чтение содержимого заметок | `ctx.api.getNote(path)` возвращает тело заметки вместе с ревизией. Требуется и для `ctx.openNote(path)` — плагин переходит только к заметке, которую ему разрешено читать (§4.2). |
 | `notes.write` | Запись заметок | `ctx.api.saveNote(path, content, revision)` — запись идёт через optimistic locking. |
 | `tree.read` | Чтение дерева заметок | `ctx.api.getTree()` возвращает `{ folders, files }`. |
 | `search.read` | Поиск по заметкам | `ctx.api.search(query, limit?)`. |
@@ -203,6 +213,7 @@ stopped by a permission error»).
 | `on(event, cb)` | `() => void` | Подписка на событие платформы. |
 | `onEditor(cb)` | `() => void` | Подписка на редактор приложения: колбэк вызывается сразу с текущим редактором (или `null`), затем при каждой смене. Поле **необязательное** (`onEditor?`), чтобы контексты, собранные вручную в тестах компонентов, оставались валидными. |
 | `onDeactivate(cb)` | `void` | Колбэк, который будет вызван при деактивации. |
+| `openNote(path)` | `void` | Открывает заметку в редакторе (API 1.3.0, право `notes.read`). Необязательный член — см. §4.2. |
 
 ### Функции, возвращающие `() => void`
 
@@ -298,10 +309,69 @@ export function activate(ctx: PluginContext): void {
 }
 ```
 
+### 4.2. Открытие заметки (`ctx.openNote`, API 1.3.0)
+
+`ctx.openNote(path)` — необязательный член контекста: он появился в версии
+`1.3.0` и открывает заметку в редакторе приложения.
+
+```ts
+export interface PluginContext {
+  // ...
+  openNote?(path: string): void;
+}
+```
+
+Правила:
+
+* операция требует права **`notes.read`**: плагин переходит только к заметке,
+  которую ему разрешено читать; без права бросается `PluginPermissionError`;
+* операция **не даёт** содержимое заметки — чтобы прочитать её, плагин
+  обращается к `ctx.api.getNote(path)`;
+* если хост не умеет открывать заметки (зависимость `openNote` не передана),
+  операция бросает `Error('the host cannot open notes')` — молчаливого
+  no-op нет;
+* действие записывается в журнал аудита (§13).
+
+Встроенный плагин `backlinks` использует операцию: ссылки панели открывают
+заметку.
+
+```ts
+ctx.registerPanel({
+  id: 'my-plugin.panel',
+  title: 'My plugin',
+  render: () =>
+    h('button', { onClick: () => ctx.openNote?.('notes/alpha.md') }, 'Alpha'),
+});
+```
+
+### 4.3. Песочница плагинов (API 1.3.0)
+
+Плагин, чей манифест объявляет `sandbox: true`, **не выполняется** в контексте
+приложения: его код живёт в строке `plugin.sandboxSource` и выполняется внутри
+`iframe` со строгой политикой безопасности.
+
+| Свойство | Значение |
+| --- | --- |
+| Атрибут `sandbox` кадра | `allow-scripts` — **без** `allow-same-origin`, поэтому документ имеет непрозрачный origin |
+| Политика (CSP) | `default-src 'none'; script-src 'nonce-…'; style-src 'nonce-…'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` — без `unsafe-inline` и без `unsafe-eval` |
+| Мост | `postMessage` с проверкой канала, идентификатора плагина, идентификатора запроса и списка разрешённых методов |
+| Разрешённые методы | `api.getNote`, `api.getTree`, `api.search`, `api.query`, `api.tags`, `editor.getText`, `editor.getSelection`, `editor.getCursor`, `editor.getPath`, `openNote`, `log` |
+| Права | Те же, что и у обычного плагина: обработчики моста строятся из ограниченных возможностей плагина, поэтому `PluginPermissionError` работает и в песочнице |
+
+Внутри кадра плагин пользуется только `window.notoPlugin`:
+
+```js
+const tree = await window.notoPlugin.api.getTree();
+```
+
+Исходный код песочницы **не должен** содержать `eval`, `new Function`,
+динамический `import()`, `fetch`, `XMLHttpRequest` или `WebSocket` — это
+проверяет новое правило границ **R17**
+(`frontend/scripts/check-boundaries.mjs`).
+
 ---
 
 ## 5. Доступ к данным (`PluginApi`)
-
 `frontend/src/plugins/contract.ts:117`. Реализация — фасад
 `createPluginApi()` (`frontend/src/core/api/pluginApi.ts:28`), который
 делегирует в `src/api/notes.ts`, `src/api/tree.ts`, `src/api/search.ts`.
@@ -912,7 +982,29 @@ const all = await ctx.settings.all();
 
 ---
 
-## 13. Где искать ещё
+## 13. Журнал аудита действий плагинов (API 1.3.0)
+
+Каждое действие плагина записывается в журнал аудита: идентификатор
+плагина, действие, момент и цель.
+
+| Действие | Когда записывается | Пример цели |
+| --- | --- | --- |
+| `read` | Плагин прочитал данные хранилища (`getNote`, `getTree`, `search`, `query`, `tags`) | `notes/alpha.md`, `tree`, `query:path != ""` |
+| `write` | Плагин записал заметку (`saveNote`) | `notes/alpha.md` |
+| `open` | Плагин попросил открыть заметку (`ctx.openNote`) | `notes/alpha.md` |
+| `command` | Плагин выполнил зарегистрированную команду | `backlinks.show` |
+
+Журнал — ограниченное кольцо на 500 записей
+(`PluginAuditLog`, `frontend/src/plugins/audit.ts`): когда он переполняется, самая
+старая запись вытесняется. Запись **никогда** не содержит содержимого заметки —
+только путь, вид запроса и идентификатор команды.
+
+Журнал показывает панель управления плагинами
+(`PluginManagerPanel`, свойство `audit`).
+
+---
+
+## 14. Где искать ещё
 
 * Модель доверия, ограничения и что **не** защищает enforcement:
   [PLUGIN_SECURITY.md](PLUGIN_SECURITY.md).
@@ -920,3 +1012,6 @@ const all = await ctx.settings.all();
   [PLUGIN_DEVELOPMENT.md](PLUGIN_DEVELOPMENT.md).
 * Архитектурные правила импортов: `frontend/scripts/check-boundaries.mjs`.
 * Бэкенд-точка расширения: `backend/internal/notes/noteapi.go`.
+* Механизм песочницы и мост: `frontend/src/plugins/sandbox.ts`.
+* Журнал аудита: `frontend/src/plugins/audit.ts`.
+* Установка плагинов из файла и из URL: `frontend/src/plugins/loader.ts`.

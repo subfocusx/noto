@@ -116,4 +116,9 @@ Noto умеет искать по тексту (FTS5) и показывать д
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — язык получил оператор регулярных выражений: `matches` и
+префикс `match:` (`backend/internal/query/regex.go`,
+`frontend/src/core/query/regex.ts`). Бэкенд компилирует выражение через RE2,
+браузер — через `RegExp` JavaScript, поэтому у выражений есть свои
+golden-векторы `shared/vectors/regex.json`; ограничение (движки не
+эквивалентны) записано в `docs/NOT_IMPLEMENTED.md`, пункт B1.

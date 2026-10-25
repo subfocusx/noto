@@ -1,6 +1,6 @@
 # D2 — Производные свойства заметки
 
-**Status:** Draft
+**Status:** Implemented
 
 **Связанные документы:** `docs/QUERY_LANGUAGE.md` §8, `shared/query-vectors.json`
 (векторы свойств), `backend/internal/notes/`, `backend/internal/sqlitestore/`.
@@ -112,4 +112,6 @@ O(размер библиотеки). Для персонального хран
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — статус `Draft` → `Implemented`: кэш свойств, пересчёт и флаг
+`stale` реализованы в `backend/internal/notes/derived.go`,
+`backend/internal/sqlitestore/store_derived.go` и в порте `port.Store`.

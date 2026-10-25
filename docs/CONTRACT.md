@@ -150,18 +150,45 @@ CREATE TABLE IF NOT EXISTS note_props (
   path        TEXT PRIMARY KEY,
   name        TEXT NOT NULL DEFAULT '',
   title       TEXT NOT NULL DEFAULT '',
-  tags        TEXT NOT NULL DEFAULT '[]',
+  tags        TEXT NOT NULL DEFAULT '',
   flags       INTEGER NOT NULL DEFAULT 0,
   updated_at  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_note_props_tag ON note_props(tags);
+CREATE TABLE IF NOT EXISTS note_versions (
+  path       TEXT NOT NULL,
+  revision   INTEGER NOT NULL,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (path, revision)
+);
+CREATE TABLE IF NOT EXISTS note_derived (
+  path        TEXT PRIMARY KEY,
+  derived     TEXT NOT NULL DEFAULT '{}',
+  computed_at INTEGER NOT NULL DEFAULT 0,
+  stale       INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS attachment_text (
+  id        TEXT PRIMARY KEY,
+  note_path TEXT NOT NULL DEFAULT '',
+  name      TEXT NOT NULL DEFAULT '',
+  body      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_attachment_text_note ON attachment_text(note_path);
 ```
 
 The schema version is stored in `PRAGMA user_version`. It is `1` for the
-vaults created before the query language and `2` since the migration of the
-phase 8: version `2` adds the table `note_props` and its index. The migration
-is idempotent: opening a vault of version `1` twice leaves it at version `2`,
-and the data of the version `1` is never touched.
+vaults created before the query language, `2` since the migration of the
+phase 8 (the table `note_props` and its index) and `3` since the migration of
+2026-10-25: version `3` adds the table `note_versions` (the history of the
+notes), the table `note_derived` (the cache of the derived properties with
+the flag `stale`), the table `attachment_text` (the text of the attachments,
+so that it is searchable) and the column `created_at` of the notes. The
+migration is idempotent: opening a vault of version `1` twice leaves it at
+version `3`, and the data of the version `1` is never touched. The data
+migration fills the `created_at` of the old notes with their modification
+time — an approximation, not a fact.
 
 The table `note_props` holds the **derived** properties of the notes (the
 title, the tags and the boolean flags). They are a cache of the text of the
@@ -169,6 +196,16 @@ note: the file on the disk stays the source of truth, and the rows are
 rebuilt when the note is saved or when the index is rebuilt. A row whose
 flags contain the bit `PropStale` marks a note whose properties could not be
 recalculated; the answer of a query then carries `partial: true`.
+
+The table `note_derived` is the second, newer cache of the same properties:
+the blob `derived` holds the title, the tags and the bit mask of the flags,
+and the column `stale` tells whether the note changed since the last
+calculation. The rule of the cache is simple: a write **marks** the
+properties as stale instead of recomputing them, and the recalculation is a
+separate, explicit step. The table `note_versions` holds the history of the
+notes: a version is immutable, it is written once and never modified. The
+table `attachment_text` holds the text extracted from the attachments at the
+upload, so that the content of an attachment is searchable.
 
 Notes:
 
@@ -193,7 +230,7 @@ Every non-2xx response uses the envelope:
 
 Stable error codes: `bad_request`, `invalid_path`, `not_found`, `conflict`,
 `revision_conflict`, `duplicate_name`, `invalid_name`, `payload_too_large`,
-`unsupported_media_type`, `forbidden`, `internal`.
+`unsupported_media_type`, `forbidden`, `unauthenticated`, `internal`.
 
 ### Health
 * `GET /api/health` → `200 {"status":"ok","version":"...","time":"RFC3339"}`
@@ -201,6 +238,13 @@ Stable error codes: `bad_request`, `invalid_path`, `not_found`, `conflict`,
 ### Tree
 * `GET /api/tree` → `200 {"folders":[Node],"files":[Node]}`
   Flat arrays; the client builds the hierarchy. Trashed entries are excluded.
+* `GET /api/tree/children?parent=<path>&cursor=<path>&limit=<n>` →
+  `200 {"items":[Node],"nextCursor":"<path>"}`
+  One page of the children of a folder (the lazy loading of the tree). The
+  cursor is the path of the last child of the previous page; the cursor of the
+  answer is empty when the page is the last one. `limit` must be a positive
+  number (100 by default); anything else → `400 bad_request`. The page of a
+  folder that does not exist is empty.
 * `POST /api/folders` body `{"parentPath":"","name":"Journal"}` → `200 Node`
 * `POST /api/files` body `{"parentPath":"","name":"note.md"}` → `200 Node`
   `name` must end with `.md`; the server appends it when missing.
@@ -238,6 +282,12 @@ storage the same queries are answered by the browser.
   * A broken query → `400 bad_request` with the message of the parser
     (`unknown field: <name>`, `unknown operator: <name>`, `expected a value`…).
   * The limit is optional; the default is `50`.
+* The operator `matches` (and the prefix form `match:`) looks for a regular
+  expression in the text of a note. The expression is compiled when the query
+  is parsed: a broken expression is `400 bad_request` with the message
+  `invalid regular expression: <reason>`. The backend compiles it with RE2,
+  the browser with the `RegExp` of JavaScript — see
+  [`QUERY_LANGUAGE.md`](QUERY_LANGUAGE.md) §3.
 * `GET /api/tags` → `200 {"tags":[{"tag":"work","count":3}]}`
   The tags of the vault with the number of the notes that carry them, the
   biggest count first and then by name.
@@ -258,6 +308,106 @@ storage the same queries are answered by the browser.
 * `GET /api/attachments` → `200 {"attachments":[Attachment]}`
 * `GET /api/attachments/{id}/raw` → raw bytes with the stored mime type
 * `DELETE /api/attachments/{id}` → `200 {"ok":true}`
+* `POST /api/attachments/search` body `{"query":string,"limit"?:int}`
+  → `200 {"hits":[{"noteId":string,"notePath"?:string,"attachmentId":string,
+  "name":string,"mime":string,"snippet":string}]}`
+  — the full-text search over the text of the attachments (the text of a
+  `text/plain`, a `text/markdown`, a `.md` and a `.txt` file is indexed at the
+  upload). An empty query → `400 bad_request`.
+* `GET /api/attachments/{id}/content` → the raw bytes with the real content type
+* `POST /api/attachments/{id}/preview` → `200 {"mime":string,"width":int,"height":int,"url":string}`
+  — the size of an image is read from the bytes; a file that is not an image
+  gives `0` and `0`.
+
+### The versions of a note
+* `GET /api/notes/versions?path=<path>` → `200 {"versions":[{"path":string,
+  "revision":int,"title":string,"content":string,"createdAt":RFC3339}]}`
+* `GET /api/notes/versions/diff?path=<path>&from=<rev>&to=<rev>` →
+  `200 {"path":string,"from":int,"to":int,"lines":[{"kind":"context|added|removed",
+  "text":string,"fromLine":int,"toLine":int}]}` — the line numbers are 1-based,
+  `0` means that the line does not exist on that side
+* `POST /api/notes/versions/restore` body `{"path":string,"revision":int}`
+  → `200 NoteContent` — the restore is a new write, so the revision grows
+
+  An unknown path or an unknown revision → `404 not_found`; a missing `path`
+  → `400 bad_request`. The restore is written into the audit log.
+
+### The authentication (the accounts)
+The authentication is disabled by default: the local mode keeps working exactly
+as before, and every request is served as the local user `local` (role `admin`).
+When `NOTO_AUTH_ENABLED` is `true`, the endpoints below are the entry points.
+
+* `POST /api/auth/login` body `{"name":string,"password":string}`
+  → `200 {"token":string,"user":User,"expiresAt":RFC3339}`
+  — the session is also written in the cookie `noto_session` (`HttpOnly`,
+  `SameSite=Lax`), so that the browser works without a token. A wrong name or
+  password → `401 unauthenticated`.
+* `POST /api/auth/logout` → `200 {"ok":true}` — the session is removed, the
+  cookie is cleared.
+* `GET /api/auth/me` → `200 {"user":User,"authenticated":bool}`
+
+The credentials travel with the header `Authorization: Bearer <token>` or with
+the cookie `noto_session`.
+
+### The accounts (the administrator only)
+* `GET /api/users` → `200 {"users":[User]}`
+* `POST /api/users` body `{"name":string,"password":string,"role":"admin|user"}`
+  → `200 User` (the role defaults to `user`)
+* `DELETE /api/users/{id}` → `200 {"ok":true}` — the last administrator cannot
+  be removed → `409 conflict`
+* `POST /api/users/{id}/role` body `{"role":"admin|user"}` → `200 User` — the
+  last administrator cannot be demoted → `409 conflict`
+
+`User` is `{"id":string,"name":string,"role":"admin|user","createdAt":RFC3339}`.
+
+### The audit log
+* `GET /api/audit?limit=100&action=&user=` → `200 {"entries":[Entry]}` — only
+  an administrator reads it; `limit` is 100 by default and 1000 at most.
+
+`Entry` is `{"id":int,"time":RFC3339,"user":string,"action":string,"target":string,"result":"ok|error"}`.
+The actions are `note.created`, `note.updated`, `note.renamed`, `note.moved`,
+`note.deleted`, `note.restored`, `note.imported`, `file.created` and
+`folder.created`. The log never holds the content of a note — only the
+identifiers.
+
+### The webhooks
+* `GET /api/webhooks` → `200 {"subscriptions":[Subscription]}`
+  (`?all=true` — the subscriptions of every user, for an administrator)
+* `POST /api/webhooks` body `{"url":string,"events":[string]}` → `200 Subscription`
+  — the answer carries the secret of the subscription: it is the only time the
+  secret leaves the server. An empty list of events means every event.
+* `DELETE /api/webhooks/{id}` → `200 {"ok":true}`
+* `GET /api/webhooks/deliveries?limit=100` → `200 {"deliveries":[Delivery]}`
+* `POST /api/webhooks/deliveries/{id}/redeliver` → `200 {"ok":true}`
+
+`Subscription` is `{"id":string,"owner":string,"url":string,"events":[string],"secret":string,"createdAt":RFC3339}`.
+`Delivery` is `{"id":int,"subscriptionId":string,"event":string,"payload":string,"state":"pending|delivered|failed","attempts":int,"nextAttempt":RFC3339,"lastError":string,"createdAt":RFC3339}`.
+
+The guard against the server side request forgery: only `https` is accepted, and
+a plain `http` only for a loopback address (`localhost`, `127.0.0.1`, `::1`).
+Every other url → `400 bad_request`.
+
+The delivery is a `POST` with the body of the event, the header
+`X-Noto-Signature: sha256=<hexadecimal HMAC-SHA256 of the body with the secret
+of the subscription>`, the header `X-Noto-Event` and the header
+`X-Noto-Delivery`. A failed delivery is retried with a backoff (30 s, 60 s,
+120 s…) and is marked as `failed` after five attempts.
+
+### The MCP over HTTP
+* `POST /api/mcp` — the body is a JSON-RPC 2.0 request or a batch of requests.
+  The answer is the raw JSON of the protocol (the envelope of the REST API is
+  not used).
+
+The methods are `initialize`, `tools/list` and `tools/call`. The tools are
+`notes.list`, `notes.read`, `notes.create`, `notes.update`, `notes.delete` and
+`notes.search`. The errors of the protocol follow JSON-RPC 2.0: `-32700`
+(parse), `-32600` (invalid request), `-32601` (unknown method), `-32602`
+(invalid params and unknown tool), `-32603` (internal error).
+
+### The TLS
+The server serves HTTPS when `NOTO_TLS_CERT_FILE` and `NOTO_TLS_KEY_FILE` are
+set. Nothing changes in the API: the routes, the envelopes and the codes are
+the same over HTTPS.
 
 ### Maintenance
 The maintenance endpoint is registered **only** when the server was started
@@ -388,6 +538,18 @@ Policy of the command:
   allow only `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`,
   `application/pdf`, `text/plain`; enforce the size limit; generate the stored
   name server side; never trust the client file name or mime type.
+* Authentication: when `NOTO_AUTH_ENABLED` is `true`, every endpoint of the API
+  except `GET /api/health` and `POST /api/auth/login` needs valid credentials
+  (the header `Authorization: Bearer <token>` or the cookie `noto_session`).
+  The endpoints of the accounts and the audit log need the role `admin`. The
+  password of an account is stored with PBKDF2-HMAC-SHA256 (600 000 iterations)
+  and a random salt; the encoded hash is self describing, so the parameters can
+  be raised later.
+* The secret of a webhook subscription is generated by the server and never
+  returned in clear after the creation of the subscription. The urls of the
+  subscriptions are guarded against the server side request forgery: only
+  `https`, or a plain `http` for a loopback address.
+* The audit log never holds the content of a note — only the identifiers.
 
 ## 6. Logging
 

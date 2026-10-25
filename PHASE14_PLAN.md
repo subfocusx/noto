@@ -102,19 +102,18 @@
 
 | # | Функция | Состояние сегодня | Где делать | Размер |
 |---|---|---|---|---|
-| B1 | Шаблоны | плагин `insert-template` с жёстко заданными шаблонами | плагин (настройки плагина, контракт не меняется) | M |
-| B2 | Вложения | конвейер есть, превью нет (`AttachmentsPanel.tsx:64-68` — только ссылка) | ядро + плагин | M |
-| B3 | Аудиозапись | нет (`MediaRecorder` в репозитории отсутствует) | плагин + контракт (`attachments.upload`, `PLUGIN_API_VERSION` → 1.3.0) | M |
-| B4 | Работа с текстом | оглавление и подсчёт слов есть; сносок и презентаций нет | плагины | S / M / L |
-| B5 | Быстрые заметки | нет (создание требует имени и папки) | ядро (`createQuickNote`) | S |
-| B6 | Автосохранение черновиков | есть (`lib/drafts.ts`, `core/vault/sealedDrafts.ts`) | проверка тестом | S |
-| B7 | Markdown | есть (`marked` + `dompurify`); формул и подсветки кода нет | ядро + новая зависимость | M |
-| B8 | Заккрепление | есть только «избранное»; закрепления вверху дерева нет | ядро | M |
-| B9a | Вебхуки | нет | бэкенд (outbox в SQLite, `notes.Hook`, новые маршруты) | L |
-| B9b | MCP | нет | бэкенд (JSON-RPC 2.0 поверх HTTP) | M |
-| B9c | gRPC | нет | отложено решением пользователя | L |
-| B10 | Мобильная адаптация | частично (медиазапросы, drawer ≤820 px, PWA) | ядро (CSS и компоненты) | M |
-| B11 | Время создания | есть в БД и в языке запросов, в интерфейсе не показывается | ядро | S |
+| B1 | Шаблоны | **DONE** | `frontend/src/core/templates/templates.ts`, `frontend/src/components/sections/TemplatePanel.tsx` (встроенный `insert-template` остался) | M |
+| B2 | Вложения | **DONE** | `backend/internal/notes/{attachsearch,attachment_search,attachment_preview}.go`, `frontend/src/components/AttachmentsPanel.tsx` (превью, лайтбокс, поиск по тексту) | M |
+| B3 | Аудиозапись | **DONE** | `frontend/src/core/recorder/` (`MediaRecorder`), кнопка в `frontend/src/components/Editor.tsx` | M |
+| B4 | Работа с текстом | **DONE** | формулы, подсветка кода и сноски — `frontend/src/lib/markdown/`; презентации — `frontend/src/core/presentations/` | S / M / L |
+| B5 | Быстрые заметки | **DONE** | `frontend/src/core/quicknotes/quickNotes.ts` | S |
+| B6 | Автосохранение черновиков | **DONE** | `frontend/src/lib/drafts.ts`, `frontend/src/core/vault/sealedDrafts.ts`; покрыто тестами (`editor-drafts.test.ts`, `drafts-regression.test.ts`) | S |
+| B7 | Markdown | **DONE** | `frontend/src/lib/markdown/{math,codeHighlight,footnotes}.ts` | M |
+| B8 | Заккрепление | **DONE** | `frontend/src/core/pin/pins.ts`, `frontend/src/styles/tree-pins.css` | M |
+| B9a | Вебхуки | **DONE** | `backend/internal/webhooks/` (подписки, outbox, воркер доставки), `backend/internal/api/handlers_webhooks.go` | L |
+| B9b | MCP | **DONE** | `backend/internal/mcp/`, `backend/internal/api/handlers_mcp.go` | M |
+| B10 | Мобильная адаптация | **частично** | жест ящика — `frontend/src/core/touch/`, стили — `mobile-drawer.css`, `mobile-panels.css`, `mobile-editor.css`; оболочка остаётся настольной (см. `docs/NOT_IMPLEMENTED.md`, B7) | M |
+| B11 | Время создания | **DONE** | `created_at` в базе (схема версии 3), в дереве — `frontend/src/styles/tree-dates.css` | S |
 
 Правило этапа B: то, что умещается в контракт плагина, — плагином; остальное —
 ядром фронтенда и бэкендом, с записью в документацию в том же коммите.
@@ -185,9 +184,10 @@
 
 ## Отклонения и риски
 
-* **Бэкенд, контракт API и схема SQLite не меняются**: фаза снова
-  фронтенд-only. Вебхуки и MCP (этап B) — серверная часть, они меняют
-  `port.Store` и контракт API.
+* **Бэкенд, контракт API и схема SQLite не менялись в самой фазе 14**:
+  фаза была фронтенд-only. Вебхуки и MCP (этап B) — серверная часть, они
+  меняют `port.Store` и контракт API; они сделаны в пакете от 2026-10-25
+  (см. `IMPLEMENTATION_STATUS.md`, «Phase 16 status»).
 * **Путь хранилища открывает меню, а не диалог.** Диалог обхода диска остаётся
   в меню («Choose another folder…»). Два E2E-теста
   (`e2e/specs/vault.spec.ts`, `e2e/specs/encryption.spec.ts`) обновлены под
@@ -204,4 +204,62 @@
   прямой путь из шапки.
 * **Стили панелей плагинов** лежат в `plugin.css`. У панели «Tags» их не
   было вовсе — отсюда серые блоки. У соседних панелей (Activity, Link Cards,
-  Graph) своих стилей тоже нет: они остаются в списке на будущее.
+  Graph) своих стилей тоже не было: они оставались в списке на будущее.
+  Свои стили у них появились в пакете от 2026-10-25
+  (`frontend/src/styles/plugin-activity.css`, `plugin-graph.css`,
+  `plugin-links.css`).
+
+
+---
+
+## 8. A22, B8, B18, B20 — следующий шаг фазы
+
+Четыре пункта из `docs/NOT_IMPLEMENTED.md` закрыты фронтендом; сервер не
+менялся.
+
+### A22 — несколько хранилищ одновременно
+
+Состояние каждого хранилища живёт в `frontend/src/core/storages/`: карта
+состояний по пути хранилища (`storageRegistry.ts`) и само состояние
+(`storageState.ts` — дерево, открытая заметка, раскрытые папки, зеркала
+стора). В сторе по-прежнему одно состояние: это состояние активного
+хранилища, реестр держит копии остальных.
+
+* `switchStorage(path)` — переключение: серверу говорится новая папка,
+  состояние прежнего хранилища запоминается, состояние нового
+  возвращается в стор (если его открывали раньше) или читается с сервера.
+* `closeStorage(path)` — закрытие: хранилище теряет дерево, заметку и
+  раскрытые папки.
+* Меню хранилища (`VaultSwitchMenu`) показывает открытые хранилища и
+  кнопку закрытия каждого.
+
+Ограничение (записано честно): сервер по-прежнему отдаёт одно хранилище за
+раз, поэтому «открытые» хранилища живут в памяти браузера — их дерево
+восстанавливается из реестра, а не перечитывается.
+
+### B8 — мобильная адаптация
+
+Жест живёт в `frontend/src/core/touch/`: `swipe.ts` (порог 48 px, доля
+поперечного движения 0,6) и `drawerGesture.ts` (свайп у края открывает
+ящик, свайп влево закрывает, прокрутка дерева жестом не считается).
+Ящик слушает жест с самого старта приложения (`core/store/appStore.ts`).
+Стили — три новых файла: `mobile-drawer.css`, `mobile-panels.css`,
+`mobile-editor.css`.
+
+### B18 — хранилище, зафиксированное окружением
+
+Кнопка остаётся на месте и помечена `aria-disabled`, но теперь объясняет
+себя: колонка разделов показывает заметку (`storage-fixed-note`), меню
+хранилища — короткое сообщение с причиной, а кнопка «Why can it not be
+changed?» кладёт объяснение в баннер. Тексты живут в
+`frontend/src/core/storages/fixedStorage.ts`.
+
+### B20 — образ Docker
+
+Docker на этой машине не установлен (`docker version` — «не является
+командой»), образ здесь не собирался. Проверено вручную: Dockerfile
+копирует только то, что есть в контексте (`frontend/package.json`,
+`frontend/package-lock.json`, `backend/go.mod`, `backend/go.sum`), стадия
+сборки фронтенда кладёт `frontend/dist` в `backend/internal/web/dist` до
+сборки Go, поэтому `//go:embed all:dist` наполнен; локально `go build ./...`
+и `go vet ./...` проходят с собранным `dist`.

@@ -102,10 +102,10 @@
 
 | ID | Задача | Статус | Примечание |
 |---|---|---|---|
-| F8.1 | Подсветка совпадений запроса в редакторе, автодополнение тегов, drop файла, сброс черновика | **TODO** | механизм подсветки уже есть (`core/query/highlight.ts`), но не подключён к CodeMirror |
-| F8.2 | Режим фокуса, отмена удаления, карточка заметки | **TODO** | приёмы из memos, отдельная задача |
-| F8.3 | Синхронизация фильтра с URL | **TODO** | состояние фильтра живёт в сторе, ссылка на запрос ещё не делается |
-| F8.4 | Регулярные выражения в языке | **TODO** | сознательно не поддерживаются: `matches` → «unknown operator» |
+| F8.1 | Подсветка совпадений запроса в редакторе, автодополнение тегов, drop файла, сброс черновика | **DONE** | сделано в пакете от 2026-10-25: `frontend/src/lib/editor/{matchRanges,tags}.ts`, drop файла и сброс черновика — в `frontend/src/components/Editor.tsx` и `frontend/src/lib/drafts.ts` (`resetDraft`) |
+| F8.2 | Режим фокуса, отмена удаления, карточка заметки | **DONE** | `frontend/src/core/editor/{focusMode,undoDelete}.ts` (тост живёт 5000 мс), `frontend/src/components/NoteCard.tsx` |
+| F8.3 | Синхронизация фильтра с URL | **DONE** | `frontend/src/lib/editor/filterUrl.ts` |
+| F8.4 | Регулярные выражения в языке | **DONE** | оператор `matches` и префикс `match:`; RE2 в бэкенде (`backend/internal/query/regex.go`), `RegExp` в браузере (`frontend/src/core/query/regex.ts`), векторы — `shared/vectors/regex.json`. Разница RE2 и JavaScript остаётся и записана в `docs/NOT_IMPLEMENTED.md` (B1) |
 
 ## Журнал проверок
 

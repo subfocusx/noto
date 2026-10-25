@@ -1,6 +1,6 @@
 # D5 — Отмена удаления
 
-**Status:** Draft
+**Status:** Implemented
 
 **Связанные документы:** `frontend/src/components/`, `docs/CONTRACT.md` §3
 (удаление и восстановление), `docs/DESIGN_SYSTEM.md`.
@@ -91,4 +91,6 @@
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — статус `Draft` → `Implemented`: тост отмены удаления на пять
+секунд реализован в `frontend/src/core/editor/undoDelete.ts` и показывается
+в `frontend/src/components/Editor.tsx`.

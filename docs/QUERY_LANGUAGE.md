@@ -1,7 +1,9 @@
 # The query language of Noto
 
-**Status:** Implemented (phase 8).
-**Source of truth:** this document plus the golden vectors `shared/query-vectors.json`.
+**Status:** Implemented (phase 8; the operator `matches` and the prefix form
+`match:` came later).
+**Source of truth:** this document plus the golden vectors `shared/query-vectors.json`
+and `shared/vectors/regex.json`.
 
 The language answers one question: *which notes of the vault match?* It is used
 by the search panel, by the saved views, by the tag tree, by the plugins and by
@@ -22,11 +24,13 @@ query      := orExpr
 orExpr     := andExpr ( "||" andExpr )*
 andExpr    := unary ( "&&" unary )*
 unary      := "!" unary | primary
-primary    := "(" orExpr ")" | comparison
+primary    := "(" orExpr ")" | regexPrefix | comparison
+regexPrefix:= "match" ":" ( string | raw )
 comparison := field operator value
+            | field "." operator "(" value ")"
             | field                       -- a flag on its own means "is true"
 operator   := "==" | "!=" | ">" | ">=" | "<" | "<="
-            | "in" | "contains" | "startsWith" | "endsWith"
+            | "in" | "contains" | "startsWith" | "endsWith" | "matches"
 value      := string | number | "true" | "false"
             | "now" | "today" | relative
             | "[" [ value { "," value } ] "]"
@@ -39,6 +43,11 @@ duration   := "d" | "h" | "m"
   `field == true`.
 * The right hand side of a comparison is always a **value**, never a field:
   there are no comparisons between two fields.
+* The operator can be written in two ways: `field contains "x"` and
+  `field.contains("x")` mean the same thing.
+* The prefix form `match:<expression>` is a comparison in disguise: it looks
+  for the expression in the `title`, in the `content`, in the `path` and in
+  the `tag` of the note (see §3).
 
 ### Tokens
 
@@ -89,11 +98,39 @@ An unknown field is an error: `unknown field: <name>`.
 | `contains` | `content`, `name` | The text contains the value, case insensitively. |
 | `startsWith` | `path`, `name`, `title`, `folder` | The text starts with the value, case insensitively. |
 | `endsWith` | `path`, `name`, `title`, `folder` | The text ends with the value, case insensitively. |
+| `matches` | `path`, `name`, `title`, `folder`, `ext`, `content`, `tag` | The text of the field matches the regular expression of the value. |
 
-An operator that does not exist (`~`, `matches`) is an error:
-`unknown operator: <name>`. The regular expression operator is **not** part of
-the language: the syntax of the regular expressions differs between the
-engines, so the language stays predictable.
+An operator that does not exist (`~`) is an error:
+`unknown operator: <name>`. An operator that does not fit the field is an
+error too: `operator <op> does not fit the field <field>`.
+
+### The regular expressions
+
+The operator `matches` takes a **regular expression**, and the prefix form
+`match:` does the same without naming a field:
+
+```
+title matches "^A"
+content matches "(foo|bar)"
+match:^#\w+$
+```
+
+* The prefix form `match:<expression>` looks for the expression in the
+  `title`, in the `content`, in the `path` and in the `tag` of the note — it
+  is the disjunction of the four comparisons.
+* The expression of the prefix form is either a quoted string (`match:"^#"`),
+  or a raw text that ends at the first space (`match:^#\w+$`).
+* The expression is compiled when the query is parsed, never when it is run:
+  a broken expression is an error of the query, not a failure in the middle
+  of the answer.
+* The expression is bounded: it may not be longer than 512 bytes.
+* The backend compiles the expression with **RE2** (the engine of Go): it is
+  linear, it has no back reference and no look around. The browser compiles
+  it with the `RegExp` of JavaScript, whose language is close but not the
+  same. The golden vectors of the regular expressions
+  (`shared/vectors/regex.json`) hold only the expressions that **both**
+  engines understand, and both implementations must produce exactly the same
+  intermediate representation of them.
 
 ---
 
@@ -123,6 +160,9 @@ path startsWith "projects/"
 created_at >= now - 7d
 created_at >= today
 folder != ""
+title matches "^A"
+content matches "(foo|bar)"
+match:^#\w+$
 ```
 
 ---
@@ -138,6 +178,8 @@ folder != ""
 | A parenthesis is not closed | `expected )` |
 | The query ends in the middle | `unexpected end of query` |
 | The text is not a query at all | `unexpected token: <token>` |
+| The expression of `matches` (or of `match:`) is broken | `invalid regular expression: <reason>` |
+| The expression of `matches` is longer than 512 bytes | `invalid regular expression: the expression is longer than 512 bytes` |
 
 An empty query is not an error: it matches nothing.
 
@@ -162,7 +204,9 @@ str{v}  num{v}  bool{v}  list{items}  now  today  rel{base,off}
 
 Both implementations read the same golden vectors (`shared/query-vectors.json`)
 and must produce exactly the same IR. The test of the conformance reads the
-same file in both languages: the language cannot drift.
+same file in both languages: the language cannot drift. The regular expressions
+have their own file of vectors (`shared/vectors/regex.json`), read by the two
+implementations in the same way.
 
 ---
 
@@ -173,6 +217,12 @@ note in one pass (`backend/internal/metadata`, `frontend/src/core/metadata`).
 They are a cache, not a source of truth: the file `.md` is the truth, and the
 properties are recalculated when the note is saved and when the index is
 rebuilt.
+
+The cache lives in the database (the table `note_props` of the schema of
+SQLite) and it carries the flag `stale`: a note that changed since the last
+calculation is marked, and the recalculation is a separate, explicit step.
+The answer of the query says `partial: true` when the properties of some
+notes could not be recalculated.
 
 The rules are simple and are covered by the golden vectors:
 

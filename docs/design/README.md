@@ -29,11 +29,11 @@
 | Карточка | Тема | Статус | Связанные документы |
 |---|---|---|---|
 | [D1 — Язык запросов](D1-query-language.md) | Свой мини-язык запросов вместо cel-go: IR и два компилятора, golden-векторы как контракт | Implemented | `docs/QUERY_LANGUAGE.md`, `shared/query-vectors.json` |
-| [D2 — Производные свойства заметки](D2-derived-note-properties.md) | Кэш свойств: пересчёт при сохранении и при переиндексации, флаг `stale` при ошибке | Draft | `docs/QUERY_LANGUAGE.md` §8 |
-| [D3 — Формат бэкапа v2](D3-backup-format-v2.md) | `manifest` + JSON Schema + `sha256` на файл + идемпотентность; архивы v1 читаются | Draft | `backend/internal/backuppkg/manifest.go`, `scripts/restore-smoke.ps1` |
-| [D4 — Сохранённые представления](D4-saved-views.md) | Именованные фильтры с иконкой, хранятся в настройках | Draft | `docs/API-CHANGELOG.md`, `frontend/src/core/settings/` |
-| [D5 — Отмена удаления](D5-undo-delete.md) | Тост на 5 секунд после удаления | Draft | `frontend/src/components/` |
-| [D6 — Тепловая карта активности](D6-activity-heatmap.md) | Плагин, считающий активность по `modTime` | Draft | `docs/PLUGIN_API.md` |
+| [D2 — Производные свойства заметки](D2-derived-note-properties.md) | Кэш свойств: пересчёт при сохранении и при переиндексации, флаг `stale` при ошибке | Implemented | `docs/QUERY_LANGUAGE.md` §8, `backend/internal/notes/derived.go`, `backend/internal/sqlitestore/store_derived.go` |
+| [D3 — Формат бэкапа v2](D3-backup-format-v2.md) | `manifest` + JSON Schema + `sha256` на файл + идемпотентность; архивы v1 читаются | Implemented | `backend/internal/backuppkg/manifest.go`, `scripts/restore-smoke.ps1` |
+| [D4 — Сохранённые представления](D4-saved-views.md) | Именованные фильтры с иконкой, хранятся в настройках | Implemented | `frontend/src/core/views/types.ts`, `frontend/src/components/FilterPanel.tsx` |
+| [D5 — Отмена удаления](D5-undo-delete.md) | Тост на 5 секунд после удаления | Implemented | `frontend/src/core/editor/undoDelete.ts`, `frontend/src/components/Editor.tsx` |
+| [D6 — Тепловая карта активности](D6-activity-heatmap.md) | Плагин, считающий активность по `modTime` | Implemented | `frontend/src/plugins/builtin/activity/index.ts`, `frontend/src/core/graph/activity.ts` |
 
 ## Как писать карточку
 

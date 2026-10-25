@@ -1,6 +1,6 @@
 # D3 — Формат бэкапа v2
 
-**Status:** Draft
+**Status:** Implemented
 
 **Связанные документы:** `backend/internal/backuppkg/manifest.go`,
 `backend/internal/restore/restore.go`, `docs/CONTRACT.md` §3.1,
@@ -107,4 +107,6 @@
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — статус `Draft` → `Implemented`: манифест версии 2 с суммами
+`sha256`, проверка архива и чтение архивов версии 1 реализованы в
+`backend/internal/backuppkg/`.

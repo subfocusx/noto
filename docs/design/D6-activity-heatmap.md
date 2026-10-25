@@ -1,6 +1,6 @@
 # D6 — Тепловая карта активности
 
-**Status:** Draft
+**Status:** Implemented
 
 **Связанные документы:** `docs/PLUGIN_API.md`, `docs/QUERY_LANGUAGE.md`
 (поля `created_at`, `updated_at`), `frontend/src/plugins/builtin/`.
@@ -107,4 +107,6 @@
 
 ## Amendments
 
-_(пусто)_
+2026-10-25 — статус `Draft` → `Implemented`: календарь активности реализован
+в плагине `frontend/src/plugins/builtin/activity/index.ts` и в чистом модуле
+`frontend/src/core/graph/activity.ts`.

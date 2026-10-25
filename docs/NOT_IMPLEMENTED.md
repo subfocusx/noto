@@ -17,72 +17,23 @@ Two groups:
 
 Status: `not started` · `partial` · `deferred by decision` · `draft`.
 
+The list was reconciled with the code on 2026-10-25, after the batch of the
+features of that day (the versions of the notes, the regular expressions of
+the query language, the authentication, the webhooks, the MCP, the
+localisation, the offline queue and the rest). The points that were closed by
+that batch left this list; the ones that are still here survived it.
+
 ---
 
 ## (A) Not written at all
 
-### The editor and the notes
+### The server and the platform
 
 | # | What | Where it is declared | Status | Size |
 |---|---|---|---|---|
-| A1 | The history of the versions of a note and the diff | `IMPLEMENTATION_STATUS.md:378`, `README.md:1107` | not started | — |
-| A2 | The highlighting of the matches in the editor | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:105` | not started | — |
-| A3 | The autocompletion of the tags | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:105` | not started | — |
-| A4 | The focus mode | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:106` | not started | — |
-| A5 | The undo of a deletion (a toast of five seconds) | `IMPLEMENTATION_STATUS.md:280`, `docs/design/README.md:38` | draft | S |
-| A6 | The card of a note | `IMPLEMENTATION_STATUS.md:280`, `PHASE8_PLAN.md:106` | not started | — |
-| A7 | The synchronisation of the filter with the URL | `IMPLEMENTATION_STATUS.md:280`, `PHASE8_PLAN.md:107` | not started | — |
-| A8 | The drop of a file into the editor and the reset of a draft | `PHASE8_PLAN.md:105` | not started | S |
-| A9 | The formulas and the highlighting of the code in the Markdown | `PHASE14_PLAN.md:111` | not started | M |
-| A10 | The footnotes and the presentations in a note | `PHASE14_PLAN.md:108` | not started | S / M / L |
-| A11 | The recording of the sound | `PHASE14_PLAN.md:107` (`MediaRecorder` is nowhere in the repository) | not started | M |
-| A12 | The preview of the attachments (images) | `frontend/src/components/AttachmentsPanel.tsx:64`, `README.md:1111` | not started | M |
-| A13 | The full-text search over the attachments | `README.md:1146` | not started | — |
-| A14 | The cache of the derived properties of a note with the flag `stale` | `docs/design/README.md:36` | draft | — |
-
-### The tree and the interface
-
-| # | What | Where it is declared | Status | Size |
-|---|---|---|---|---|
-| A15 | The graph of the notes and the archive (the two buttons of the header are honest stubs) | `frontend/src/components/sections/ExplorerSection.tsx:380-396`, `IMPLEMENTATION_STATUS.md:168` | not started | L |
-| A16 | The pinning of the notes at the top of the tree | `PHASE14_PLAN.md:112` | not started | M |
-| A17 | The quick notes (a note without a name and without a folder) | `PHASE14_PLAN.md:109` | not started | S |
-| A18 | The time of the creation, shown in the interface | `PHASE14_PLAN.md:117` | not started | S |
-| A19 | The user-defined templates (only the built-in `insert-template` exists) | `PHASE14_PLAN.md:105` | not started | M |
-| A20 | The redesign of the right panel (the outline) | `IMPLEMENTATION_STATUS.md:381`, `PHASE10_PLAN.md:145` | not started | — |
-| A21 | The section `H` in its full form (the versions) | `PHASE10_PLAN.md:146` | not started | — |
-| A22 | The several storages at the same time (as in SiYuan) | `docs/UI_AUDIT.md:288` | not started | — |
-| A23 | The graph of the activity instead of the banner | `docs/UI_AUDIT.md:284` | not started | — |
-| A24 | The server-side pagination and the lazy loading of the tree | `README.md:1113`, `README.md:1145` | not started | — |
-| A25 | The translation of the interface into Russian | `IMPLEMENTATION_STATUS.md:322`, `PHASE9_PLAN.md:98` | not started | L |
-
-### The server and the automation
-
-| # | What | Where it is declared | Status | Size |
-|---|---|---|---|---|
-| A26 | The webhooks (an outbox in SQLite, `notes.Hook`, the routes) | `PHASE14_PLAN.md:113`, `IMPLEMENTATION_STATUS.md:642` | not started | L |
-| A27 | The MCP over HTTP (JSON-RPC 2.0) | `PHASE14_PLAN.md:114`, `IMPLEMENTATION_STATUS.md:642` | not started | M |
-| A28 | gRPC | `PHASE14_PLAN.md:115` | deferred by decision | L |
-| A29 | The authentication, the accounts, the multi-user | `README.md:1105` | not started | L |
-| A30 | The audit log on the server | `README.md:1107`, `docs/PLUGIN_SECURITY.md:307` | not started | — |
-| A31 | The end-to-end encryption between the browser and the server | `README.md:1147` | not started | L |
-| A32 | The TLS termination in the server | `README.md:1106` | not started | — |
-| A33 | The native Android wrapper | `README.md:1134`, `README.md:1148` | not started | — |
-
-### The platform of the plugins
-
-| # | What | Where it is declared | Status | Size |
-|---|---|---|---|---|
-| A34 | The plugins from a disk, from the network or from a registry | `README.md:1121`, `docs/PLUGIN_SECURITY.md:284` | not started | L |
-| A35 | The sandbox of the plugins (an iframe with a strict CSP) | `docs/PLUGIN_SECURITY.md:288` | not started | L |
-| A36 | The audit log of the actions of the plugins | `docs/PLUGIN_SECURITY.md:307` | not started | — |
-| A37 | The operation that opens a note (the plugin of the backlinks can only list them) | `README.md:1126` | not started | S |
-
-### The offline mode
-
-| # | What | Where it is declared | Status | Size |
-|---|---|---|---|---|
-| A38 | The real synchronisation of the offline writes | `IMPLEMENTATION_STATUS.md:948`, `docs/PLUGIN_SECURITY.md:305`, `docs/UI_AUDIT.md:285` | not started | L |
+| A1 | The end-to-end encryption between the browser and the server: the sealed storage encrypts the files in the browser, but the traffic between the browser and the server is only protected by the TLS of the server | `README.md` (§ Known limitations and roadmap), `docs/ENCRYPTION.md` | not started | L |
+| A2 | The native Android wrapper: the mobile answer today is the installed PWA | `README.md` (§ Known limitations and roadmap) | not started | L |
+| A3 | The purge of the drafts: a draft is deleted when the note is saved, but nothing removes the drafts of the notes that were deleted or that were never saved | `frontend/src/lib/drafts.ts`, `frontend/src/core/store/actions.ts` | not started | S |
 
 ---
 
@@ -90,39 +41,34 @@ Status: `not started` · `partial` · `deferred by decision` · `draft`.
 
 | # | What | The limitation | Where it is declared |
 |---|---|---|---|
-| B1 | The regular expressions in the query language | Deliberately not supported: `matches` answers "unknown operator" | `IMPLEMENTATION_STATUS.md:281`, `PHASE8_PLAN.md:108` |
-| B2 | The notifications (the phase 11) | They live in the memory of the session, not in `localStorage` | `IMPLEMENTATION_STATUS.md:435` |
-| B3 | The reminders and the notifications (the phase 12) | Memory / `localStorage` of the browser, no delivery by the server | `IMPLEMENTATION_STATUS.md:512` |
-| B4 | The calendar | It does not create the daily note by itself (only the command and the button do) | `IMPLEMENTATION_STATUS.md:439` |
-| B5 | The window of the search and of the filters (the phase 13) | It is modal: the tree behind it is darkened and cannot be clicked | `IMPLEMENTATION_STATUS.md:550` |
-| B6 | The panels of the plugins Activity, Link Cards and Graph | They have no styles of their own: the browser draws them | `IMPLEMENTATION_STATUS.md:645`, `PHASE14_PLAN.md:205` |
-| B7 | The webhooks and the MCP | They inherit the absence of an authentication of the API | `IMPLEMENTATION_STATUS.md:648` |
-| B8 | The mobile adaptation (B10) | Partially: media queries, the drawer under 820 px, the PWA | `PHASE14_PLAN.md:116` |
-| B9 | The drafts (B6) | They exist (`lib/drafts.ts`, `core/vault/sealedDrafts.ts`); they still need a test | `PHASE14_PLAN.md:110` |
-| B10 | The Markdown (B7) | `marked` and `dompurify` are there; the formulas and the highlighting of the code are not | `PHASE14_PLAN.md:111` |
-| B11 | The pinning (B8) | There is only the "favourites" | `PHASE14_PLAN.md:112` |
-| B12 | The plugins | Trusted code without a sandbox; the declared rights do not cover the network calls a plugin makes itself | `README.md:1121`, `docs/PLUGIN_SECURITY.md:288` |
-| B13 | The search | The `LIKE` fallback when the SQLite build has no FTS5: slower and less exact | `README.md:1109` |
-| B14 | The name of a note | Not limited in length, control characters are allowed (except NUL), on purpose | `README.md:1128`, `IMPLEMENTATION_STATUS.md:953` |
-| B15 | The export | The archive is buffered in the memory | `IMPLEMENTATION_STATUS.md:951` |
-| B16 | The tooltip of the search button | It still says "Search (Ctrl+K)", the shortcut is `Ctrl+Shift+F` | `README.md:1131`, `IMPLEMENTATION_STATUS.md:958` |
-| B17 | The trash | The shortcut is `Ctrl+Alt+D`, not `Ctrl+Alt+T` (a deliberate deviation) | `IMPLEMENTATION_STATUS.md:382` |
-| B18 | The storage fixed by the environment | The button stays, marked `aria-disabled`, and opens nothing | `PHASE14_PLAN.md:195` |
-| B19 | The mobile shell | The PWA, not a native application | `README.md:1134` |
-| B20 | The Docker image | It has never been built on this machine | `IMPLEMENTATION_STATUS.md:922` |
+| B1 | The regular expressions in the query language | The operator `matches` and the prefix `match:` work in the backend (RE2) and in the browser (the `RegExp` of JavaScript), but **the two engines are not the same**: RE2 has no back reference and no look around, and JavaScript has. The golden vectors hold only the expressions that both engines understand | `docs/QUERY_LANGUAGE.md` §3, `backend/internal/query/regex.go`, `frontend/src/core/query/regex.ts`, `shared/vectors/regex.json` |
+| B2 | The notifications | They live in the `localStorage` of the browser and survive a reload, but they belong to the browser of the user, not to the vault: the server knows nothing about them and delivers nothing | `frontend/src/core/notifications/persistence.ts` |
+| B3 | The reminders | The same: the browser shows a reminder whose moment has passed when the tab is opened again, the server neither stores nor delivers them | `frontend/src/core/reminders/` |
+| B4 | The several storages at the same time | The registry keeps the state of every storage in the memory of the browser, but the server still serves **one** storage at a time: the tree of a storage that was opened before is restored from the registry and not read again | `frontend/src/core/storages/`, `PHASE14_PLAN.md` §8 |
+| B5 | The paged listing of the tree | The domain and the store answer one page of the children of a folder (`notes.Children`, `port.Store.ListChildrenPaged`), but there is **no HTTP route** for it and the interface still asks for the whole tree | `backend/internal/notes/paged.go`, `backend/internal/port/port.go` |
+| B6 | The plugins | The built-in plugins still run as trusted code in the context of the application; the sandbox (an iframe with a strict CSP) belongs to the plugins that are installed from a disk or from a network, and the declared rights of a plugin do not cover the network calls it makes itself | `frontend/src/plugins/sandbox.ts`, `docs/PLUGIN_SECURITY.md` |
+| B7 | The mobile adaptation | Partially: the drawer answers to the touch, the panels and the editor fit a narrow screen; the shell is still the shell of the desktop | `PHASE14_PLAN.md` §8 |
+| B8 | The search | The `LIKE` fallback when the SQLite build has no FTS5: slower and less exact | `README.md` (§ Known limitations and roadmap), `backend/internal/sqlitestore/search.go` |
+| B9 | The name of a note | Not limited in length, control characters are allowed (except NUL), on purpose: an existing file on the disk is never rejected | `README.md` (§ Known limitations and roadmap), `IMPLEMENTATION_STATUS.md` (§ Known limitations) |
+| B10 | The trash | The shortcut is `Ctrl+Alt+D`, not `Ctrl+Alt+T` (a deliberate deviation) | `IMPLEMENTATION_STATUS.md` (§ Known limitations) |
+| B11 | The storage fixed by the environment | The button stays, marked `aria-disabled`, and it explains itself: the column and the menu say why, and the banner repeats the reason. The storage itself cannot be changed while the server runs | `PHASE14_PLAN.md` §8, `frontend/src/core/storages/fixedStorage.ts` |
+| B12 | The mobile shell | The PWA, not a native application | `README.md` (§ Known limitations and roadmap) |
+| B13 | The Docker image | Docker is not installed on this machine: the image has never been built here; the Dockerfile and the build context were checked by hand | `IMPLEMENTATION_STATUS.md` (§ Known limitations) |
+| B14 | The creation time of the notes that were written before the column existed | The migration of the schema (version 3) fills `created_at` with the modification time of the note: for those notes the moment of the creation is an approximation, not a fact | `backend/internal/sqlitestore/store_schema.go` |
 
 ---
 
 ## The stale texts (they say more than the code does)
 
-These lines of the documentation are **outdated**: the code does more than
-the text says. They are listed here so that nobody takes them for a gap.
+These lines of the documentation are **outdated**: the code does more than the
+text says. They are listed here so that nobody takes them for a gap.
 
-| Where | What it says | The truth |
-|---|---|---|
-| `README.md:1106` | "No encryption at rest" | The sealed storage of the phase 7 encrypts the files in the browser (`frontend/src/core/vault/sealedVault.ts`, `backend/internal/sealed/`) |
-| `README.md:1139` | "Optional passphrase protection for the whole vault" | The same: the encrypted storage with its master password exists |
-| `docs/design/README.md:36-36` | The cards D2–D6 are marked `Draft` | The code of D3 (the manifest of the backup v2), of D4 (the saved views) and of D6 (the plugin of the activity) exists; the status of the cards is old |
+The list was reconciled with the code on 2026-10-25 and no stale line is known
+at that moment: the texts that said «the regular expressions are not
+supported», «there is no history of the versions», «there are no user
+accounts», «the plugins have no sandbox» and «the export is buffered in the
+memory» were corrected in the same change. A text that says more than the
+code must be listed here in the same change that makes it stale.
 
 ---
 
@@ -131,15 +77,14 @@ the text says. They are listed here so that nobody takes them for a gap.
 The points are not of the same weight. The ones that the user asked for
 most often are at the top.
 
-1. **The eleven large features of the phase 14** (`PHASE14_PLAN.md` §7): the
-   boundaries, the place of the work and the size are already written down.
-2. **The block of the phases 8 and 9** (`PHASE8_PLAN.md:105-108`,
-   `PHASE9_PLAN.md:98-101`): the highlighting, the focus mode, the undo of a
-   deletion, the card of a note, the synchronisation with the URL.
-3. **The automation of the server**: the webhooks and the MCP — with the
-   authentication, which they need first.
-4. **The honest stubs** of the interface: the graph and the archive.
+1. **A1** — the end-to-end encryption between the browser and the server: it
+   changes the protocol of the API and the model of the storage.
+2. **A2** — the native Android wrapper: it needs its own build of the PWA and
+   a place in the store of the applications.
+3. **A3** — the purge of the drafts: it is small, but it touches the storage of
+   the browser and the moments of the saving.
+4. **B4** and **B5** — the storages at the same time and the paged tree: both
+   need the server to serve more than one storage and one page at a time.
 
-The graph of the notes and the archive are the only two buttons of the
-interface that do nothing at all; they are marked as such, and they are the
-only ones that can be called a lie.
+The other points are deliberate: they are written down so that nobody expects
+more than the repository delivers.

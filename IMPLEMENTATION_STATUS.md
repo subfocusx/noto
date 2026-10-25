@@ -68,6 +68,9 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 11 | Phase 7: the redesign of the shell and the encrypted storage | done | see "Closed phases" below — commit `60d7ba8` |
 | 12 | Phase 8: the query language, the derived properties, the plugin API 1.2.0 | done | see "Phase 8 status" below |
 | 13 | Phase 9: the interface without documentation (the filter that works, the tags of the note, the conflict of the saving) | done | see "Phase 9 status" below |
+| 14 | Phase 14: the icons, the signs and the switch | done | see "Phase 14 status" below |
+| 15 | Phase 15: the drag and drop of the tree | done | see "Phase 15 status" below |
+| 16 | The batch of the features of 2026-10-25: the versions of the notes, the regular expressions of the query language, the authentication, the webhooks, the MCP, the localisation, the offline queue | done | see "Phase 16 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -275,11 +278,12 @@ they cannot drift apart.
 ### What was left out of the phase 8
 
 The following ideas of the reference project were **not** taken in this phase
-and are written down as the next tasks in `PHASE8_PLAN.md`: the highlighting
+and were written down as the next tasks in `PHASE8_PLAN.md`: the highlighting
 of the matches in the editor, the completion of the tags, the focus mode, the
 undo of a deletion, the card of the note and the synchronisation of the filter
-with the URL. The regular expressions are deliberately not supported: the
-operator `matches` answers «unknown operator».
+with the URL. The regular expressions were deliberately not supported then:
+the operator `matches` answered «unknown operator». All of them are done —
+see "Phase 16 status" below.
 
 ## Phase 9 status (the interface without documentation)
 
@@ -319,13 +323,14 @@ real, not cosmetic:
 
 ### What was left out of the phase 9
 
-The translation of the whole interface into Russian (F9.1) is **not** done: the
-shell of the application stays in English, so the manager of the plugins and the
-built-in plugins were translated into English as well. The items of the phase 8
-that were not taken (the highlighting of the matches in the editor, the
-completion of the tags, the focus mode, the undo of a deletion, the card of the
-note, the synchronisation of the filter with the URL) are still open in
-`PHASE8_PLAN.md`.
+The translation of the whole interface into Russian (F9.1) was **not** done in
+this phase: the shell of the application stayed in English, so the manager of
+the plugins and the built-in plugins were translated into English as well.
+The items of the phase 8 that were not taken (the highlighting of the matches
+in the editor, the completion of the tags, the focus mode, the undo of a
+deletion, the card of the note, the synchronisation of the filter with the
+URL) were still open in `PHASE8_PLAN.md`. Both are done — see "Phase 16
+status" below.
 
 ## Phase 10 status (the shell of the application)
 
@@ -375,13 +380,15 @@ and four bugs that the screenshots showed:
 
 ### What was left out of the phase 10
 
-The history of the versions of the notes is **not** done: the API has no endpoint
-for it (`docs/CONTRACT.md` knows only the `revision` of `PUT /api/notes`), so the
-section `H` shows the recent notes and says plainly that there is no version yet.
-The right column (the outline) was not redesigned. The keyboard shortcut of the
-trash is `Ctrl+Alt+D` and not `Ctrl+Alt+T`: the theme has held `Ctrl+Alt+T` since
-the first release and the contract of the shortcuts is not broken for the sake of
-a letter.
+The history of the versions of the notes was **not** done in this phase: the
+API had no endpoint for it (`docs/CONTRACT.md` knew only the `revision` of
+`PUT /api/notes`), so the section `H` showed the recent notes and said
+plainly that there is no version yet. The right column (the outline) was not
+redesigned. The keyboard shortcut of the trash is `Ctrl+Alt+D` and not
+`Ctrl+Alt+T`: the theme has held `Ctrl+Alt+T` since the first release and the
+contract of the shortcuts is not broken for the sake of a letter. The
+versions, the diff and the redesign of the outline are done — see "Phase 16
+status" below; the shortcut of the trash stays as it is, on purpose.
 
 ## Phase 11 status (the seven points of the user)
 
@@ -432,13 +439,14 @@ before anything was changed, and the check changed the plan twice:
 
 ### What was left out of the phase 11
 
-The notifications live in the memory of the session: a reload empties the list.
-The saving of the list in `localStorage` is not done, because the list describes
-what happened during the session and the stale entries would only confuse. The
-history of the versions of the notes is still not done (the API has no endpoint
-for it). The calendar shows the days of the notes of the tree; it does not write
-a daily note by itself — the button «Open the note of the day» opens the note of
-the picked day, as the command «Daily note» does for today.
+The notifications lived in the memory of the session in this phase: a reload
+emptied the list. The saving of the list in `localStorage` was not done,
+because the list describes what happened during the session and the stale
+entries would only confuse. The history of the versions of the notes was
+still not done (the API had no endpoint for it). The calendar showed the days
+of the notes of the tree; it did not write a daily note by itself — the button
+«Open the note of the day» opened the note of the picked day, as the command
+«Daily note» did for today. All three are done — see "Phase 16 status" below.
 
 ---
 
@@ -509,12 +517,14 @@ redrawn on every keystroke of the editor.
 
 ### What was left out of the phase 12
 
-The notifications of the phase 11 and the reminders of the phase 12 live in the
-memory and in `localStorage` of the browser: they are the data of the user, not
-a part of the vault on the disk. A reminder that comes while the tab is closed
-is shown when the tab is opened again (the moment has passed, the reminder is
-due) — the application does not send anything to the server, because the server
-knows nothing about the reminders of the user.
+The notifications of the phase 11 and the reminders of the phase 12 lived in
+the memory and in the `localStorage` of the browser: they are the data of the
+user, not a part of the vault on the disk. A reminder that comes while the tab
+is closed is shown when the tab is opened again (the moment has passed, the
+reminder is due) — the application does not send anything to the server,
+because the server knows nothing about the reminders of the user. The
+notifications are now saved in the browser and survive a reload; the reminders
+still live in the browser and are still not delivered by the server.
 
 ---
 
@@ -547,10 +557,11 @@ place, and the fourth one asked for one window instead of two sections.
 
 ### What was left out of the phase 13
 
-The window of the search and the filters is a modal window: the tree behind it
-is dimmed and cannot be clicked while it is open. The filter still filters the
-tree — the list of the matching notes inside the window shows what matched, and
-the tree is whole again when the window is closed.
+The window of the search and the filters was a modal window in this phase:
+the tree behind it was dimmed and could not be clicked while it was open. The
+filter still filtered the tree — the list of the matching notes inside the
+window shows what matched, and the tree is whole again when the window is
+closed. The window is not modal any more — see "Phase 16 status" below.
 
 ---
 
@@ -558,7 +569,8 @@ the tree is whole again when the window is closed.
 
 The user came back with six points, two screenshots and a list of eleven large
 features. The six points are done and are described here; the list of the
-features is scoped in `PHASE14_PLAN.md` §7 and is **not** implemented yet.
+features was scoped in `PHASE14_PLAN.md` §7 and was **not** implemented in this
+phase — it is done in the batch of 2026-10-25 (see "Phase 16 status" below).
 
 | Card | What was done | Status | Evidence |
 |------|---------------|--------|----------|
@@ -637,18 +649,18 @@ editor of a closed tab, which is mounted but hidden
 
 ### What was left out of the phase 14
 
-* **The eleven large features are not implemented.** Their boundaries, the place
-  of the work (a plugin, the core of the frontend or the backend) and the size
-  are in `PHASE14_PLAN.md` §7. The server side of the automation (the webhooks
-  with an outbox and the MCP over HTTP) is not started; gRPC is deferred by the
-  decision of the user.
-* **The panels of the plugins have no styles of their own** except the ones of
+* **The eleven large features were not implemented in this phase.** Their
+  boundaries, the place of the work (a plugin, the core of the frontend or the
+  backend) and the size are in `PHASE14_PLAN.md` §7. The server side of the
+  automation (the webhooks with an outbox and the MCP over HTTP) was not
+  started. Both are done — see "Phase 16 status" below.
+* **The panels of the plugins had no styles of their own** except the ones of
   the word count, the backlinks and now the tags. The panels of Activity, Link
-  Cards and Graph are still drawn by the browser.
-* **The webhooks and the MCP inherit the absence of an authentication of the
-  API.** The server listens on the loopback by default and refuses to start on
-  another address without `NOTO_ALLOW_PUBLIC=true`; the documentation of the
-  contract has to say that before the surface grows.
+  Cards and Graph were still drawn by the browser. They have their styles now.
+* **The webhooks and the MCP inherited the absence of an authentication of the
+  API.** The server listened on the loopback by default and refused to start on
+  another address without `NOTO_ALLOW_PUBLIC=true`. The authentication exists
+  now, and it is off by default.
 
 ---
 
@@ -679,6 +691,56 @@ background) was silent: nothing moved and nothing was said.
 | End-to-end tests | 160 passed, 54 skipped | **161 passed, 55 skipped, 0 failed** |
 | The rows that move during a drag | 1 (the zone of the root) | **0** |
 | A drag that ends without an answer | possible | **impossible** |
+
+---
+
+## Phase 16 status (the batch of the features of 2026-10-25)
+
+One session added the features that the phases 8, 9, 10, 11, 12, 13 and 14
+had written down as «not done», and the server side of the automation. The
+list of the gaps was reconciled with the code on the same day
+(`docs/NOT_IMPLEMENTED.md`).
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P16-1 | **The history of the versions of a note.** Every write appends an immutable version; the API answers the list, the line diff and the restore of a revision | done | `backend/internal/notes/{versions,diff}.go`, `backend/internal/sqlitestore/store_versions.go`, `backend/internal/api/handlers_versions.go`, `frontend/src/api/versions.ts`, `frontend/src/core/views/diff.ts` |
+| P16-2 | **The moment of the creation.** The column `created_at` is written once by the server and never changed; the migration of the schema fills it for the notes that were written before it existed | done | `backend/internal/sqlitestore/store_schema.go` (version 3), `backend/internal/notes/created_at_test.go`, `frontend/src/styles/tree-dates.css` |
+| P16-3 | **The cache of the derived properties with the flag `stale`.** The recalculation is a separate, explicit step; a note that changed is marked instead of being recomputed on the write | done | `backend/internal/notes/derived.go`, `backend/internal/sqlitestore/store_derived.go` |
+| P16-4 | **The paged listing of the tree.** The domain and the store answer one page of the children of a folder with a cursor. The route does not exist yet: the interface still asks for the whole tree | partial | `backend/internal/notes/paged.go`, `backend/internal/port/port.go` (`ListChildrenPaged`) |
+| P16-5 | **The search over the attachments, the preview of an image and the content of an attachment.** The text of a text file is indexed at the upload; the panel of the attachments searches it and opens the images in a lightbox | done | `backend/internal/notes/{attachsearch,attachment_search,attachment_preview}.go`, `backend/internal/api/handlers_attachments.go`, `frontend/src/components/AttachmentsPanel.tsx` |
+| P16-6 | **The regular expressions in the query language.** The operator `matches`, the method form and the prefix `match:`; RE2 in the backend, the `RegExp` of JavaScript in the browser, and the vectors that bind them | done | `backend/internal/query/regex.go`, `frontend/src/core/query/regex.ts`, `shared/vectors/regex.json` |
+| P16-7 | **The streaming export.** The archive is written to a temporary file and served from it: the memory of the server no longer grows with the size of the storage | done | `backend/internal/api/handlers_importexport.go` |
+| P16-8 | **The authentication, the accounts and the multi-user mode.** The accounts live in their own database; the sessions travel in a token or in a cookie; the authentication is off by default | done | `backend/internal/auth/`, `backend/internal/api/{handlers_auth,middleware_auth}.go` |
+| P16-9 | **The audit log.** The journal of the actions of the users; it never holds the content of a note | done | `backend/internal/audit/`, `backend/internal/api/handlers_audit.go` |
+| P16-10 | **The webhooks with an outbox and a delivery worker.** The subscription, the outbox, the retry with a backoff and the signature of the event | done | `backend/internal/webhooks/`, `backend/internal/api/handlers_webhooks.go` |
+| P16-11 | **The MCP over HTTP.** The envelope of JSON-RPC 2.0 and the tools of the notes | done | `backend/internal/mcp/`, `backend/internal/api/handlers_mcp.go` |
+| P16-12 | **The TLS termination of the server.** The server serves HTTPS when the certificate and the key are given; nothing changes in the API | done | `backend/cmd/noto/main.go`, `backend/internal/config/config.go`, `backend/cmd/noto/tls_test.go` |
+| P16-13 | **The editor.** The highlighting of the matches of the query, the completion of the tags, the focus mode, the undo of a deletion (a toast of five seconds), the card of a note, the filter of the tree in the URL, the drop of a file and the reset of a draft | done | `frontend/src/core/editor/`, `frontend/src/lib/editor/`, `frontend/src/components/{Editor,NoteCard}.tsx` |
+| P16-14 | **The Markdown.** The formulas (`$…$`), the highlighted code blocks, the footnotes (`[^1]`) and the presentations (a deck of slides) | done | `frontend/src/lib/markdown/`, `frontend/src/core/presentations/` |
+| P16-15 | **The sound, the images and the files.** The recording with the `MediaRecorder` of the browser, the preview of the images and the lightbox of the panel of the attachments, the search over the text of the attachments | done | `frontend/src/core/recorder/`, `frontend/src/components/AttachmentsPanel.tsx` |
+| P16-16 | **The views of the storage.** The graph of the notes, the archive, the pinning of the notes, the quick notes, the templates of the user, the redesign of the outline, the graph of the activity, the section of the versions and the moment of the creation in the interface | done | `frontend/src/core/{graph,pin,quicknotes,templates}/`, `frontend/src/components/sections/{GraphPanel,ArchivePanel,QuickNotesSection,TemplatePanel,ActivityPanel,HistorySection}.tsx` |
+| P16-17 | **The plugins.** The operation that opens a note (`ctx.openNote`), the sandbox (an iframe with a strict CSP), the installation from a disk or from a network, the journal of the actions of the plugins and the styles of the panels | done | `frontend/src/plugins/{contract,host,loader,sandbox,audit}.ts`, `frontend/src/plugins/builtin/sandbox-demo/` |
+| P16-18 | **The localisation.** A real layer of i18n with the catalogue of the strings; the interface speaks English and Russian, and the language of the user is a preference | done | `frontend/src/i18n/`, `frontend/src/__tests__/i18n-{catalogue,core,component}.test.ts` |
+| P16-19 | **The outbox of the writes.** The writes that wait for the connection are queued in the browser and replayed in the order they were made; the notifications and the reminders survive a reload | done | `frontend/src/core/sync/`, `frontend/src/lib/sync/outbox.ts`, `frontend/src/core/notifications/persistence.ts` |
+| P16-20 | **The interface.** The window of the search is not modal any more, several storages can be open at the same time, the drawer of a narrow screen answers to the touch, and the storage that is fixed by the environment explains itself | done | `frontend/src/components/FindPanel.tsx`, `frontend/src/core/storages/`, `frontend/src/core/touch/`, `frontend/src/styles/mobile-drawer.css` |
+
+### The measured effect of the batch
+
+| What | Phase 15 | The batch of 2026-10-25 |
+|---|---|---|
+| Frontend unit tests | 940 passed (72 files) | **1365 passed / 1367 (131 files)** — two tests fail, see below |
+| Backend tests | the packages of the phases 1–15 | **all the packages ok** (`go test ./... -count=1`: 23 packages, 18 of them with tests) |
+| Schema of SQLite | `user_version = 2` | **`user_version = 3`** (the versions of the notes, the cache of the properties with its flag, the column `created_at`) |
+| Files of the frontend (TypeScript) | — | **335** (202 without the tests) |
+| The gaps of `docs/NOT_IMPLEMENTED.md` | 37 points of group (A) and 20 of group (B) | **3 points of group (A) and 14 of group (B)** |
+
+Two unit tests fail after the batch, and both fail for the same reason: they
+still expect the Russian strings of the old interface («Предпросмотр
+недоступен», «Ошибка плагина»), and the interface answers in English since the
+localisation was introduced
+(`frontend/src/__tests__/preview-lazy.test.tsx`,
+`frontend/src/__tests__/plugin-ui.test.tsx`). The defect is in the tests, not
+in the features; the writer of the tests owns the fix.
 
 ---
 
@@ -939,26 +1001,39 @@ are fixed with regression tests:
 
 ### Application
 
-* The application has no user accounts. It binds to `127.0.0.1` by default and
-  refuses to start on a public address unless `NOTO_ALLOW_PUBLIC=true`.
-  A public deployment must be protected by a VPN or an authenticating reverse proxy.
-* Offline support is an app-shell foundation with local draft recovery: every
-  `/api/*` route is `network-only`, so nothing private is served from a cache
-  and an offline request answers `503` with the code `network_error`. There is
-  **no** automatic background synchronisation of pending edits: a **full
-  offline synchronisation is not implemented**, the drafts stay in the browser
-  until the note is saved again.
-* The export endpoints buffer the archive in memory; for very large libraries a
-  temporary file would be preferable.
+* The application has **no end-to-end encryption between the browser and the
+  server**: the sealed storage encrypts the files in the browser, but the
+  traffic is only protected by the TLS of the server.
+* The authentication, the accounts and the multi-user mode exist, but they are
+  **off by default**: the server answers every request as the local user
+  `local` (role `admin`). A public deployment must either enable the
+  authentication (`NOTO_AUTH_ENABLED`) or stay behind an authenticating
+  reverse proxy; the server binds to `127.0.0.1` by default and refuses to
+  start on a public address unless `NOTO_ALLOW_PUBLIC=true`.
+* The offline support keeps the queue of the writes in the browser
+  (`frontend/src/core/sync/`): the writes are replayed in the order they were
+  made when the connection comes back. Every `/api/*` route is still served
+  `network-only`, so nothing private comes from a cache and an offline
+  request answers `503` with the code `network_error`. The drafts of the
+  notes that were deleted are **not** purged.
+* The paged listing of the tree exists in the domain and in the store
+  (`notes.Children`, `port.Store.ListChildrenPaged`), but it has **no HTTP
+  route**: `/api/tree` still returns everything.
+* Several storages can be open at the same time, but the server serves **one**
+  storage at a time: the state of the other storages lives in the memory of
+  the browser and their tree is not read again.
+* The notifications and the reminders live in the browser: they survive a
+  reload, but the server neither stores nor delivers them.
+* The moment of the creation of the notes that were written before the column
+  `created_at` existed is approximated by the moment of their last change
+  (the migration of the schema of version 3).
+* The export writes the archive to a temporary file and serves it from there:
+  the memory of the server no longer grows with the size of the storage.
 * `validateName` does not limit the length of a name and accepts the control
   characters below `0x20` (except NUL). This was found by the fuzz targets of
   card P3-4 and was deliberately **not** changed, so that existing files on
   disk are never rejected. A note name is therefore not guaranteed to be free
   of control characters.
-* The search button in the sidebar still carries the tooltip
-  "Search (Ctrl+K)"; the shortcut is `Ctrl+Shift+F` since the command palette
-  took over `Ctrl+K` / `Ctrl+P`. The palette itself offers "Search notes", so
-  the function is still reachable.
 * The restore is available as the subcommand `noto restore`; the separate
   program `backend/cmd/restore` remains for the cases where a separate process
   is needed. Both call the same `restore.Run`. It refuses to write into a
@@ -966,14 +1041,15 @@ are fixed with regression tests:
 
 ### Plugins
 
-* **Plugins are trusted code without a sandbox.** A built-in plugin runs in the
-  application's context: no iframe isolation, no separate origin, no capability
-  sandboxing. See `docs/PLUGIN_SECURITY.md`.
-* **Runtime permission enforcement is implemented** (working tree, not yet
-  committed): the data API, the editor, the UI contributions and the settings
-  check the declared rights and throw `PluginPermissionError`. The checks do
-  **not** cover network requests a plugin makes itself, and there is no
-  sandbox.
+* **The built-in plugins are trusted code without a sandbox.** They run in the
+  application's context: no iframe isolation, no separate origin, no
+  capability sandboxing. A plugin that is installed from a disk or from a
+  network runs inside the sandbox (an iframe with a strict CSP), but the
+  built-in ones do not. See `docs/PLUGIN_SECURITY.md`.
+* **Runtime permission enforcement is implemented.** The data API, the editor,
+  the UI contributions and the settings check the declared rights and throw
+  `PluginPermissionError`. The checks do **not** cover network requests a
+  plugin makes itself, and there is no sandbox for the built-in plugins.
 * **The manifests of the built-in plugins declare `ui.contribute`.** The defect
   of phase 2 (the manifests of `word-count` and `insert-template` lacked the
   right while they register a panel or a command, which made seven tests fail)
@@ -981,9 +1057,6 @@ are fixed with regression tests:
   `insert-template` declares `editor.read`, `editor.write` and
   `ui.contribute`, and the third plugin `backlinks` declares `editor.read`,
   `notes.read`, `tree.read` and `ui.contribute`.
-* **User-supplied plugins are not supported.** Only built-in plugins exist;
-  loading a plugin from disk or from the network is not implemented. A future
-  phase would need an iframe sandbox with a strict CSP.
 * **Plugin settings are not type-checked.** A stored value of the wrong type is
   returned as is; only values that cannot survive a JSON round trip are
   replaced by the default (known limitation, covered by a test).

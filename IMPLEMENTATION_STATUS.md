@@ -676,7 +676,7 @@ background) was silent: nothing moved and nothing was said.
 | What | Phase 14 | Phase 15 |
 |---|---|---|
 | Frontend unit tests | 923 passed (71 files) | **940 passed (72 files)** |
-| End-to-end tests | 160 passed, 54 skipped | **161 passed, 54 skipped, 0 failed** |
+| End-to-end tests | 160 passed, 54 skipped | **161 passed, 55 skipped, 0 failed** |
 | The rows that move during a drag | 1 (the zone of the root) | **0** |
 | A drag that ends without an answer | possible | **impossible** |
 

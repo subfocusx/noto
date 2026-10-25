@@ -101,7 +101,8 @@ describe('app shell', () => {
 
     fireEvent.click(view.getByRole('button', { name: 'Change the storage of the notes' }));
     fireEvent.click(view.getByRole('menuitem', { name: /Choose another folder/ }));
-    await waitFor(() => expect(view.getByTestId('vault-picker')).toBeTruthy());
+    // The picker lives in a lazy chunk: the import must have the time.
+    await waitFor(() => expect(view.getByTestId('vault-picker')).toBeTruthy(), { timeout: 5000 });
 
     fireEvent.click(view.getByTestId('vault-picker-confirm'));
     await waitFor(() =>

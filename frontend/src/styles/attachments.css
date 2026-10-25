@@ -1,5 +1,45 @@
 /* The attachments: the preview of the images, the lightbox and the search. */
 
+/* The player of a sound in the panel of the attachments. */
+.attachment-player {
+  width: 100%;
+  max-width: 320px;
+  height: 32px;
+}
+
+/* The player of a sound in the preview of a note. */
+.noto-audio {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+  vertical-align: middle;
+}
+
+.noto-audio audio {
+  height: 32px;
+  max-width: 320px;
+}
+
+.noto-audio-caption {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+/* The label of a sound in the list of the attachments. */
+.attachment-audio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .attachments-header {
   display: flex;
   align-items: center;

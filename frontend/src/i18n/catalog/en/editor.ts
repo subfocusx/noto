@@ -32,6 +32,10 @@ export const editor: Record<string, string> = {
   'editor.recorder.cannotStart': 'The recording could not be started.',
   'editor.recorder.cannotSave': 'The recording could not be saved.',
 
+  'editor.audio.label': 'Audio recording',
+  'editor.audio.play': 'Play the recording',
+  'editor.audio.pause': 'Pause the recording',
+
   'preview.unavailable': 'Preview unavailable',
   'preview.present': 'Present',
   'preview.label': 'Presentation: {title}',

@@ -5,6 +5,7 @@
 // the editor uses): the preview shows the file and the text stays readable.
 
 import { uploadAttachment } from '../../api/attachments';
+import { audioUrl } from '../../lib/attachments';
 import { attachmentReference, insertAttachmentReference } from '../../lib/drafts';
 import type { Attachment } from '../../types';
 import type { RecordingResult } from './recorder';
@@ -51,7 +52,10 @@ export function recordingReference(result: RecordingResult, rawUrl: string, when
   const stamp =
     `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}` +
     ` ${pad(when.getHours())}:${pad(when.getMinutes())}`;
-  return attachmentReference(`Recording ${stamp} (${formatDuration(result.durationMs)})`, rawUrl);
+  const label = `Recording ${stamp} (${formatDuration(result.durationMs)})`;
+  // The address carries the hint of the sound, so the preview of the note
+  // shows a player and not a broken picture.
+  return attachmentReference(label, audioUrl(rawUrl));
 }
 
 /**

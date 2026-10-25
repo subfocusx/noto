@@ -18,6 +18,25 @@ function node(path: string, name: string): Node {
   };
 }
 
+describe('the sound in the preview', () => {
+  it('shows a player for a recording', () => {
+    const html = renderMarkdown('![Recording 2026-10-25 16:28 (0:05)](/api/attachments/att-1/raw?type=audio)');
+
+    expect(html).toContain('<audio');
+    expect(html).toContain('controls');
+    expect(html).toContain('/api/attachments/att-1/raw?type=audio');
+    // The picture is not shown: the sound is not a picture.
+    expect(html).not.toContain('<img');
+  });
+
+  it('keeps the pictures as pictures', () => {
+    const html = renderMarkdown('![photo](/api/attachments/att-2/raw)');
+
+    expect(html).toContain('<img');
+    expect(html).not.toContain('<audio');
+  });
+});
+
 describe('markdown sanitization', () => {
   it('removes script tags', () => {
     const html = renderMarkdown('# hi\n\n<script>alert(1)</script>');

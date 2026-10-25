@@ -17,6 +17,9 @@ import {
   stopFootnoteCollection,
 } from './markdown/footnotes';
 import { mathExtension } from './markdown/math';
+import { isAudioUrl } from './attachments';
+import { recordingDuration } from './audioReferences';
+import { t } from '../i18n';
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -31,6 +34,21 @@ marked.use({
       const highlighted = highlightCode(code, language);
       const attribute = language ? ` class="language-${escapeHtml(language)}"` : '';
       return `<pre><code${attribute}>${highlighted}</code></pre>`;
+    },
+    image(href: string | null, title: string | null, text: string): string {
+      // A recording of the sound is a link to the bytes of the attachment:
+      // the preview shows a player instead of a broken picture.
+      if (isAudioUrl(href)) {
+        const name = title ?? text ?? '';
+        const duration = recordingDuration(name);
+        // The caption names the sound instead of showing the Markdown of the
+        // reference: the reader sees what it is and how long it is.
+        const caption = duration ? `${t('editor.audio.label')} · ${duration}` : t('editor.audio.label');
+        const nameAttribute = name ? ` title="${escapeHtml(name)}"` : '';
+        return `<span class="noto-audio"><span class="noto-audio-caption"${nameAttribute}>${escapeHtml(caption)}</span><audio controls preload="metadata" src="${escapeHtml(href ?? '')}"></audio></span>`;
+      }
+      const titleAttribute = title ? ` title="${escapeHtml(title)}"` : '';
+      return `<img src="${escapeHtml(href ?? '')}" alt="${escapeHtml(text ?? '')}"${titleAttribute}>`;
     },
   },
 });

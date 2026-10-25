@@ -31,6 +31,7 @@ export const panels: Record<string, string> = {
   'attachments.showMore': 'Show more ({count} left)',
   'attachments.previousImage': 'Previous image',
   'attachments.nextImage': 'Next image',
+  'attachments.play': 'Play {name}',
 
   'outline.title': 'Outline',
   'outline.empty': 'No headings in this note.',

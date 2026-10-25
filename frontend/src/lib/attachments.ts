@@ -104,6 +104,8 @@ export function iconNameForMime(mime: string | null | undefined): string {
       return 'image';
     case 'archive':
       return 'archive';
+    case 'audio':
+      return 'audio-lines';
     default:
       return 'file-text';
   }
@@ -119,6 +121,27 @@ export function shouldShowThumbnail(mime: string | null | undefined, size: numbe
   if (!isImageMime(mime)) return false;
   if (!Number.isFinite(size) || size <= 0) return false;
   return size <= MAX_THUMBNAIL_BYTES;
+}
+
+/**
+ * The hint that marks the link of a sound.
+ *
+ * The reference of a recording lives in the text of the note as a link to the
+ * bytes of the attachment. The address of the attachment has no extension, so
+ * the preview cannot know that it is a sound: the hint in the address tells
+ * it, and the note keeps the plain Markdown.
+ */
+export const AUDIO_HINT = 'type=audio';
+
+/** The address of a sound, with the hint that marks it. */
+export function audioUrl(url: string): string {
+  if (!url || url.includes(AUDIO_HINT)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}${AUDIO_HINT}`;
+}
+
+/** True when the address points to a sound. */
+export function isAudioUrl(url: string | null | undefined): boolean {
+  return (url ?? '').includes(AUDIO_HINT);
 }
 
 /**

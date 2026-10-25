@@ -17,6 +17,7 @@ import {
   visibleAttachments,
 } from '../lib/attachment-list';
 import {
+  attachmentKind,
   formatAttachmentDate,
   iconNameForMime,
   isImageMime,
@@ -185,6 +186,7 @@ export function AttachmentsPanel(props: AttachmentsPanelProps) {
         {visible.map((attachment) => {
           const thumbnail = shouldShowThumbnail(attachment.mime, attachment.size);
           const date = formatAttachmentDate(attachment.modifiedAt ?? attachment.createdAt);
+          const audio = attachmentKind(attachment.mime) === 'audio';
           return (
             <li key={attachment.id}>
               {thumbnail ? (
@@ -210,6 +212,21 @@ export function AttachmentsPanel(props: AttachmentsPanelProps) {
               <a href={attachmentRawUrl(attachment.id)} target="_blank" rel="noopener noreferrer">
                 {attachment.name}
               </a>
+              {audio ? (
+                <span class="attachment-audio-badge">
+                  <Icon name="mic" size={12} />
+                  {t('editor.audio.label')}
+                </span>
+              ) : null}
+              {audio ? (
+                <audio
+                  class="attachment-player"
+                  controls
+                  preload="none"
+                  src={attachmentRawUrl(attachment.id)}
+                  aria-label={t('attachments.play', { name: attachment.name })}
+                />
+              ) : null}
               <span class="muted">
                 {attachment.mime} · {formatSize(attachment.size)}
                 {date ? ` · ${date}` : ''}

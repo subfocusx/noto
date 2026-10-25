@@ -31,6 +31,7 @@ export const panels: Record<string, string> = {
   'attachments.showMore': 'Показать ещё ({count})',
   'attachments.previousImage': 'Предыдущее изображение',
   'attachments.nextImage': 'Следующее изображение',
+  'attachments.play': 'Прослушать «{name}»',
 
   'outline.title': 'Структура',
   'outline.empty': 'В этой заметке нет заголовков.',

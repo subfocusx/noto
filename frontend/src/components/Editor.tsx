@@ -33,6 +33,7 @@ import {
 import { useAppSelector } from '../core/store/hooks';
 import { useT } from '../i18n/useT';
 import { attachmentReference, insertAttachmentReference } from '../lib/drafts';
+import { audioChips } from './editor/audioChips';
 import { computeMatchRanges, pickCurrentMatch, type TextRange } from '../lib/editor/matchRanges';
 import {
   applyTagSuggestion,
@@ -397,6 +398,8 @@ export function MarkdownEditor(props: EditorProps) {
     search({ top: true }),
     highlightQueryField,
     highlightField,
+    /** The sounds of the note are shown as chips, not as bare links. */
+    audioChips(),
     keymap.of([
       {
         key: 'Enter',

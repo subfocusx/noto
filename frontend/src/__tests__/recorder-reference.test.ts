@@ -57,6 +57,9 @@ describe('the recording in the note', () => {
 
     expect(reference).toContain('![Recording');
     expect(reference).toContain('/api/attachments/att-1/raw');
+    // The address carries the hint of the sound: the preview of the note
+    // shows a player and not a broken picture.
+    expect(reference).toContain('type=audio');
 
     const result = insertRecordingReference('The note. ', 9, reference);
     expect(result.text).toContain(reference);

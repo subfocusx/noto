@@ -26,6 +26,59 @@
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+/* The chip of a sound in the editor: the reference of a recording is shown as
+   a chip with the icon of the microphone, its name and the button of the play. */
+.noto-audio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+  color: var(--fg);
+  font-size: 0.85em;
+  line-height: 1.7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.noto-audio-chip-icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.noto-audio-chip-name {
+  font-weight: 600;
+}
+
+.noto-audio-chip-duration {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.noto-audio-chip-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.noto-audio-chip-play:hover {
+  background: var(--bg-hover);
+}
+
+.noto-audio-chip.is-playing {
+  border-color: var(--accent);
+}
+
 /* The completion of the tags, under the editor. */
 .editor-completion {
   position: absolute;

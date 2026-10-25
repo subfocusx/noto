@@ -1,9 +1,9 @@
 // The indicator of the connection with the backend.
 //
-// The indicator lives in the header of the explorer, next to the actions of
-// the vault: it answers at a glance whether the changes of the user reach the
-// disk. The dot is the only part of the interface that is coloured by state,
-// so it must stay small and quiet.
+// The indicator lives in the status bar, at the bottom of the window, next to
+// the state of the save: it answers at a glance whether the changes of the
+// user reach the disk. The dot is the only part of the interface that is
+// coloured by state, so it must stay small and quiet.
 import type { ConnectionState } from '../types';
 
 export interface ConnectionIndicatorProps {

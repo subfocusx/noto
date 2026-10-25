@@ -818,12 +818,12 @@ button.sidebar-section-title {
 /* ------------------------------------------------------ connection dot */
 
 /* The dot of the connection with the backend: it is the only coloured
-   element of the header of the explorer, so it stays small and quiet. */
+   element of the status bar, so it stays small and quiet. */
 .conn-dot {
   width: 8px;
   height: 8px;
   flex: none;
-  margin: 0 6px;
+  margin: 0;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
@@ -831,6 +831,12 @@ button.sidebar-section-title {
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-fast) var(--ease-out);
+}
+
+/* In the status bar the dot stands next to the text: the gap of the bar is
+   wide, so the dot takes half of it on each side and stays quiet. */
+.app-footer .conn-dot {
+  margin: 0 calc(var(--space-2) * -1);
 }
 
 .conn-dot.connected {

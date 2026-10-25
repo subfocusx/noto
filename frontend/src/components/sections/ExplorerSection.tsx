@@ -7,12 +7,11 @@
 // The tree of the notes lives here, and so does the state of the drag and drop
 // between the folders: the two belong together and nothing else needs them.
 import { useMemo, useState } from 'preact/hooks';
-import type { ConnectionState, Node } from '../../types';
+import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
 import { filterTree } from '../../lib/tree';
 import { Icon } from '../../ui/icons';
 import { IconButton } from '../../ui/tooltip';
-import { ConnectionIndicator } from '../ConnectionIndicator';
 import type { TreeContextMenuPayload } from '../TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from '../TreeRow';
 
@@ -75,10 +74,6 @@ export interface ExplorerSectionProps {
   onOpenPalette?(): void;
   /** Opens the manager of the plugins. */
   onOpenPlugins?(): void;
-  /** The state of the connection with the backend. */
-  connection?: ConnectionState;
-  /** Called when the user asks the application to check the backend again. */
-  onRetryConnection?(): void;
 }
 
 /** The parent of a path, or the empty string for the root. */
@@ -280,10 +275,6 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 onClick={() => props.onOpenPalette?.()}
               />
               <IconButton label="Plugins" icon="puzzle" onClick={() => props.onOpenPlugins?.()} />
-              <ConnectionIndicator
-                connection={props.connection ?? 'connecting'}
-                onRetry={props.onRetryConnection}
-              />
             </div>
           </div>
 

@@ -68,15 +68,6 @@ describe('the header of the explorer', () => {
     expect(screen.queryByRole('button', { name: 'Search notes' })).toBeNull();
   });
 
-  it('holds the indicator of the connection', () => {
-    renderSidebar({ connection: 'connected' });
-
-    const title = screen.getByText('Explorer').closest('.sidebar-section-title');
-    const indicator = title?.querySelector('.conn-dot');
-    expect(indicator).not.toBeNull();
-    expect(indicator?.getAttribute('aria-label')).toBe('Backend connected');
-  });
-
   it('shows no counter of the totals', () => {
     renderSidebar();
 

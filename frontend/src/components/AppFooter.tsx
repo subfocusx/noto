@@ -1,9 +1,19 @@
 import type { AutosaveStatus } from '../lib/autosave';
+import type { ConnectionState } from '../types';
 import { IconButton } from '../ui/tooltip';
+import { ConnectionIndicator } from './ConnectionIndicator';
 
 export interface AppFooterProps {
   /** The message of the last save error, if any. */
   saveError: string | null;
+  /**
+   * The state of the connection with the backend.
+   *
+   * The bar always shows the dot, so the state is always known.
+   */
+  connection: ConnectionState;
+  /** Called when the user asks the application to check the backend again. */
+  onRetryConnection?(): void;
   /** The state of the autosave. */
   status: AutosaveStatus;
   /** The readable label of the state of the autosave. */
@@ -53,6 +63,10 @@ function group(value: number): string {
  * of the note, the position of the cursor, the counters and the format. The
  * actions of the vault live in the header of the explorer, not here.
  *
+ * The state of the backend stands next to the state of the save: the dot of
+ * the connection is a button, and a click asks the application to check the
+ * backend again.
+ *
  * The left column has no toggle: the rail of the sections is always there, and
  * the column stands next to it.
  */
@@ -94,6 +108,7 @@ export function AppFooter(props: AppFooterProps) {
           Retry save
         </button>
       ) : null}
+      <ConnectionIndicator connection={props.connection} onRetry={props.onRetryConnection} />
       <span class="muted" title={props.vaultPath ?? props.currentPath}>
         {props.currentPath}
       </span>

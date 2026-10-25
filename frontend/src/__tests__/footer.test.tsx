@@ -7,6 +7,7 @@ function renderFooter(overrides: Partial<ComponentProps<typeof AppFooter>> = {})
   const props = {
     saveError: null,
     status: 'saved' as const,
+    connection: 'connected' as const,
     currentPath: 'notes/a.md',
     onRetrySave: () => undefined,
     ...overrides,
@@ -84,6 +85,7 @@ describe('the status bar', () => {
       <AppFooter
         saveError={null}
         status='saved'
+        connection='connected'
         currentPath='a.md'
         onRetrySave={() => undefined}
         theme='dark'
@@ -95,6 +97,7 @@ describe('the status bar', () => {
       <AppFooter
         saveError={null}
         status='saved'
+        connection='connected'
         currentPath='a.md'
         onRetrySave={() => undefined}
         theme='light'

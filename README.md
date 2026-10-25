@@ -1142,6 +1142,14 @@ Full request and response examples are in [`docs/API.md`](docs/API.md).
 * Full-text search over attachments.
 * Optional end-to-end encryption between the browser and the server.
 * A native Android wrapper using the same API.
+* The large features of the phase 14 (the boundaries are in
+  [`PHASE14_PLAN.md`](PHASE14_PLAN.md)): user-defined templates, a preview of
+  the attachments and a recording of the sound, footnotes and presentations
+  from a note, quick notes, the pinning of the notes, the time of the creation
+  in the interface, the formulas and the highlighting of the code in the
+  Markdown.
+* The server side of the automation: the webhooks (an outbox in the database
+  and a delivery worker) and an MCP endpoint over HTTP. gRPC is deferred.
 
 ---
 
@@ -1193,6 +1201,7 @@ noto/
 ├── PHASE11_PLAN.md           the plan of the phase 11 (the seven points of the user)
 ├── PHASE12_PLAN.md           the plan of the phase 12 (the comfort of the interface)
 ├── PHASE13_PLAN.md           the plan of the phase 13 (the calendar, the tabs, the window)
+├── PHASE14_PLAN.md           the plan of the phase 14 (the icons, the signs, the switch)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

@@ -269,20 +269,6 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               {props.vaultPath}
             </span>
           )}
-          {props.onChooseVault ? (
-            <button
-              type="button"
-              class="icon-button"
-              title="Switch the storage of the notes"
-              aria-label="Switch the storage of the notes"
-              aria-disabled={props.vaultFixed ? 'true' : undefined}
-              aria-haspopup="menu"
-              aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
-              onClick={toggleMenu}
-            >
-              <Icon name="folder-open" size={15} />
-            </button>
-          ) : null}
         </span>
         <button
           type="button"

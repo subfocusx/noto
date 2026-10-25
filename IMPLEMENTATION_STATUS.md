@@ -554,6 +554,54 @@ the tree is whole again when the window is closed.
 
 ---
 
+## Phase 14 status (the icons, the signs and the switch)
+
+The user came back with six points, two screenshots and a list of eleven large
+features. The six points are done and are described here; the list of the
+features is scoped in `PHASE14_PLAN.md` §7 and is **not** implemented yet.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P14-1 | **The restore of the trash is an icon.** The button of a row shows the glyph `rotate-ccw` and names the note it restores (`Restore <имя файла>`), so the rows do not sound alike | done | `frontend/src/components/TrashList.tsx`, `frontend/src/ui/icons.tsx`, `frontend/src/__tests__/trash-list.test.tsx` |
+| P14-2 | **The active filter shows itself.** The permanent status bar carries a neutral chip "Filter: <query>" with the number of the matches and a cross that drops the filter and brings the whole tree back. The cross is named "Clear the active filter", so it never collides with the button of the same purpose inside the window of the filters | done | `frontend/src/components/AppFooter.tsx`, `frontend/src/styles/layout.css`, `frontend/src/__tests__/footer.test.tsx` |
+| P14-3 | **Every folder can be opened and closed at once.** The store knows both actions, the group of the explorer offers two buttons, the palette knows two commands. The list of the open folders survives a reload and is limited to 5000 entries | done | `frontend/src/core/store/actions.ts`, `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/core/commands/appCommands.ts`, `frontend/src/__tests__/tree-expand-all.test.tsx` |
+| P14-4 | **A quick menu switches the storage.** The path of the storage in the header (and the palette command `app:switch-vault`) opens a menu with the storage that is open, the recent storages and the picker of the folders. The list of the recent storages lives with the preferences of the user | done | `frontend/src/components/VaultSwitchMenu.tsx`, `frontend/src/core/settings/prefs.ts`, `frontend/src/__tests__/vault-switch.test.tsx` |
+| P14-5 | **The lock lives in the header, and the settings follow the mode.** The header of the storage carries a padlock: an encrypted storage is locked, an open one is offered the wizard of the encryption. The settings of an open storage show no action of a key at all, and the open storage does not even ask the backend about the format | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/components/VaultSecuritySection.tsx`, `frontend/src/__tests__/vault-ux.test.tsx` |
+| P14-6 | **The tags of the panel are chips.** The panel had no styles at all, so the browser drew the tags as grey blocks. They are chips in a row now: a thin border instead of a fill, radius 4 px, semantic tokens only | done | `frontend/src/styles/plugin.css`, `frontend/src/__tests__/plugin-tags.test.tsx` |
+
+Two defects of the session of the vault were fixed on the way: locking an open
+storage no longer turns it into an encrypted one, and switching the storage
+drops the key material of the previous one and reads the mode of the new one,
+so an encrypted storage shows the screen of the password instead of the notes
+of the storage that was open before
+(`frontend/src/core/vault/session.ts`, `frontend/src/core/store/actions.ts`).
+
+### The measured effect of the phase 14
+
+| What | Phase 13 | Phase 14 |
+|---|---|---|
+| Entry chunk of the bundle | 43,58 kB gzip | **45,00 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 773 passed (63 files) | **802 passed (67 files)** |
+| Icons of the registry | 41 | **45** (`rotate-ccw`, `chevrons-down-up`, `chevrons-up-down`, `lock`, `lock-open`) |
+| The sections of the column | 6 | **6** (unchanged) |
+
+### What was left out of the phase 14
+
+* **The eleven large features are not implemented.** Their boundaries, the place
+  of the work (a plugin, the core of the frontend or the backend) and the size
+  are in `PHASE14_PLAN.md` §7. The server side of the automation (the webhooks
+  with an outbox and the MCP over HTTP) is not started; gRPC is deferred by the
+  decision of the user.
+* **The panels of the plugins have no styles of their own** except the ones of
+  the word count, the backlinks and now the tags. The panels of Activity, Link
+  Cards and Graph are still drawn by the browser.
+* **The webhooks and the MCP inherit the absence of an authentication of the
+  API.** The server listens on the loopback by default and refuses to start on
+  another address without `NOTO_ALLOW_PUBLIC=true`; the documentation of the
+  contract has to say that before the surface grows.
+
+---
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the

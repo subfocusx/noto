@@ -129,7 +129,9 @@ describe('the header of the storage', () => {
     );
 
     expect(screen.getByRole('menu', { name: 'Switch the storage of the notes' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Switch the storage of the notes' })).toBeTruthy();
+    // The path of the storage is the trigger of the menu.
+    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
   });
 
   it('opens the menu when the path of the storage is pressed', () => {

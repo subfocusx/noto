@@ -27,20 +27,21 @@ test.describe('the tree at once', () => {
     await createFolder(page, folder);
     await createNote(page, folder, `${note}.md`);
 
-    // The folder starts closed, so the note inside it is not in the tree.
-    const collapse = page.getByRole('button', { name: `Collapse ${folder}`, exact: true });
-    if ((await collapse.count()) > 0) await collapse.click();
+    // The note is inside the folder: the folder is open, so the note is in the
+    // tree.
+    await expect(treeFile(page, `${note}.md`)).toBeVisible();
+
+    const actions = page.locator('.sidebar-section-actions');
+
+    // One click closes every folder of the storage: the note inside the folder
+    // is not in the tree any more.
+    await actions.getByRole('button', { name: 'Collapse all folders' }).click();
+    await expect(page.getByRole('button', { name: `Expand ${folder}`, exact: true })).toBeVisible();
     await expect(treeFile(page, `${note}.md`)).toHaveCount(0);
 
-    // One click opens every folder of the storage.
-    const actions = page.locator('.sidebar-section-actions');
+    // And one click opens them all again.
     await actions.getByRole('button', { name: 'Expand all folders' }).click();
     await expect(treeFile(page, `${note}.md`)).toBeVisible();
     await expect(page.getByRole('button', { name: `Collapse ${folder}`, exact: true })).toBeVisible();
-
-    // And one click closes them all again.
-    await actions.getByRole('button', { name: 'Collapse all folders' }).click();
-    await expect(treeFile(page, `${note}.md`)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: `Expand ${folder}`, exact: true })).toBeVisible();
   });
 });

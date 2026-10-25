@@ -138,9 +138,15 @@ export async function expandFolder(page: Page, name: string): Promise<void> {
   }
 }
 
-/** The text currently held by the CodeMirror editor. */
+/**
+ * The text currently held by the CodeMirror editor.
+ *
+ * A closed tab keeps its editor mounted (it is only hidden), so the text is
+ * read from the editor that is really on the screen.
+ */
 export async function editorText(page: Page): Promise<string> {
-  return (await page.locator('.cm-content').innerText()).replace(/\u00a0/g, ' ');
+  const content = page.locator('.cm-content:visible').first();
+  return (await content.innerText()).replace(/\u00a0/g, ' ');
 }
 
 /** Types text into the CodeMirror editor (always at the end of the document). */

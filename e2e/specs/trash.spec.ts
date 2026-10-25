@@ -67,6 +67,6 @@ test.describe('the trash', () => {
     await page.getByRole('button', { name: 'Explorer', exact: true }).click();
     await expect(treeFile(page, file)).toBeVisible();
     await treeFile(page, file).click();
-    await expect(editorText(page)).toContain('the text of the note');
+    expect(await editorText(page)).toContain('the text of the note');
   });
 });

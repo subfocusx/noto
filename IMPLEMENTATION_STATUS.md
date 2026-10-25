@@ -605,8 +605,8 @@ menu keeps its place without the rule, and the header sticks again
 
 | What | Phase 13 | Phase 14 |
 |---|---|---|
-| Entry chunk of the bundle | 43,58 kB gzip | **44,98 kB gzip** (the budget is 46 kB) |
-| Frontend unit tests | 773 passed (63 files) | **804 passed (67 files)** |
+| Entry chunk of the bundle | 43,58 kB gzip | **45,06 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 773 passed (63 files) | **805 passed (67 files)** |
 | End-to-end tests | 152 passed, 46 skipped | **152 passed, 46 skipped, 0 failed** |
 | Icons of the registry | 41 | **45** (`rotate-ccw`, `chevrons-down-up`, `chevrons-up-down`, `lock`, `lock-open`) |
 | The sections of the column | 6 | **6** (unchanged) |

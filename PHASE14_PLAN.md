@@ -143,9 +143,9 @@
 | `go build ./...`, `go vet ./...`, `go test ./... -race -count=1` | exit 0 |
 | `go run ./cmd/smoke` | PASS |
 | `npx tsc --noEmit` | exit 0 |
-| `npm test` (frontend) | **67 файлов / 804 теста passed** |
+| `npm test` (frontend) | **67 файлов / 805 теста passed** |
 | `npm run check:boundaries` | OK: 204 файла, нарушений нет (R1–R16) |
-| `npm run build` + `npm run measure` | entry **44,98 kB gzip** (бюджет 46 kB) |
+| `npm run build` + `npm run measure` | entry **45,06 kB gzip** (бюджет 46 kB) |
 | `scripts\verify.ps1` | все шаги PASS |
 | `npx playwright test` | **152 passed, 46 skipped, 0 failed** |
 
@@ -177,7 +177,7 @@
 * **Хранилище, зафиксированное окружением**, менять нельзя: кнопка остаётся
   на месте, но помечена `aria-disabled` и ничего не открывает.
 * **Бюджет entry-чанка** — 46 kB gzip (после фазы 13 — 43,58 kB, после фазы
-  14 — 44,98 kB). Пять новых иконок стоят 1,42 kB; меню смены хранилища
+  14 — 45,06 kB). Пять новых иконок стоят 1,42 kB; меню смены хранилища
   приходит из общего чанка, криптоядро по-прежнему ленивое.
 * **Массовое раскрытие** пишет в `localStorage` список раскрытых папок, он
   ограничен 5000 записями.

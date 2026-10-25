@@ -419,6 +419,13 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
               dragRefusal.current = 'nowhere';
             }}
+            onDragLeave={(event) => {
+              // The pointer left the tree: there is no target under it any
+              // more, so the drag must end with an answer.
+              const related = event.relatedTarget as Element | null;
+              if (related && event.currentTarget.contains(related)) return;
+              dragRefusal.current = 'nowhere';
+            }}
           >
             {view.folders.map((folder) => (
               <TreeFolderRow

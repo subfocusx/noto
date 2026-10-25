@@ -615,6 +615,22 @@ describe('the drag and the drop of the explorer', () => {
     );
   });
 
+  it('answers a drag that left the tree', async () => {
+    const view = renderExplorer();
+    const row = view.getByText('journal').closest('.tree-row') as HTMLElement;
+
+    fireEvent.dragStart(row, { dataTransfer: dataTransferMock() });
+    await waitFor(() => expect(view.getByText('Move to the root')).toBeTruthy());
+
+    // The pointer leaves the tree: there is no target under it any more.
+    fireEvent.dragLeave(view.getByTestId('file-tree'), { dataTransfer: dataTransferMock() });
+    fireEvent.dragEnd(row, { dataTransfer: dataTransferMock() });
+
+    await waitFor(() =>
+      expect(view.getByText('The node was not moved: drop it on a folder.')).toBeTruthy(),
+    );
+  });
+
   it('explains why a refused target refuses the drop', async () => {
     const view = renderExplorer();
     const row = view.getByText('journal').closest('.tree-row') as HTMLElement;

@@ -25,20 +25,20 @@ Status: `not started` · `partial` · `deferred by decision` · `draft`.
 
 | # | What | Where it is declared | Status | Size |
 |---|---|---|---|---|
-| A1 | The history of the versions of a note and the diff | `IMPLEMENTATION_STATUS.md:378`, `README.md:1103` | not started | — |
+| A1 | The history of the versions of a note and the diff | `IMPLEMENTATION_STATUS.md:378`, `README.md:1107` | not started | — |
 | A2 | The highlighting of the matches in the editor | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:105` | not started | — |
 | A3 | The autocompletion of the tags | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:105` | not started | — |
 | A4 | The focus mode | `IMPLEMENTATION_STATUS.md:279`, `PHASE8_PLAN.md:106` | not started | — |
-| A5 | The undo of a deletion (a toast of five seconds) | `IMPLEMENTATION_STATUS.md:280`, `docs/design/README.md:34` | draft | S |
+| A5 | The undo of a deletion (a toast of five seconds) | `IMPLEMENTATION_STATUS.md:280`, `docs/design/README.md:38` | draft | S |
 | A6 | The card of a note | `IMPLEMENTATION_STATUS.md:280`, `PHASE8_PLAN.md:106` | not started | — |
 | A7 | The synchronisation of the filter with the URL | `IMPLEMENTATION_STATUS.md:280`, `PHASE8_PLAN.md:107` | not started | — |
 | A8 | The drop of a file into the editor and the reset of a draft | `PHASE8_PLAN.md:105` | not started | S |
 | A9 | The formulas and the highlighting of the code in the Markdown | `PHASE14_PLAN.md:111` | not started | M |
 | A10 | The footnotes and the presentations in a note | `PHASE14_PLAN.md:108` | not started | S / M / L |
 | A11 | The recording of the sound | `PHASE14_PLAN.md:107` (`MediaRecorder` is nowhere in the repository) | not started | M |
-| A12 | The preview of the attachments (images) | `frontend/src/components/AttachmentsPanel.tsx:64`, `README.md:1107` | not started | M |
-| A13 | The full-text search over the attachments | `README.md:1142` | not started | — |
-| A14 | The cache of the derived properties of a note with the flag `stale` | `docs/design/README.md:32` | draft | — |
+| A12 | The preview of the attachments (images) | `frontend/src/components/AttachmentsPanel.tsx:64`, `README.md:1111` | not started | M |
+| A13 | The full-text search over the attachments | `README.md:1146` | not started | — |
+| A14 | The cache of the derived properties of a note with the flag `stale` | `docs/design/README.md:36` | draft | — |
 
 ### The tree and the interface
 
@@ -53,7 +53,7 @@ Status: `not started` · `partial` · `deferred by decision` · `draft`.
 | A21 | The section `H` in its full form (the versions) | `PHASE10_PLAN.md:146` | not started | — |
 | A22 | The several storages at the same time (as in SiYuan) | `docs/UI_AUDIT.md:288` | not started | — |
 | A23 | The graph of the activity instead of the banner | `docs/UI_AUDIT.md:284` | not started | — |
-| A24 | The server-side pagination and the lazy loading of the tree | `README.md:1109`, `README.md:1141` | not started | — |
+| A24 | The server-side pagination and the lazy loading of the tree | `README.md:1113`, `README.md:1145` | not started | — |
 | A25 | The translation of the interface into Russian | `IMPLEMENTATION_STATUS.md:322`, `PHASE9_PLAN.md:98` | not started | L |
 
 ### The server and the automation
@@ -63,26 +63,26 @@ Status: `not started` · `partial` · `deferred by decision` · `draft`.
 | A26 | The webhooks (an outbox in SQLite, `notes.Hook`, the routes) | `PHASE14_PLAN.md:113`, `IMPLEMENTATION_STATUS.md:642` | not started | L |
 | A27 | The MCP over HTTP (JSON-RPC 2.0) | `PHASE14_PLAN.md:114`, `IMPLEMENTATION_STATUS.md:642` | not started | M |
 | A28 | gRPC | `PHASE14_PLAN.md:115` | deferred by decision | L |
-| A29 | The authentication, the accounts, the multi-user | `README.md:1101` | not started | L |
-| A30 | The audit log on the server | `README.md:1103`, `docs/PLUGIN_SECURITY.md:307` | not started | — |
-| A31 | The end-to-end encryption between the browser and the server | `README.md:1143` | not started | L |
-| A32 | The TLS termination in the server | `README.md:1102` | not started | — |
-| A33 | The native Android wrapper | `README.md:1130`, `README.md:1144` | not started | — |
+| A29 | The authentication, the accounts, the multi-user | `README.md:1105` | not started | L |
+| A30 | The audit log on the server | `README.md:1107`, `docs/PLUGIN_SECURITY.md:307` | not started | — |
+| A31 | The end-to-end encryption between the browser and the server | `README.md:1147` | not started | L |
+| A32 | The TLS termination in the server | `README.md:1106` | not started | — |
+| A33 | The native Android wrapper | `README.md:1134`, `README.md:1148` | not started | — |
 
 ### The platform of the plugins
 
 | # | What | Where it is declared | Status | Size |
 |---|---|---|---|---|
-| A34 | The plugins from a disk, from the network or from a registry | `README.md:1117`, `docs/PLUGIN_SECURITY.md:284` | not started | L |
+| A34 | The plugins from a disk, from the network or from a registry | `README.md:1121`, `docs/PLUGIN_SECURITY.md:284` | not started | L |
 | A35 | The sandbox of the plugins (an iframe with a strict CSP) | `docs/PLUGIN_SECURITY.md:288` | not started | L |
 | A36 | The audit log of the actions of the plugins | `docs/PLUGIN_SECURITY.md:307` | not started | — |
-| A37 | The operation that opens a note (the plugin of the backlinks can only list them) | `README.md:1122` | not started | S |
+| A37 | The operation that opens a note (the plugin of the backlinks can only list them) | `README.md:1126` | not started | S |
 
 ### The offline mode
 
 | # | What | Where it is declared | Status | Size |
 |---|---|---|---|---|
-| A38 | The real synchronisation of the offline writes | `IMPLEMENTATION_STATUS.md:918`, `docs/PLUGIN_SECURITY.md:305`, `docs/UI_AUDIT.md:285` | not started | L |
+| A38 | The real synchronisation of the offline writes | `IMPLEMENTATION_STATUS.md:948`, `docs/PLUGIN_SECURITY.md:305`, `docs/UI_AUDIT.md:285` | not started | L |
 
 ---
 
@@ -101,15 +101,15 @@ Status: `not started` · `partial` · `deferred by decision` · `draft`.
 | B9 | The drafts (B6) | They exist (`lib/drafts.ts`, `core/vault/sealedDrafts.ts`); they still need a test | `PHASE14_PLAN.md:110` |
 | B10 | The Markdown (B7) | `marked` and `dompurify` are there; the formulas and the highlighting of the code are not | `PHASE14_PLAN.md:111` |
 | B11 | The pinning (B8) | There is only the "favourites" | `PHASE14_PLAN.md:112` |
-| B12 | The plugins | Trusted code without a sandbox; the declared rights do not cover the network calls a plugin makes itself | `README.md:1117`, `docs/PLUGIN_SECURITY.md:288` |
-| B13 | The search | The `LIKE` fallback when the SQLite build has no FTS5: slower and less exact | `README.md:1105` |
-| B14 | The name of a note | Not limited in length, control characters are allowed (except NUL), on purpose | `README.md:1124`, `IMPLEMENTATION_STATUS.md:923` |
-| B15 | The export | The archive is buffered in the memory | `IMPLEMENTATION_STATUS.md:921` |
-| B16 | The tooltip of the search button | It still says "Search (Ctrl+K)", the shortcut is `Ctrl+Shift+F` | `README.md:1127`, `IMPLEMENTATION_STATUS.md:928` |
+| B12 | The plugins | Trusted code without a sandbox; the declared rights do not cover the network calls a plugin makes itself | `README.md:1121`, `docs/PLUGIN_SECURITY.md:288` |
+| B13 | The search | The `LIKE` fallback when the SQLite build has no FTS5: slower and less exact | `README.md:1109` |
+| B14 | The name of a note | Not limited in length, control characters are allowed (except NUL), on purpose | `README.md:1128`, `IMPLEMENTATION_STATUS.md:953` |
+| B15 | The export | The archive is buffered in the memory | `IMPLEMENTATION_STATUS.md:951` |
+| B16 | The tooltip of the search button | It still says "Search (Ctrl+K)", the shortcut is `Ctrl+Shift+F` | `README.md:1131`, `IMPLEMENTATION_STATUS.md:958` |
 | B17 | The trash | The shortcut is `Ctrl+Alt+D`, not `Ctrl+Alt+T` (a deliberate deviation) | `IMPLEMENTATION_STATUS.md:382` |
 | B18 | The storage fixed by the environment | The button stays, marked `aria-disabled`, and opens nothing | `PHASE14_PLAN.md:195` |
-| B19 | The mobile shell | The PWA, not a native application | `README.md:1130` |
-| B20 | The Docker image | It has never been built on this machine | `IMPLEMENTATION_STATUS.md:892` |
+| B19 | The mobile shell | The PWA, not a native application | `README.md:1134` |
+| B20 | The Docker image | It has never been built on this machine | `IMPLEMENTATION_STATUS.md:922` |
 
 ---
 
@@ -120,9 +120,9 @@ the text says. They are listed here so that nobody takes them for a gap.
 
 | Where | What it says | The truth |
 |---|---|---|
-| `README.md:1102` | "No encryption at rest" | The sealed storage of the phase 7 encrypts the files in the browser (`frontend/src/core/vault/sealedVault.ts`, `backend/internal/sealed/`) |
-| `README.md:1135` | "Optional passphrase protection for the whole vault" | The same: the encrypted storage with its master password exists |
-| `docs/design/README.md:32-36` | The cards D2–D6 are marked `Draft` | The code of D3 (the manifest of the backup v2), of D4 (the saved views) and of D6 (the plugin of the activity) exists; the status of the cards is old |
+| `README.md:1106` | "No encryption at rest" | The sealed storage of the phase 7 encrypts the files in the browser (`frontend/src/core/vault/sealedVault.ts`, `backend/internal/sealed/`) |
+| `README.md:1139` | "Optional passphrase protection for the whole vault" | The same: the encrypted storage with its master password exists |
+| `docs/design/README.md:36-36` | The cards D2–D6 are marked `Draft` | The code of D3 (the manifest of the backup v2), of D4 (the saved views) and of D6 (the plugin of the activity) exists; the status of the cards is old |
 
 ---
 

@@ -114,6 +114,6 @@
 | `npm run typecheck` | exit 0 |
 | `npm test` (frontend) | **72 файла / 940 тестов passed** |
 | `npm run check:boundaries` | OK (R1–R16) |
-| `npm run build` + `npm run measure` | entry **45,14 kB gzip** (бюджет 46 kB) |
+| `npm run build` + `npm run measure` | entry **45,32 kB gzip** (бюджет 46 kB) |
 | `npx playwright test` | **161 passed, 54 skipped, 0 failed** |
 | `scripts\verify.ps1` | все шаги PASS |

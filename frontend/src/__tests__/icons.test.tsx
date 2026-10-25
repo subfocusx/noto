@@ -41,6 +41,7 @@ describe('the icon registry', () => {
       'command',
       'copy',
       'dots-vertical',
+      'eye',
       'file-plus',
       'file-text',
       'filter',

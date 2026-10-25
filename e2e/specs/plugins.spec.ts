@@ -64,7 +64,7 @@ test.describe('plugin platform', () => {
     await openPluginManager(page);
 
     // All built-in plugins are listed...
-    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(7);
+    await expect(page.locator('li.noto-plugin-list-item')).toHaveCount(8);
 
     // ...with their version and their state.
     await expect(pluginVersion(page, WORD_COUNT)).toHaveText('1.0.0');

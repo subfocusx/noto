@@ -56,17 +56,17 @@ test.describe('the shell of the application', () => {
     await expect(page.locator('.sidebar-section-counts')).toHaveCount(0);
   });
 
-  test('the stubs of the prototype are disabled icons', async ({ page }) => {
+  test('the graph and the archive are real views', async ({ page }) => {
     await gotoApp(page);
     await openSidebarIfNeeded(page);
 
     const graph = page.getByRole('button', { name: 'Graph' });
     const archive = page.getByRole('button', { name: 'Archive' });
 
-    await expect(graph).toHaveAttribute('aria-disabled', 'true');
-    await expect(graph).toHaveAttribute('title', 'Not implemented yet');
-    await expect(archive).toHaveAttribute('aria-disabled', 'true');
-    await expect(archive).toHaveAttribute('title', 'Not implemented yet');
+    await expect(graph).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(graph).toHaveAttribute('title', 'Graph');
+    await expect(archive).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(archive).toHaveAttribute('title', 'Archive');
   });
 
   test('the search opens a window over the application', async ({ page }) => {

@@ -12,8 +12,6 @@ import type { ComponentChildren, ComponentType } from 'preact';
 import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import type { RailSection } from '../core/store/types';
-import { useAppActions } from '../core/store/hooks';
-import { STORAGE_FIXED_MESSAGE } from '../core/storages/fixedStorage';
 import { useT } from '../i18n/useT';
 import { Icon } from '../ui/icons';
 import { ColumnResizer } from './ColumnResizer';
@@ -184,7 +182,6 @@ export function Sidebar(props: SidebarProps) {
   const t = useT();
   const navRef = useRef<HTMLElement | null>(null);
   const [sections, setSections] = useState<LazySections | null>(null);
-  const actions = useAppActions();
 
   /**
    * The sections that are not the explorer are loaded on demand.
@@ -342,20 +339,9 @@ export function Sidebar(props: SidebarProps) {
       {/*
         The storage of the notes can be fixed by the environment. The button of
         the storage stays where it is, but it cannot open anything: the column
-        says why instead of pretending that the storage can be changed.
+        of the explorer says why instead of pretending that the storage can be
+        changed.
       */}
-      {props.vaultFixed ? (
-        <p class="storage-fixed-note" role="note" data-testid="storage-fixed-note">
-          <span class="storage-fixed-message">{STORAGE_FIXED_MESSAGE}</span>
-          <button
-            type="button"
-            class="text-button"
-            onClick={() => actions.explainFixedStorage()}
-          >
-            {t('sidebar.whyFixed')}
-          </button>
-        </p>
-      ) : null}
       <div class="sidebar-scroll">{renderSection()}</div>
 
       {props.hasPluginItems && props.children ? (

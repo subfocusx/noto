@@ -12,6 +12,7 @@ import type { TreeFolder } from '../../lib/tree';
 import type { MoveRefusal } from '../../lib/tree';
 import { allFiles, allFolderNodes, filterTree, refusalOfMove } from '../../lib/tree';
 import { useAppActions } from '../../core/store/hooks';
+import { STORAGE_FIXED_MESSAGE } from '../../core/storages/fixedStorage';
 import { pinnedNodes, usePins } from '../../core/pin/pins';
 import { quickNoteName } from '../../core/quicknotes/quickNotes';
 import { getVaultService } from '../../core/vault/vaultService';
@@ -426,6 +427,25 @@ export function ExplorerSection(props: ExplorerSectionProps) {
       </header>
 
       <div class="column-body">
+        {/*
+          The storage of the notes can be fixed by the environment. The button
+          of the storage stays where it is, but it cannot open anything: the
+          column says why instead of pretending that the storage can be
+          changed. The note stands under the header of the column — a message
+          above it would push the headers of the columns down.
+        */}
+        {props.vaultFixed ? (
+          <p class="storage-fixed-note" role="note" data-testid="storage-fixed-note">
+            <span class="storage-fixed-message">{STORAGE_FIXED_MESSAGE}</span>
+            <button
+              type="button"
+              class="text-button"
+              onClick={() => actions.explainFixedStorage()}
+            >
+              {t('sidebar.whyFixed')}
+            </button>
+          </p>
+        ) : null}
         <div class="sidebar-section">
           <div class="sidebar-section-title">
             <span>

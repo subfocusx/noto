@@ -30,6 +30,19 @@ export interface EditorTabsProps {
   onClose(path: string): void;
   /** Opens an empty tab; the button is not shown when it is missing. */
   onNewTab?(): void;
+  /**
+   * The toggle of the preview of the note.
+   *
+   * It stands in the strip of the tabs, at its right end.
+   */
+  onTogglePreview?: {
+    /** The label of the button (the text of the interface). */
+    label: string;
+    /** True when the preview is on the screen. */
+    pressed: boolean;
+    /** Opens or closes the preview. */
+    onClick(): void;
+  };
 }
 
 /**
@@ -140,6 +153,23 @@ export function EditorTabs(props: EditorTabsProps) {
           onClick={() => props.onNewTab?.()}
         >
           <Icon name="plus" size={14} />
+        </button>
+      ) : null}
+      {/*
+        The toggle of the preview stands in the strip of the tabs: the strip is
+        the header of the column of the editor, and a button beside it (outside
+        the strip) would break the line of the headers of the interface.
+      */}
+      {props.onTogglePreview ? (
+        <button
+          type="button"
+          class="icon-button tab-preview"
+          aria-label={props.onTogglePreview.label}
+          title={props.onTogglePreview.label}
+          aria-pressed={props.onTogglePreview.pressed ? 'true' : 'false'}
+          onClick={() => props.onTogglePreview?.onClick()}
+        >
+          <Icon name="eye" size={14} />
         </button>
       ) : null}
     </div>

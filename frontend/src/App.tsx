@@ -1254,31 +1254,24 @@ export function App() {
         </div>
 
         <main class="workspace">
-          <div class="workspace-header">
-            <EditorTabs
-              tabs={tabItems}
-              activePath={note.path}
-              onSelect={(path) => void openNote(path)}
-              onClose={(path) => {
-                actions.closeTab(path);
-                const rest = ui.openPaths.filter((item) => item !== path);
-                if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
-                // The last tab closes the note with it: a closed tab must not
-                // leave the note (and its name) on the screen.
-                if (path === note.path && rest.length === 0) void actions.closeNote();
-              }}
-            />
-            <button
-              type="button"
-              class="icon-button"
-              aria-label={previewOpen ? t('app.hidePreview') : t('app.showPreview')}
-              title={previewOpen ? t('app.hidePreview') : t('app.showPreview')}
-              aria-pressed={previewOpen ? 'true' : 'false'}
-              onClick={() => setPreviewOpen((open) => !open)}
-            >
-              <Icon name="eye" size={16} />
-            </button>
-          </div>
+          <EditorTabs
+            tabs={tabItems}
+            activePath={note.path}
+            onSelect={(path) => void openNote(path)}
+            onClose={(path) => {
+              actions.closeTab(path);
+              const rest = ui.openPaths.filter((item) => item !== path);
+              if (path === note.path && rest.length > 0) void openNote(rest[rest.length - 1]!);
+              // The last tab closes the note with it: a closed tab must not
+              // leave the note (and its name) on the screen.
+              if (path === note.path && rest.length === 0) void actions.closeNote();
+            }}
+            onTogglePreview={{
+              label: previewOpen ? t('app.hidePreview') : t('app.showPreview'),
+              pressed: previewOpen,
+              onClick: () => setPreviewOpen((open) => !open),
+            }}
+          />
 
           <div class="breadcrumb-strip">
             <NoteBreadcrumbs path={note.path ?? ''} onOpenFolder={(path) => actions.expandFolder(path)} />

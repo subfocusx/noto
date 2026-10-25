@@ -273,7 +273,12 @@
 /* ------------------------------------------------------------ vault column */
 
 .vault-header {
-  position: relative;
+  /*
+   * The header of the explorer is the header of the column: it is sticky (see
+   * `.column-header`), so the tree scrolls under it and the menu of the storage
+   * hangs from it. A sticky element is a positioned one: the menu keeps its
+   * place without a rule of its own.
+   */
   display: flex;
   align-items: center;
   gap: var(--space-1);

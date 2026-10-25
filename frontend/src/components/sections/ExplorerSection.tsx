@@ -28,6 +28,10 @@ export interface ExplorerSectionProps {
   loading: boolean;
   /** Called when a folder is folded or unfolded. */
   onToggle(path: string): void;
+  /** Called when every folder of the storage must be opened at once. */
+  onExpandAll?(): void;
+  /** Called when every folder of the storage must be closed at once. */
+  onCollapseAll?(): void;
   /** Called when a note is chosen. */
   onSelect(path: string): void;
   /** Called when the user asks for a new folder. */
@@ -254,6 +258,16 @@ export function ExplorerSection(props: ExplorerSectionProps) {
               {filtered ? <span class="q9-filtered-badge">filtered</span> : null}
             </span>
             <div class="sidebar-section-actions" role="group" aria-label="Explorer actions">
+              <IconButton
+                label="Expand all folders"
+                icon="chevrons-down-up"
+                onClick={() => props.onExpandAll?.()}
+              />
+              <IconButton
+                label="Collapse all folders"
+                icon="chevrons-up-down"
+                onClick={() => props.onCollapseAll?.()}
+              />
               <IconButton
                 label="Graph"
                 icon="network"

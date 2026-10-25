@@ -96,6 +96,15 @@ export const RIGHT_PANEL_WIDTH_DEFAULT = 280;
 /** The number of the notes in the list of the recent notes. */
 export const RECENT_LIMIT = 20;
 
+/**
+ * The number of the folders that are remembered as open.
+ *
+ * The list is written into the storage of the browser, so it must stay small
+ * enough to be written at once. A vault with more folders than that keeps the
+ * tree of the last reload; the rest is opened by the user.
+ */
+export const EXPANDED_FOLDERS_LIMIT = 5000;
+
 /** The default number of minutes of inactivity before the vault locks itself. */
 export const AUTO_LOCK_MINUTES_DEFAULT = 15;
 
@@ -216,7 +225,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
     treeSort,
     editorFontSize,
     editorWrap: source.editorWrap !== false,
-    expandedFolders: stringList(source.expandedFolders),
+    expandedFolders: stringList(source.expandedFolders).slice(0, EXPANDED_FOLDERS_LIMIT),
     recentPaths: stringList(source.recentPaths).slice(0, RECENT_LIMIT),
     rightPanelVisible: source.rightPanelVisible !== false,
     rightPanelPinned: source.rightPanelPinned === true,

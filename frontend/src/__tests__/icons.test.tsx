@@ -34,6 +34,8 @@ describe('the icon registry', () => {
       'chevron-down',
       'chevron-right',
       'chevron-up',
+      'chevrons-down-up',
+      'chevrons-up-down',
       'circle',
       'clock',
       'command',

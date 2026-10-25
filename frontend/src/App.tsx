@@ -324,6 +324,8 @@ export function App() {
         }
         void appStore.actions.duplicateNote(note.path);
       },
+      expandAllFolders: () => appStore.actions.expandAllFolders(),
+      collapseAllFolders: () => appStore.actions.collapseAllFolders(),
     });
 
     const host = new PluginHost({
@@ -1107,6 +1109,8 @@ export function App() {
             currentPath={note.path ?? ''}
             expanded={ui.expanded}
             onToggle={actions.toggleFolder}
+            onExpandAll={actions.expandAllFolders}
+            onCollapseAll={actions.collapseAllFolders}
             onSelect={(path) => void openNote(path)}
             onCreateFolder={(parentPath) =>
               actions.openDialog({ kind: 'create-folder', parentPath, value: '' })

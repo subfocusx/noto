@@ -91,6 +91,14 @@ export interface AppCommandDeps {
   openShortcuts(): void;
   /** Opens a section of the left column. */
   openSection(section: RailSection): void;
+  /**
+   * Opens every folder of the tree at once.
+   *
+   * The callback is optional: the shell wires it when the store is ready.
+   */
+  expandAllFolders?(): void;
+  /** Closes every folder of the tree at once. */
+  collapseAllFolders?(): void;
 }
 
 /** A command of the application, before it is registered. */
@@ -154,6 +162,18 @@ export function appCommandSpecs(deps: AppCommandDeps): AppCommandSpec[] {
       title: 'Open trash',
       description: 'Show the deleted notes',
       run: () => deps.openTrash(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}expand-all-folders`,
+      title: 'Expand all folders',
+      description: 'Open every folder of the tree at once',
+      run: () => deps.expandAllFolders?.(),
+    },
+    {
+      id: `${APP_COMMAND_PREFIX}collapse-all-folders`,
+      title: 'Collapse all folders',
+      description: 'Close every folder of the tree at once',
+      run: () => deps.collapseAllFolders?.(),
     },
     {
       id: `${APP_COMMAND_PREFIX}settings`,

@@ -220,6 +220,31 @@ function expandTo(path: string): void {
   });
 }
 
+/**
+ * Opens every folder of the storage at once.
+ *
+ * The tree of the storage is flat in the state, so the paths of the folders are
+ * known without walking the tree. When a filter is active the tree shows only
+ * the folders that hold a matching note; the other ones stay open in the
+ * state, which is harmless — they are not in the tree.
+ *
+ * Opening a note expands the folders on the way to it again, so a note that is
+ * opened after this action is always visible.
+ */
+export function expandAllFolders(): void {
+  update((prev) => ({
+    ...prev,
+    ui: { ...prev.ui, expanded: new Set(prev.tree.folders.map((folder) => folder.path)) },
+  }));
+  persistPrefs();
+}
+
+/** Closes every folder of the storage at once. */
+export function collapseAllFolders(): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, expanded: new Set<string>() } }));
+  persistPrefs();
+}
+
 /* ----------------------------------------------------------------- notes */
 
 export async function openNote(path: string): Promise<void> {
@@ -1119,6 +1144,8 @@ export interface AppActions {
   keepLocalVersion(): Promise<void>;
   dismissConflict(): void;
   toggleFolder(path: string): void;
+  expandAllFolders(): void;
+  collapseAllFolders(): void;
   openDialog(dialog: DialogState): void;
   setDialogValue(value: string): void;
   closeDialog(): void;
@@ -1195,6 +1222,8 @@ export const actions: AppActions = {
   keepLocalVersion,
   dismissConflict,
   toggleFolder,
+  expandAllFolders,
+  collapseAllFolders,
   openDialog,
   setDialogValue,
   closeDialog,

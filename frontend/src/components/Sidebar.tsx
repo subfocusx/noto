@@ -38,6 +38,10 @@ export interface SidebarProps {
   currentPath: string;
   expanded: Set<string>;
   onToggle(path: string): void;
+  /** Called when every folder of the storage must be opened at once. */
+  onExpandAll?(): void;
+  /** Called when every folder of the storage must be closed at once. */
+  onCollapseAll?(): void;
   onSelect(path: string): void;
   onCreateFolder(parentPath: string): void;
   onCreateFile(parentPath: string): void;
@@ -221,6 +225,8 @@ export function Sidebar(props: SidebarProps) {
           expanded={props.expanded}
           loading={props.loading}
           onToggle={props.onToggle}
+          onExpandAll={props.onExpandAll}
+          onCollapseAll={props.onCollapseAll}
           onSelect={props.onSelect}
           onCreateFolder={props.onCreateFolder}
           onCreateFile={props.onCreateFile}

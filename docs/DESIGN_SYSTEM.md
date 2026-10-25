@@ -202,14 +202,14 @@ import { Icon } from '../ui/icons';
 
 ```
 archive  bell       bookmark     calendar      chevron-down
-chevron-right  chevron-up  circle   clock     command
-copy     dots-vertical  file-plus  file-text  filter
-folder   folder-open  folder-plus  hash      image
-link     menu        moon         more-horizontal  move
-network  panel-left  panel-right  pencil     plus
-puzzle   refresh-cw  rotate-ccw  search      settings
-star     sun         tags        trash       upload
-x
+chevron-right  chevron-up  chevrons-down-up  chevrons-up-down
+circle   clock     command      copy          dots-vertical
+file-plus  file-text  filter     folder        folder-open
+folder-plus  hash    image      link          menu
+moon     more-horizontal  move  network       panel-left
+panel-right  pencil  plus       puzzle        refresh-cw
+rotate-ccw  search  settings    star         sun
+tags      trash      upload     x
 ```
 
 Чтобы добавить иконку, внесите её в `frontend/src/ui/icons.tsx` — реестр
@@ -274,6 +274,9 @@ x
 * **Действие хранилища живёт в шапке раздела, к которому оно относится.**
   Поиск, Graph, Archive, палитра команд, менеджер плагинов и создание
   заметки/папки — в шапке EXPLORER и в шапке хранилища.
+* **Действие представления живёт рядом с тем, что оно меняет.** Раскрыть все
+  папки и схлопнуть все папки — в группе действий EXPLORER, рядом с деревом:
+  это действия над видом дерева, а не над хранилищем.
 * **Состояние документа живёт в строке состояния.** Статус автосохранения,
   путь, позиция курсора, счётчики, формат и признак «только чтение» — в
   постоянной строке состояния. Она никогда не скрывается, поэтому скрытую

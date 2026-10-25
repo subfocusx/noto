@@ -564,3 +564,36 @@ func TestAttachments(t *testing.T) {
 		t.Fatalf("expected payload_too_large, got %q", notes.Code(err))
 	}
 }
+
+func TestUploadAudioAttachment(t *testing.T) {
+	svc, _, _ := testutil.NewTestService(t)
+	ctx := context.Background()
+
+	// The recording of the browser arrives as WebM: the server has to accept
+	// it, otherwise the recorder of the editor cannot save the sound.
+	webm := append([]byte{0x1a, 0x45, 0xdf, 0xa3}, bytes.Repeat([]byte{0x00}, 64)...)
+	att, err := svc.UploadAttachment(ctx, "recording.webm", webm, "")
+	if err != nil {
+		t.Fatalf("upload webm: %v", err)
+	}
+	if att.MIME != "audio/webm" {
+		t.Fatalf("unexpected mime type %q", att.MIME)
+	}
+
+	// The other containers of the sound are accepted as well.
+	cases := map[string][]byte{
+		"audio/ogg":  append([]byte("OggS"), bytes.Repeat([]byte{0x00}, 64)...),
+		"audio/wav":  append([]byte("RIFF\x00\x00\x00\x00WAVE"), bytes.Repeat([]byte{0x00}, 64)...),
+		"audio/mpeg": append([]byte("ID3"), bytes.Repeat([]byte{0x00}, 64)...),
+		"audio/mp4":  append([]byte{0x00, 0x00, 0x00, 0x18}, append([]byte("ftypM4A "), bytes.Repeat([]byte{0x00}, 64)...)...),
+	}
+	for mime, content := range cases {
+		got, err := svc.UploadAttachment(ctx, "recording", content, "")
+		if err != nil {
+			t.Fatalf("upload %s: %v", mime, err)
+		}
+		if got.MIME != mime {
+			t.Fatalf("expected %q, got %q", mime, got.MIME)
+		}
+	}
+}

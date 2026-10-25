@@ -21,6 +21,13 @@ var allowedAttachmentMIMEs = map[string]bool{
 	"image/svg+xml":   true,
 	"application/pdf": true,
 	"text/plain":      true,
+	// The recorder of the editor saves the sound of the user as an
+	// attachment of the note: the audio is a first class attachment.
+	"audio/webm": true,
+	"audio/ogg":  true,
+	"audio/mp4":  true,
+	"audio/mpeg": true,
+	"audio/wav":  true,
 }
 
 // attachmentExtensions maps a content type to the extension of the stored file.
@@ -32,6 +39,11 @@ var attachmentExtensions = map[string]string{
 	"image/svg+xml":   ".svg",
 	"application/pdf": ".pdf",
 	"text/plain":      ".txt",
+	"audio/webm": ".webm",
+	"audio/ogg":  ".ogg",
+	"audio/mp4":  ".m4a",
+	"audio/mpeg": ".mp3",
+	"audio/wav":  ".wav",
 }
 
 // UploadAttachment stores an uploaded binary. The content type is detected on
@@ -95,6 +107,9 @@ func sniffAttachmentMIME(content []byte) string {
 	if len(sniff) > 512 {
 		sniff = sniff[:512]
 	}
+	if mime, ok := sniffAudioMIME(sniff); ok {
+		return mime
+	}
 	mime := http.DetectContentType(sniff)
 	base := strings.ToLower(strings.TrimSpace(strings.Split(mime, ";")[0]))
 	switch base {
@@ -105,6 +120,39 @@ func sniffAttachmentMIME(content []byte) string {
 		}
 	}
 	return base
+}
+
+// sniffAudioMIME detects the container of an audio file.
+//
+// The standard sniffer of the standard library knows nothing about the
+// containers of the sound: the recording of the browser arrives as WebM or
+// as Ogg, and without this the server would answer "this file type is not
+// allowed" to a perfectly valid recording.
+func sniffAudioMIME(sniff []byte) (string, bool) {
+	// WebM and Matroska: the EBML header.
+	if len(sniff) >= 4 && sniff[0] == 0x1a && sniff[1] == 0x45 && sniff[2] == 0xdf && sniff[3] == 0xa3 {
+		return "audio/webm", true
+	}
+	// Ogg: the page header "OggS".
+	if len(sniff) >= 4 && string(sniff[:4]) == "OggS" {
+		return "audio/ogg", true
+	}
+	// WAV: the RIFF container with the form type "WAVE".
+	if len(sniff) >= 12 && string(sniff[:4]) == "RIFF" && string(sniff[8:12]) == "WAVE" {
+		return "audio/wav", true
+	}
+	// MP4 and M4A: the box "ftyp" at the fourth byte.
+	if len(sniff) >= 12 && string(sniff[4:8]) == "ftyp" {
+		return "audio/mp4", true
+	}
+	// MP3: the tag "ID3" or the frame synchronisation.
+	if len(sniff) >= 3 && string(sniff[:3]) == "ID3" {
+		return "audio/mpeg", true
+	}
+	if len(sniff) >= 2 && sniff[0] == 0xff && sniff[1]&0xe0 == 0xe0 {
+		return "audio/mpeg", true
+	}
+	return "", false
 }
 
 // ListAttachments returns every stored attachment.

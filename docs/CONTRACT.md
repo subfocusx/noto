@@ -534,10 +534,12 @@ Policy of the command:
 * Archive import: reject entries with absolute paths, `..` segments, symlinks,
   and total uncompressed size above `cfg.MaxArchiveBytes`; also cap the
   number of entries (e.g. 10000).
-* Attachment upload: sniff the content type from the bytes (http.DetectContentType),
-  allow only `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`,
-  `application/pdf`, `text/plain`; enforce the size limit; generate the stored
-  name server side; never trust the client file name or mime type.
+* Attachment upload: sniff the content type from the bytes (http.DetectContentType
+  for the documents and images, a dedicated sniffer for the containers of the
+  sound), allow only `image/png`, `image/jpeg`, `image/gif`, `image/webp`,
+  `image/svg+xml`, `application/pdf`, `text/plain`, `audio/webm`, `audio/ogg`,
+  `audio/mp4`, `audio/mpeg`, `audio/wav`; enforce the size limit; generate the
+  stored name server side; never trust the client file name or mime type.
 * Authentication: when `NOTO_AUTH_ENABLED` is `true`, every endpoint of the API
   except `GET /api/health` and `POST /api/auth/login` needs valid credentials
   (the header `Authorization: Bearer <token>` or the cookie `noto_session`).

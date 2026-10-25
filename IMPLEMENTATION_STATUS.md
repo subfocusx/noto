@@ -518,6 +518,42 @@ knows nothing about the reminders of the user.
 
 ---
 
+## Phase 13 status (the calendar, the tabs, the window)
+
+The user came back with four points and two screenshots. Two of them were about
+a function that looked broken but was not: the calendar marked the days of the
+*life* of a note and not the days of its *name*, and the closing of the last tab
+left the note on the screen (only its name was gone, and it looked like a tab
+that stayed). The third point was about a colour that was not in the right
+place, and the fourth one asked for one window instead of two sections.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P13-1 | **A daily note belongs to its day.** A note whose name reads as a day (`2026-10-29.md`) belongs to that day and to that day only; the days of its creation and of its change do not add it to the calendar. Every other note keeps the old rule | done | `frontend/src/core/calendar/notes.ts`, `frontend/src/__tests__/calendar-notes.test.ts` |
+| P13-2 | **The two signs of the calendar differ.** The dot of today is painted in the colour of the text (white in the dark theme), the tint of a day with records stays violet | done | `frontend/src/styles/calendar.css` |
+| P13-3 | **The last tab closes the note.** Closing the last tab empties the editor and clears the breadcrumbs: the name of the note does not hang in the strip any more | done | `frontend/src/core/store/actions.ts` (`closeNote`), `frontend/src/App.tsx` |
+| P13-4 | **The dot of the connection moved down.** It stands in the status bar, next to the state of the save, and it is still a button: a click checks the backend again | done | `frontend/src/components/AppFooter.tsx`, `frontend/src/components/ConnectionIndicator.tsx` |
+| P13-5 | **One window for the search and the filters.** The magnifier and the funnel open the same window in their own module; the column of the explorer keeps the tree. The two sections of the column are gone | done | `frontend/src/components/FindPanel.tsx`, `frontend/src/styles/find.css` |
+
+### The measured effect of the phase 13
+
+| What | Phase 12 | Phase 13 |
+|---|---|---|
+| Entry chunk of the bundle | 43,51 kB gzip | **43,58 kB gzip** (the budget is 46 kB) |
+| Frontend unit tests | 752 passed (60 files) | **773 passed (63 files)** |
+| End-to-end tests | 146 passed, 46 skipped | **152 passed, 46 skipped, 0 failed** |
+| The sections of the column | 8 (the explorer, the favorites, the calendar, the search, the filters, the history, the notifications, the trash) | **6** (the search and the filters moved into the window) |
+| The signs of a day of the calendar | two, but both violet | **two, and they differ in colour** |
+
+### What was left out of the phase 13
+
+The window of the search and the filters is a modal window: the tree behind it
+is dimmed and cannot be clicked while it is open. The filter still filters the
+tree — the list of the matching notes inside the window shows what matched, and
+the tree is whole again when the window is closed.
+
+---
+
 ## Closed phases
 
 The closed phases are kept here as an archive: the cards of the phase are the

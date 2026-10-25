@@ -1192,6 +1192,7 @@ noto/
 ├── PHASE10_PLAN.md           the plan of the phase 10 (the shell of the application)
 ├── PHASE11_PLAN.md           the plan of the phase 11 (the seven points of the user)
 ├── PHASE12_PLAN.md           the plan of the phase 12 (the comfort of the interface)
+├── PHASE13_PLAN.md           the plan of the phase 13 (the calendar, the tabs, the window)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example

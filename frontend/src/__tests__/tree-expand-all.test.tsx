@@ -3,7 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/preact';
 import { Sidebar } from '../components/Sidebar';
 import { buildTree } from '../lib/tree';
 import { appStore } from '../core/store/appStore';
-import { loadPrefs } from '../core/settings/prefs';
+import {
+  DEFAULT_PREFS,
+  EXPANDED_FOLDERS_LIMIT,
+  PREFS_KEY,
+  loadPrefs,
+  savePrefs,
+} from '../core/settings/prefs';
 import type { Node } from '../types';
 
 // The tree of the store comes from the server, so the client of the API is the
@@ -115,7 +121,11 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
 describe('opening and closing every folder at once', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    appStore.actions.collapseAllFolders();
+    // The store is a singleton: it is rebuilt from the preferences of the
+    // browser, so the storage is emptied and the state is reset before every
+    // test. The preferences of one test never leak into the next one.
+    localStorage.clear();
+    appStore.reset();
   });
 
   it('offers the two actions in the group of the explorer', () => {
@@ -160,5 +170,80 @@ describe('opening and closing every folder at once', () => {
 
     appStore.actions.collapseAllFolders();
     expect(loadPrefs().expandedFolders).toEqual([]);
+  });
+
+  it('changes nothing when every folder is opened a second time', async () => {
+    await appStore.actions.refreshTree();
+
+    appStore.actions.expandAllFolders();
+    const first = [...appStore.getSnapshot().ui.expanded].sort();
+
+    appStore.actions.expandAllFolders();
+    expect([...appStore.getSnapshot().ui.expanded].sort()).toEqual(first);
+    expect(first).toEqual(['journal', 'journal/2026']);
+    expect([...loadPrefs().expandedFolders].sort()).toEqual(['journal', 'journal/2026']);
+  });
+
+  it('opens the folders that live inside another folder too', async () => {
+    await appStore.actions.refreshTree();
+
+    appStore.actions.expandAllFolders();
+    const expanded = appStore.getSnapshot().ui.expanded;
+    expect(expanded.has('journal')).toBe(true);
+    expect(expanded.has('journal/2026')).toBe(true);
+  });
+
+  it('closes a single folder again after every folder was opened', async () => {
+    await appStore.actions.refreshTree();
+
+    appStore.actions.expandAllFolders();
+    appStore.actions.toggleFolder('journal');
+
+    expect([...appStore.getSnapshot().ui.expanded]).toEqual(['journal/2026']);
+    expect(loadPrefs().expandedFolders).toEqual(['journal/2026']);
+  });
+
+  it('forgets the open folders when they are all closed', async () => {
+    await appStore.actions.refreshTree();
+
+    appStore.actions.expandAllFolders();
+    appStore.actions.collapseAllFolders();
+
+    expect(appStore.getSnapshot().ui.expanded.size).toBe(0);
+    expect(loadPrefs().expandedFolders).toEqual([]);
+  });
+
+  it('opens nothing when the tree of the storage is not loaded yet', () => {
+    // A preference that the store does not know is kept as it is.
+    savePrefs({ ...DEFAULT_PREFS, autoLockMinutes: 42 });
+
+    appStore.actions.expandAllFolders();
+
+    expect(appStore.getSnapshot().ui.expanded.size).toBe(0);
+    expect(loadPrefs().expandedFolders).toEqual([]);
+    expect(loadPrefs().autoLockMinutes).toBe(42);
+  });
+
+  it('opens the same folders again when the state is rebuilt', async () => {
+    await appStore.actions.refreshTree();
+
+    appStore.actions.expandAllFolders();
+    // The state of the application is rebuilt from the preferences, so the
+    // folders that were open are open again.
+    appStore.reset();
+
+    expect([...appStore.getSnapshot().ui.expanded].sort()).toEqual(['journal', 'journal/2026']);
+  });
+
+  it('cuts the list of the open folders that comes from the storage', () => {
+    const folders = Array.from(
+      { length: EXPANDED_FOLDERS_LIMIT + 10 },
+      (_, i) => `folder-${i}`,
+    );
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ expandedFolders: folders }));
+
+    const prefs = loadPrefs();
+    expect(prefs.expandedFolders).toHaveLength(EXPANDED_FOLDERS_LIMIT);
+    expect(prefs.expandedFolders).not.toContain(`folder-${EXPANDED_FOLDERS_LIMIT + 9}`);
   });
 });

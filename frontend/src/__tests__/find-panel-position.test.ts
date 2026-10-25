@@ -16,28 +16,26 @@ const VIEWPORT = { width: 1280, height: 800 };
 const SIZE = { x: 0, y: 0, width: PANEL_WIDTH, height: 400 };
 
 describe('the place of the floating window', () => {
-  it('sits right of the column of the tree', () => {
-    const anchor = { x: 0, y: 0, width: 300, height: 800 };
-    const rect = findPanelRect(VIEWPORT, SIZE, anchor);
+  it('sits in the middle of the screen', () => {
+    const rect = findPanelRect(VIEWPORT, SIZE);
 
-    expect(rect.x).toBe(300 + PANEL_MARGIN);
-    expect(rect.y).toBe(PANEL_MARGIN);
+    expect(rect.x).toBe(Math.round((VIEWPORT.width - PANEL_WIDTH) / 2));
+    expect(rect.y).toBe(Math.round((VIEWPORT.height - SIZE.height) / 2));
     expect(rect.width).toBe(PANEL_WIDTH);
   });
 
   it('never leaves the screen', () => {
-    const anchor = { x: 0, y: 0, width: 1200, height: 800 };
-    const rect = findPanelRect(VIEWPORT, SIZE, anchor);
+    const rect = findPanelRect(VIEWPORT, SIZE);
 
     expect(rect.x).toBeLessThanOrEqual(VIEWPORT.width - rect.width);
     expect(rect.x).toBeGreaterThanOrEqual(PANEL_MARGIN);
     expect(rect.y).toBeGreaterThanOrEqual(PANEL_MARGIN);
   });
 
-  it('sits in the corner of the screen without an anchor', () => {
-    const rect = findPanelRect(VIEWPORT, SIZE);
+  it('stays in the margin of a screen that is too small', () => {
+    const rect = findPanelRect({ width: 200, height: 150 }, SIZE);
 
-    expect(rect.x + rect.width).toBe(VIEWPORT.width - PANEL_MARGIN);
+    expect(rect.x).toBe(PANEL_MARGIN);
     expect(rect.y).toBe(PANEL_MARGIN);
   });
 

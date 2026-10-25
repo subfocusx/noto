@@ -2,8 +2,8 @@
 //
 // The window is not a modal window any more: it floats over the application
 // and the tree behind it stays visible and clickable. The rules of its place
-// and of the click that closes it live here, so they can be tested without a
-// browser.
+// (the middle of the screen) and of the click that closes it live here, so
+// they can be tested without a browser.
 
 /** A point of the screen. */
 export interface Point {
@@ -37,27 +37,19 @@ export const PANEL_MAX_HEIGHT = 480;
 /**
  * The place of the floating window.
  *
- * The window floats over the application, never over the tree: without an
- * anchor it sits in the upper right corner (over the editor), with an anchor
- * (the column of the tree) it sits right of that column. The window never
- * leaves the screen: a window that does not fit is pinned to the margin.
+ * The window sits in the middle of the screen: the search and the filters
+ * are the instrument of the whole application, so they open where the eye
+ * already is, not over one of the columns. The window never leaves the
+ * screen: a window that does not fit is pinned to the margin.
  */
-export function findPanelRect(viewport: Viewport, size: Rect, anchor?: Rect): Rect {
+export function findPanelRect(viewport: Viewport, size: Rect): Rect {
   const width = Math.min(size.width, Math.max(0, viewport.width - PANEL_MARGIN * 2));
   const height = Math.min(size.height, Math.max(0, viewport.height - PANEL_MARGIN * 2));
   const maxX = Math.max(PANEL_MARGIN, viewport.width - width - PANEL_MARGIN);
   const maxY = Math.max(PANEL_MARGIN, viewport.height - height - PANEL_MARGIN);
 
-  let x: number;
-  if (anchor) {
-    // The window goes right of the column of the tree; when there is no room
-    // it goes over the workspace, but never over the tree itself.
-    const right = anchor.x + anchor.width + PANEL_MARGIN;
-    x = right + width <= viewport.width - PANEL_MARGIN ? right : Math.max(PANEL_MARGIN, anchor.x);
-  } else {
-    x = viewport.width - width - PANEL_MARGIN;
-  }
-  const y = anchor ? anchor.y : PANEL_MARGIN;
+  const x = Math.round((viewport.width - width) / 2);
+  const y = Math.round((viewport.height - height) / 2);
 
   return {
     x: Math.min(Math.max(PANEL_MARGIN, x), maxX),

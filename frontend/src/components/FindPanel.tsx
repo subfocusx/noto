@@ -54,21 +54,6 @@ function resultId(index: number): string {
 }
 
 /**
- * The column of the tree, used as the anchor of the floating window.
- *
- * The window floats right of that column: the tree stays visible, and the
- * clicks that fall outside of the window reach it.
- */
-function anchorOfTree(): Rect | undefined {
-  if (typeof document === 'undefined') return undefined;
-  const element = document.querySelector('.sidebar-wrap');
-  if (!element) return undefined;
-  const box = element.getBoundingClientRect();
-  if (box.width <= 0 && box.height <= 0) return undefined;
-  return { x: box.left, y: box.top, width: box.width, height: box.height };
-}
-
-/**
  * The window of the search and the filters.
  *
  * The module of the search keeps the behaviour of the old overlay: the request
@@ -137,12 +122,10 @@ export function FindPanel(props: FindPanelProps) {
       const box = card.current?.getBoundingClientRect();
       const width = box && box.width > 0 ? box.width : PANEL_WIDTH;
       const height = box && box.height > 0 ? box.height : PANEL_MAX_HEIGHT;
-      const anchor = anchorOfTree();
       setRect(
         findPanelRect(
           { width: window.innerWidth, height: window.innerHeight },
           { x: 0, y: 0, width, height },
-          anchor,
         ),
       );
     };

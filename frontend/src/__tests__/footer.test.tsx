@@ -129,6 +129,15 @@ describe('the status bar', () => {
     expect(onClearFilter).toHaveBeenCalled();
   });
 
+  it('explains the limit of the tree when the counter holds more notes', () => {
+    renderFooter({ filterQuery: 'tag:work', filterTotal: 137, filterTruncated: true });
+
+    // The counter tells the whole number, the tree holds the first fifty
+    // matches: the chip says so.
+    const count = screen.getByText('137 notes');
+    expect(count.getAttribute('title')).toContain('first 50 matches');
+  });
+
   it('shows no chip when no filter is active', () => {
     renderFooter({ filterQuery: '', filterTotal: 0 });
 

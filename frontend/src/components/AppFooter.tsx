@@ -55,6 +55,13 @@ export interface AppFooterProps {
   filterQuery?: string | null;
   /** The number of the notes that match the query. */
   filterTotal?: number;
+  /**
+   * True when the tree holds fewer notes than the counter.
+   *
+   * The answer of a query is limited to the first fifty matches, while the
+   * counter tells the whole number: the chip says so.
+   */
+  filterTruncated?: boolean;
   /** Drops the filter and shows the whole tree again. */
   onClearFilter?(): void;
 }
@@ -127,7 +134,14 @@ export function AppFooter(props: AppFooterProps) {
         <span class="filter-chip" data-testid="filter-chip">
           <span class="filter-chip-name">Filter: {props.filterQuery}</span>
           {props.filterTotal !== undefined ? (
-            <span class="filter-chip-count">
+            <span
+              class="filter-chip-count"
+              title={
+                props.filterTruncated
+                  ? 'The tree holds the first 50 matches, the counter shows them all'
+                  : undefined
+              }
+            >
               {props.filterTotal} {props.filterTotal === 1 ? 'note' : 'notes'}
             </span>
           ) : null}

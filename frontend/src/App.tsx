@@ -1295,6 +1295,7 @@ export function App() {
         drawerOpen={ui.drawerOpen}
         filterQuery={ui.query.trim() || null}
         filterTotal={ui.queryTotal}
+        filterTruncated={ui.queryTotal > ui.queryHits.length}
         onClearFilter={actions.clearQuery}
       />
 

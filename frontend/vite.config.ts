@@ -2,6 +2,15 @@ import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 
 /**
+ * The environment of the process that starts the dev server.
+ *
+ * The types of Node are not a dependency of the frontend: the only variable
+ * the configuration reads is the address of the backend, and it is declared
+ * here instead of pulling a whole set of types in.
+ */
+declare const process: { env: Record<string, string | undefined> };
+
+/**
  * Splits the heavy vendor code out of the entry chunk.
  *
  * Only the CodeMirror packages that are imported statically end up in the
@@ -51,7 +60,7 @@ export default defineConfig({
     // `npm run dev` talks to a locally running backend.
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        target: process.env.NOTO_API_TARGET ?? 'http://127.0.0.1:8080',
         changeOrigin: false,
       },
     },

@@ -1,0 +1,79 @@
+/* ==========================================================================
+   The right column of the application.
+
+   The column shows one panel at a time: the core of the application (the
+   outline of the note) and the panels of the plugins are peers, chosen by a
+   strip of tabs at the top of the column. The strip scrolls sideways, so a
+   vault with many plugins does not break the width of the column.
+
+   Every colour, size and duration comes from the tokens of the design system
+   (see `tokens.css`).
+   ========================================================================== */
+
+/* The column itself: the strip of the tabs and the panel that is open. */
+.right-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The strip of the tabs.
+ *
+ * The tabs are small: the column is narrow, and the names of the panels of
+ * the plugins can be long. The strip scrolls sideways instead of wrapping. */
+.right-column-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  flex: none;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--divider);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.right-column-tabs button {
+  flex: none;
+  min-height: var(--control-md);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.right-column-tabs button:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.right-column-tabs button.active {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.right-column-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The body of the column: the panel that is open.
+ *
+ * The body has no padding of its own: every panel keeps the padding it
+ * needs, so the core and the plugins stay alike. */
+.right-column-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.right-column-body > .outline-panel {
+  padding-top: var(--space-2);
+}

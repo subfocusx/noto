@@ -15,6 +15,7 @@
 import { useMemo } from 'preact/hooks';
 import { useAppActions, useAppState } from '../../core/store/hooks';
 import { useT } from '../../i18n/useT';
+import { displayNameOf } from '../../lib/tree';
 import type { Node } from '../../types';
 import { Icon } from '../../ui/icons';
 
@@ -23,11 +24,6 @@ export interface FavoritesSectionProps {
   files: Node[];
   /** Called when the user opens a favorite. */
   onOpenNote(path: string): void;
-}
-
-/** The name of a note: the name of the file, without its extension. */
-function noteName(fileName: string): string {
-  return fileName.endsWith('.md') ? fileName.slice(0, -3) : fileName;
 }
 
 /**
@@ -39,7 +35,7 @@ function noteName(fileName: string): string {
 function nameOfPath(path: string): string {
   const index = path.lastIndexOf('/');
   const file = index === -1 ? path : path.slice(index + 1);
-  return noteName(file);
+  return displayNameOf(file);
 }
 
 /**
@@ -58,7 +54,7 @@ export function FavoritesSection(props: FavoritesSectionProps) {
   // from there. A note that is gone keeps only its path.
   const names = useMemo(() => {
     const map = new Map<string, string>();
-    for (const file of props.files) map.set(file.path, noteName(file.name));
+    for (const file of props.files) map.set(file.path, displayNameOf(file.name));
     return map;
   }, [props.files]);
 

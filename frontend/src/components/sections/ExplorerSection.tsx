@@ -6,25 +6,32 @@
 //
 // The tree of the notes lives here, and so does the state of the drag and drop
 // between the folders: the two belong together and nothing else needs them.
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { JSX } from 'preact';
 import type { Node } from '../../types';
 import type { TreeFolder } from '../../lib/tree';
 import type { MoveRefusal } from '../../lib/tree';
 import { allFiles, allFolderNodes, filterTree, refusalOfMove } from '../../lib/tree';
+import {
+  findRowByPrefix,
+  flattenTreeRows,
+  indexOfRow,
+  parentRowIndex,
+} from '../../lib/treeRows';
 import { useAppActions } from '../../core/store/hooks';
 import { STORAGE_FIXED_MESSAGE } from '../../core/storages/fixedStorage';
 import { pinnedNodes, usePins } from '../../core/pin/pins';
-import { quickNoteName } from '../../core/quicknotes/quickNotes';
+import { isQuickNoteName, quickNoteName, quickNotes } from '../../core/quicknotes/quickNotes';
 import { getVaultService } from '../../core/vault/vaultService';
 import { useT } from '../../i18n/useT';
 import { Icon } from '../../ui/icons';
-import { IconButton } from '../../ui/tooltip';
 import type { TreeContextMenuPayload } from '../TreeContextMenu';
 import { TreeFolderRow, TreeNoteRow, type TreeDragState } from '../TreeRow';
 import { VaultSwitchMenu } from '../VaultSwitchMenu';
 import { ArchivePanel } from './ArchivePanel';
 import { GraphPanel } from './GraphPanel';
-import { QuickNotesSection } from './QuickNotesSection';
+import { ExplorerMenu } from './ExplorerMenu';
+import { QuickNotesZone } from './QuickNotesZone';
 
 export interface ExplorerSectionProps {
   /** The folders of the vault. */
@@ -130,6 +137,21 @@ export function ExplorerSection(props: ExplorerSectionProps) {
    * the shell does not answer, the explorer opens them by itself.
    */
   const [panel, setPanel] = useState<'graph' | 'archive' | null>(null);
+  /**
+   * The menu of the actions of the explorer.
+   *
+   * The header of the column shows two buttons: the new note and the menu.
+   * Everything else — the folders, the graph, the archive, the plugins — lives
+   * in the menu, so the header stays readable.
+   */
+  const [menuOpen, setMenuOpen] = useState(false);
+  /**
+   * The button that opens the menu of the actions.
+   *
+   * A click on it must not close the menu: the button itself decides whether
+   * the menu opens or closes.
+   */
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const actions = useAppActions();
   const pins = usePins();
   /**
@@ -143,18 +165,32 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   const dropHandled = useRef(false);
   const dragRefusal = useRef<MoveRefusal | 'nowhere' | null>(null);
   /**
-   * The buttons that open the quick menu of the storage.
+   * The button that opens the quick menu of the storage.
    *
-   * The menu closes itself when the user clicks outside of it. The buttons that
-   * open it must not be seen as "outside", otherwise the click would close the
+   * It is the name of the storage itself: the menu hangs from the name, the
+   * way it hangs from the name of the workspace in the other applications.
+   *
+   * The menu closes itself when the user clicks outside of it. The button that
+   * opens it must not be seen as "outside", otherwise the click would close the
    * menu and open it again.
    */
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   /** Opens or closes the quick menu of the storage. */
   const toggleMenu = (): void => {
     if (props.vaultFixed) return;
+    setMenuOpen(false);
     props.onVaultMenuToggle?.(!props.vaultMenuOpen);
+  };
+
+  /** Opens or closes the menu of the actions of the explorer. */
+  const toggleActions = (): void => {
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+    props.onVaultMenuToggle?.(false);
+    setMenuOpen(true);
   };
 
   /**
@@ -184,7 +220,6 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   }, [props.folders, props.filesByParent, props.filterPaths]);
 
   const rootFiles = view.filesByParent.get('') ?? [];
-  const isEmpty = view.folders.length === 0 && rootFiles.length === 0;
   const filtered = props.filterPaths !== null && props.filterPaths !== undefined;
 
   // Every node of the tree, indexed by its path: the menu needs the node of
@@ -232,6 +267,213 @@ export function ExplorerSection(props: ExplorerSectionProps) {
    */
   const vaultFiles = useMemo(() => allFiles(props.filesByParent), [props.filesByParent]);
   const vaultFolders = useMemo(() => allFolderNodes(props.folders), [props.folders]);
+
+  /**
+   * The quick notes, shown as a group at the top of the tree.
+   *
+   * When the user searches, the tree shows the result of the search as it
+   * is: the group would be a second, contradicting answer.
+   */
+  const groupNotes = useMemo(
+    () => (filtered ? [] : quickNotes(vaultFiles)),
+    [filtered, vaultFiles],
+  );
+
+  /**
+   * The notes of the root of the tree, without the quick notes.
+   *
+   * A quick note is shown in the group and nowhere else: a note that is
+   * shown twice is a note the user cannot trust.
+   */
+  const treeRootFiles = useMemo(
+    () => (filtered ? rootFiles : rootFiles.filter((file) => !isQuickNoteName(file.name))),
+    [filtered, rootFiles],
+  );
+
+  const isEmpty = view.folders.length === 0 && treeRootFiles.length === 0 && groupNotes.length === 0;
+
+  /**
+   * The rows of the tree the user can reach with the keyboard.
+   *
+   * The list follows what is drawn: a folded folder hides its notes, and a
+   * note that the filter of the user left out is not reachable.
+   */
+  const visibleRows = useMemo(
+    () => flattenTreeRows(view.folders, treeRootFiles, view.filesByParent, props.expanded),
+    [view.folders, treeRootFiles, view.filesByParent, props.expanded],
+  );
+
+  /** The row that holds the keyboard of the tree. */
+  const [activeRowPath, setActiveRowPath] = useState<string | null>(null);
+  const treeRef = useRef<HTMLUListElement | null>(null);
+  /** The letters of the quick jump, with the moment of the last letter. */
+  const typeAhead = useRef({ buffer: '', at: 0 });
+
+  /**
+   * The button of a row: the name of the note or of the folder.
+   *
+   * The keyboard moves the focus to that button, so the row that is reached
+   * is the row that is seen.
+   */
+  const rowButtonOf = (path: string): HTMLElement | null => {
+    const list = treeRef.current;
+    if (!list) return null;
+    for (const row of Array.from(list.querySelectorAll<HTMLElement>('[data-tree-path]'))) {
+      if (row.dataset.treePath !== path) continue;
+      return row.querySelector<HTMLElement>('button.tree-file-button, button.tree-folder-button');
+    }
+    return null;
+  };
+
+  /** Moves the focus to a row of the tree. */
+  const focusRow = (path: string): void => {
+    setActiveRowPath(path);
+    const button = rowButtonOf(path);
+    if (button) button.focus();
+  };
+
+  /**
+   * The path of the row that has the focus of the browser.
+   *
+   * The pointer can put the focus on a row that the state does not know yet,
+   * so the keyboard asks the document and not only the state.
+   */
+  const focusedRowPath = (): string | null => {
+    const list = treeRef.current;
+    const active = list ? document.activeElement : null;
+    if (!active || !list || !list.contains(active)) return activeRowPath;
+    const row = active.closest<HTMLElement>('[data-tree-path]');
+    return row?.dataset.treePath ?? activeRowPath;
+  };
+
+  /**
+   * One tab stop for the whole tree.
+   *
+   * The rows of a tree are a list, not a set of fields: the tab key walks
+   * the tree of the application, and the arrow keys walk the tree of the
+   * notes.
+   */
+  useEffect(() => {
+    const list = treeRef.current;
+    if (!list) return;
+    const active =
+      activeRowPath && visibleRows.some((row) => row.path === activeRowPath)
+        ? activeRowPath
+        : visibleRows[0]?.path ?? null;
+    // Every button of a row leaves the tab order: the chevron of a folder is
+    // not a field of its own, the row is.
+    const buttons = Array.from(list.querySelectorAll<HTMLElement>('.tree-row button'));
+    for (const button of buttons) button.tabIndex = -1;
+    if (active === null) return;
+    for (const row of Array.from(list.querySelectorAll<HTMLElement>('[data-tree-path]'))) {
+      if (row.dataset.treePath !== active) continue;
+      const name = row.querySelector<HTMLElement>('button.tree-file-button, button.tree-folder-button');
+      if (name) name.tabIndex = 0;
+    }
+  }, [visibleRows, activeRowPath]);
+
+  /**
+   * The keyboard of the tree.
+   *
+   * The tree is a list of files: the arrow keys walk it, the folders fold
+   * and unfold like in every file manager, `Enter` opens a note, `F2` renames
+   * the row that has the focus, and the letters jump to the note that starts
+   * with them.
+   */
+  const handleTreeKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLUListElement>): void => {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    // The user who renames a row is typing a name, not walking the tree.
+    if (
+      target &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+    ) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const rows = visibleRows;
+    if (rows.length === 0) return;
+    const current = indexOfRow(rows, focusedRowPath());
+    const key = event.key;
+
+    const move = (index: number): void => {
+      if (index < 0 || index >= rows.length) return;
+      event.preventDefault();
+      focusRow(rows[index].path);
+    };
+
+    if (key === 'ArrowDown') {
+      move(current < 0 ? 0 : current + 1);
+      return;
+    }
+    if (key === 'ArrowUp') {
+      move(current < 0 ? 0 : current - 1);
+      return;
+    }
+    if (key === 'Home') {
+      move(0);
+      return;
+    }
+    if (key === 'End') {
+      move(rows.length - 1);
+      return;
+    }
+
+    if (key === 'ArrowRight' || key === 'ArrowLeft') {
+      if (current < 0) {
+        move(0);
+        return;
+      }
+      const row = rows[current];
+      if (key === 'ArrowRight') {
+        // A folded folder unfolds, an open folder gives its first row.
+        if (row.kind === 'folder') {
+          if (!props.expanded.has(row.path)) {
+            event.preventDefault();
+            props.onToggle(row.path);
+            return;
+          }
+          const child = rows[current + 1];
+          if (child && child.depth > row.depth) move(current + 1);
+        }
+        return;
+      }
+      // An open folder folds, a row that lies inside a folder goes to it.
+      if (row.kind === 'folder' && props.expanded.has(row.path)) {
+        event.preventDefault();
+        props.onToggle(row.path);
+        return;
+      }
+      const parent = parentRowIndex(rows, current);
+      if (parent >= 0) move(parent);
+      return;
+    }
+
+    if (key === 'Enter' || key === ' ') {
+      if (current < 0) {
+        move(0);
+        return;
+      }
+      const row = rows[current];
+      event.preventDefault();
+      if (row.kind === 'folder') props.onToggle(row.path);
+      else props.onSelect(row.path);
+      return;
+    }
+
+    // The quick jump by letters: the user types the beginning of the name of
+    // a note and the tree jumps to it.
+    if (key.length !== 1 || key === ' ' || !/\S/.test(key)) return;
+    const now = Date.now();
+    const state = typeAhead.current;
+    const buffer = now - state.at > 800 ? key : state.buffer + key;
+    typeAhead.current = { buffer, at: now };
+    const found = findRowByPrefix(rows, buffer, current < 0 ? -1 : current);
+    if (found >= 0) {
+      event.preventDefault();
+      focusRow(rows[found].path);
+    }
+  };
 
   /** The notes the user pinned to the top of the tree. */
   const pinnedFiles = useMemo(() => pinnedNodes(vaultFiles, pins), [vaultFiles, pins]);
@@ -346,73 +588,90 @@ export function ExplorerSection(props: ExplorerSectionProps) {
   /** The node that is dragged, if any: the rows need its kind, not only its path. */
   const draggingNode = drag.path ? (nodesByPath.get(drag.path) ?? null) : null;
 
+  /**
+   * The name of the storage in the header.
+   *
+   * When no storage is open, the name is the invitation to choose one: the
+   * header of the column is where the user looks for it.
+   */
+  const vaultLabel =
+    !props.vaultPath && props.onChooseVault
+      ? t('explorer.chooseFolder')
+      : (props.vaultName ?? 'Noto');
+
   return (
     <section class="column-section" aria-label={t('section.explorer')}>
+      {/*
+        The header of the column is one line: the icon of the storage, its
+        name and the actions of the explorer. The name is the button of the
+        quick menu of the storage, the way the other applications do it
+        (Obsidian, Notion): the full path is a detail, so it lives in the
+        tooltip of the name and in the menu itself, not in a second line.
+      */}
       <header class="column-header vault-header">
-        <span class="vault-header-icon">
-          <Icon name="folder" size={15} />
+        <span class="vault-header-icon" aria-hidden="true">
+          <Icon name="folder" size={16} />
         </span>
-        <span class="vault-header-name">{props.vaultName ?? 'Noto'}</span>
-        <span class="vault-header-triggers" ref={triggerRef}>
-          {props.onChooseVault ? (
-            <button
-              type="button"
-              class="vault-header-path"
-              title={
-                props.vaultFixed
-                  ? t('explorer.storageFixed')
-                  : props.vaultPath
-              }
-              aria-label={t('explorer.changeStorage')}
-              aria-disabled={props.vaultFixed ? 'true' : undefined}
-              aria-haspopup="menu"
-              aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
-              onClick={toggleMenu}
-            >
-              {props.vaultPath || t('explorer.chooseFolder')}
-            </button>
-          ) : (
-            <span class="vault-header-path" title={props.vaultPath}>
-              {props.vaultPath}
-            </span>
-          )}
+        {props.onChooseVault ? (
+          <button
+            type="button"
+            class="vault-header-name"
+            ref={triggerRef}
+            title={props.vaultFixed ? t('explorer.storageFixed') : props.vaultPath}
+            aria-label={t('explorer.changeStorageNamed', { name: vaultLabel })}
+            aria-disabled={props.vaultFixed ? 'true' : undefined}
+            aria-haspopup="menu"
+            aria-expanded={props.vaultMenuOpen ? 'true' : undefined}
+            onClick={toggleMenu}
+          >
+            <span class="vault-header-name-text">{vaultLabel}</span>
+            <Icon name="chevron-down" size={13} class="vault-header-chevron" />
+          </button>
+        ) : (
+          <span class="vault-header-name vault-header-name-static" title={props.vaultPath}>
+            <span class="vault-header-name-text">{vaultLabel}</span>
+          </span>
+        )}
+        <span class="vault-header-actions">
+          <button
+            type="button"
+            class="icon-button"
+            title={t('tree.newNote')}
+            aria-label={t('tree.newNote')}
+            onClick={() => props.onCreateFile('')}
+          >
+            <Icon name="plus" size={15} />
+          </button>
+          <button
+            type="button"
+            class="icon-button"
+            title={lockLabel}
+            aria-label={lockLabel}
+            onClick={() => props.onVaultLock?.()}
+          >
+            <Icon name={lockIcon} size={15} />
+          </button>
+          <button
+            type="button"
+            class="icon-button"
+            ref={menuTriggerRef}
+            title={t('explorer.actions')}
+            aria-label={t('explorer.actions')}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen ? 'true' : undefined}
+            onClick={toggleActions}
+          >
+            <Icon name="more-horizontal" size={15} />
+          </button>
         </span>
-        <button
-          type="button"
-          class="icon-button"
-          title={lockLabel}
-          aria-label={lockLabel}
-          onClick={() => props.onVaultLock?.()}
-        >
-          <Icon name={lockIcon} size={15} />
-        </button>
-        <button
-          type="button"
-          class="icon-button"
-          title={t('tree.newNote')}
-          aria-label={t('tree.newNote')}
-          onClick={() => props.onCreateFile('')}
-        >
-          <Icon name="file-plus" size={15} />
-        </button>
-        <button
-          type="button"
-          class="icon-button"
-          title={t('tree.newFolder')}
-          aria-label={t('tree.newFolder')}
-          onClick={() => props.onCreateFolder('')}
-        >
-          <Icon name="folder-plus" size={15} />
-        </button>
-        <button
-          type="button"
-          class="icon-button"
-          title={t('explorer.refresh')}
-          aria-label={t('explorer.refreshTree')}
-          onClick={props.onRefresh}
-        >
-          <Icon name="refresh-cw" size={15} />
-        </button>
+        {menuOpen ? (
+          <ExplorerMenu
+            onOpenGraph={openGraph}
+            onOpenPlugins={props.onOpenPlugins}
+            triggerRef={menuTriggerRef}
+            onClose={() => setMenuOpen(false)}
+          />
+        ) : null}
         {props.vaultMenuOpen ? (
           <VaultSwitchMenu
             currentPath={props.vaultPath ?? ''}
@@ -447,45 +706,17 @@ export function ExplorerSection(props: ExplorerSectionProps) {
           </p>
         ) : null}
         <div class="sidebar-section">
-          <div class="sidebar-section-title">
-            <span>
-              {t('section.explorer')}
-              {filtered ? (
-                <span class="q9-filtered-badge">{t('explorer.filtered')}</span>
-              ) : null}
-            </span>
-            <div class="sidebar-section-actions" role="group" aria-label={t('explorer.actions')}>
-              <IconButton
-                label={t('explorer.expandAll')}
-                icon="chevrons-down-up"
-                onClick={() => props.onExpandAll?.()}
-              />
-              <IconButton
-                label={t('explorer.collapseAll')}
-                icon="chevrons-up-down"
-                onClick={() => props.onCollapseAll?.()}
-              />
-              <IconButton
-                label={t('explorer.graph')}
-                icon="network"
-                title={t('explorer.graph')}
-                onClick={openGraph}
-              />
-              <IconButton
-                label={t('explorer.archive')}
-                icon="archive"
-                title={t('explorer.archive')}
-                onClick={openArchive}
-              />
-              <IconButton
-                label={t('explorer.palette')}
-                icon="command"
-                title={t('explorer.paletteTitle')}
-                onClick={() => props.onOpenPalette?.()}
-              />
-              <IconButton label={t('explorer.plugins')} icon="puzzle" onClick={() => props.onOpenPlugins?.()} />
+          {/*
+            The explorer has no title of its own: the header of the column
+            already says which storage the tree belongs to, and a second
+            title would only repeat it. The badge of the filter is the one
+            thing the user has to be told about the state of the tree.
+          */}
+          {filtered ? (
+            <div class="explorer-filtered-row">
+              <span class="q9-filtered-badge">{t('explorer.filtered')}</span>
             </div>
-          </div>
+          ) : null}
 
           {panel === 'graph' ? (
             <GraphPanel
@@ -508,16 +739,88 @@ export function ExplorerSection(props: ExplorerSectionProps) {
 
           {panel ? null : (
             <>
-              {isEmpty ? null : (
-                <p class="explorer-hint">{t('explorer.hint')}</p>
-              )}
+              {/*
+                The actions of the tree: the two bulk actions of the folders,
+                the creation of a folder, the fresh tree, the archive and the
+                palette of the commands. They stay on the face of the column:
+                they are the actions of the tree itself, and a tree that hides
+                the way to open every folder is a tree the user must guess.
+              */}
+              <div class="explorer-actions" role="group" aria-label={t('explorer.actions')}>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('explorer.expandAll')}
+                  aria-label={t('explorer.expandAll')}
+                  onClick={() => props.onExpandAll?.()}
+                >
+                  <Icon name="chevrons-down-up" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('explorer.collapseAll')}
+                  aria-label={t('explorer.collapseAll')}
+                  onClick={() => props.onCollapseAll?.()}
+                >
+                  <Icon name="chevrons-up-down" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('tree.newFolder')}
+                  aria-label={t('tree.newFolder')}
+                  onClick={() => props.onCreateFolder('')}
+                >
+                  <Icon name="folder-plus" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('explorer.refreshTree')}
+                  aria-label={t('explorer.refreshTree')}
+                  onClick={() => props.onRefresh()}
+                >
+                  <Icon name="refresh-cw" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('explorer.archive')}
+                  aria-label={t('explorer.archive')}
+                  onClick={openArchive}
+                >
+                  <Icon name="archive" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="icon-button explorer-action"
+                  title={t('explorer.palette')}
+                  aria-label={t('explorer.palette')}
+                  onClick={() => props.onOpenPalette?.()}
+                >
+                  <Icon name="command" size={14} />
+                </button>
+              </div>
 
-              <QuickNotesSection
-                files={vaultFiles}
+              {/*
+                The quick notes stand above the tree, in a zone of their own:
+                a quick note is a scratch, not a place in the structure of the
+                vault. A line separates the two, so the eye never reads a
+                scratch as a folder.
+              */}
+              <QuickNotesZone
+                notes={groupNotes}
+                currentPath={props.currentPath}
                 onOpenNote={props.onSelect}
-                onRename={props.onRename}
+                onContextMenu={props.onContextMenu}
+                onRenameInline={props.onRenameInline}
+                draggingNode={draggingNode}
+                onDragStart={startDrag}
+                onDragEnd={endDrag}
                 onCreate={() => void createQuickNote()}
               />
+              <div class="tree-zone-divider" />
 
               {pinnedFiles.length > 0 ? (
                 <div class="tree-pinned">
@@ -541,9 +844,32 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                 </div>
               ) : null}
 
+              {/*
+                The head of the tree of the vault. It carries the number of the
+                notes it holds, so the user knows how big the vault is without
+                counting the rows.
+              */}
+              <div class="tree-zone-head tree-zone-notes-head">
+                <span class="tree-zone-spacer" />
+                <span class="tree-zone-label">{t('explorer.notes')}</span>
+                {filtered ? null : (
+                  <span class="tree-zone-count">{vaultFiles.length - groupNotes.length}</span>
+                )}
+              </div>
+
               <ul
                 class="tree"
                 data-testid="file-tree"
+                ref={treeRef}
+                onKeyDown={handleTreeKeyDown}
+                onClick={(event) => {
+                  // The pointer also moves the keyboard: the row that the
+                  // user clicked is the row that the arrows continue from.
+                  const row = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+                    '[data-tree-path]',
+                  );
+                  if (row) setActiveRowPath(row.dataset.treePath ?? null);
+                }}
                 onDragOver={(event) => {
                   // The pointer is over the tree itself and not over a row: there
                   // is no target there, so the drop must not look like a move.
@@ -582,7 +908,7 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                     noteCountsByPath={noteCountsByPath}
                   />
                 ))}
-                {rootFiles.map((file) => (
+                {treeRootFiles.map((file) => (
                   <TreeNoteRow
                     key={file.path}
                     file={file}
@@ -600,6 +926,13 @@ export function ExplorerSection(props: ExplorerSectionProps) {
                   <li class="tree-empty">{t('explorer.empty')}</li>
                 ) : null}
               </ul>
+
+              {/*
+                The hint of the drag lives under the tree: it explains what the
+                tree can do, and it stays there instead of following the
+                pointer.
+              */}
+              <p class="explorer-hint">{t('explorer.hint')}</p>
             </>
           )}
 

@@ -29,6 +29,13 @@ export interface OutlinePanelProps {
   onSelect(id: string): void;
   /** The title of the panel. */
   title?: string;
+  /**
+   * False hides the title of the panel.
+   *
+   * The panel of the right column stands under the strip of the tabs, and the
+   * tab already carries the name: a second title would say it twice.
+   */
+  showTitle?: boolean;
 }
 
 /** The depth of the indentation of a level. */
@@ -95,7 +102,9 @@ export function OutlinePanel(props: OutlinePanelProps) {
 
   return (
     <div class="outline-panel">
-      <div class="outline-header">{props.title ?? t('outline.title')}</div>
+      {props.showTitle === false ? null : (
+        <div class="outline-header">{props.title ?? t('outline.title')}</div>
+      )}
       {sections.length === 0 ? (
         <p class="outline-empty">{t('outline.empty')}</p>
       ) : (

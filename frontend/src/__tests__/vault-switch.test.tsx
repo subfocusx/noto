@@ -161,7 +161,7 @@ describe('the header of the storage', () => {
 
     expect(screen.getByRole('menu', { name: 'Switch the storage of the notes' })).toBeTruthy();
     // The path of the storage is the trigger of the menu.
-    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const trigger = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
   });
 
@@ -192,7 +192,7 @@ describe('the header of the storage', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change the storage of the notes' }));
+    fireEvent.click(screen.getByRole('button', { name: /change the storage of the notes/i }));
     expect(onVaultMenuToggle).toHaveBeenCalledWith(true);
   });
 
@@ -224,7 +224,7 @@ describe('the header of the storage', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const button = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(button.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(button);
     expect(onVaultMenuToggle).not.toHaveBeenCalled();
@@ -389,7 +389,7 @@ describe('the trigger of the menu of the storage', () => {
       onChooseVault: () => undefined,
     });
 
-    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const trigger = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
   });
 
@@ -400,7 +400,7 @@ describe('the trigger of the menu of the storage', () => {
       onChooseVault: () => undefined,
     });
 
-    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const trigger = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(trigger.getAttribute('aria-expanded')).toBeNull();
   });
 
@@ -411,7 +411,7 @@ describe('the trigger of the menu of the storage', () => {
       onChooseVault: () => undefined,
     });
 
-    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const trigger = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(trigger.getAttribute('aria-disabled')).toBe('true');
     expect(trigger.getAttribute('title')).toContain('NOTO_VAULT_FIXED');
   });
@@ -429,7 +429,7 @@ describe('the trigger of the menu of the storage', () => {
   it('asks for a folder when no storage is open', () => {
     renderExplorer({ onChooseVault: () => undefined });
 
-    const trigger = screen.getByRole('button', { name: 'Change the storage of the notes' });
+    const trigger = screen.getByRole('button', { name: /change the storage of the notes/i });
     expect(trigger.textContent).toBe('Choose a folder…');
   });
 });
@@ -473,7 +473,7 @@ describe('the menu of the storage in the header', () => {
       onChooseVault: () => undefined,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change the storage of the notes' }));
+    fireEvent.click(screen.getByRole('button', { name: /change the storage of the notes/i }));
     expect(onVaultMenuToggle).toHaveBeenCalledWith(false);
   });
 });

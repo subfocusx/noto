@@ -17,6 +17,7 @@ import type { Node } from '../types';
 import type { TreeFolder } from '../lib/tree';
 import type { MoveRefusal } from '../lib/tree';
 import { refusalOfMove } from '../lib/tree';
+import { displayNameOf } from '../lib/tree';
 import { useOverflowTitle } from '../lib/useOverflowTitle';
 import { formatDate } from '../lib/format';
 import { Icon } from '../ui/icons';
@@ -29,7 +30,7 @@ import '../styles/tree-dates.css';
 const INDENT_STEP = 16;
 
 /** The width of the column that holds the chevron of a row, in pixels. */
-const RAIL_WIDTH = 20;
+const RAIL_WIDTH = 16;
 
 /** The state of a drag, shared by every row of the tree. */
 export interface TreeDragState {
@@ -300,12 +301,49 @@ function RowActions(props: {
   );
 }
 
-/** The name of a row, cut off with an ellipsis when it does not fit. */
-function TreeName(props: { name: string }) {
+/**
+ * A part of a name that the user does not read.
+ *
+ * The tree shows the name of a note without its `.md` extension, but the
+ * full name stays in the page: the tools that read the tree must not lose
+ * it, and the row keeps it for them.
+ */
+function HiddenPart(props: { text: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        margin: '-1px',
+        padding: '0',
+        border: '0',
+        overflow: 'hidden',
+        clip: 'rect(0 0 0 0)',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {props.text}
+    </span>
+  );
+}
+
+/**
+ * The name of a row, cut off with an ellipsis when it does not fit.
+ *
+ * `fullName` is the complete name of a note: the row shows it without its
+ * extension and keeps the rest of it out of sight.
+ */
+function TreeName(props: { name: string; fullName?: string }) {
   const overflow = useOverflowTitle(props.name);
+  const hidden = props.fullName && props.fullName !== props.name
+    ? props.fullName.slice(props.name.length)
+    : '';
   return (
     <span class="tree-name" ref={overflow.ref} title={overflow.title}>
       {props.name}
+      {hidden ? <HiddenPart text={hidden} /> : null}
     </span>
   );
 }
@@ -372,6 +410,8 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
         class={`tree-row${isDragging ? ' dragging' : ''}${over ? ' drop-target' : ''}${
           over && !canDrop ? ' drop-refused' : ''
         }`}
+        data-tree-path={node.path}
+        data-tree-kind="folder"
         style={{ paddingLeft: `${indentOf(props.depth)}px` }}
         draggable
         onDragStart={handleDragStart}
@@ -391,7 +431,7 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             title={isOpen ? t('tree.collapse', { name: node.name }) : t('tree.expand', { name: node.name })}
             onClick={() => props.onToggle(node.path)}
           >
-            <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={14} />
+            <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
           </button>
         </span>
         {rename.renaming ? (
@@ -403,9 +443,18 @@ export function TreeFolderRow(props: TreeFolderRowProps) {
             title={node.path}
             onClick={() => props.onToggle(node.path)}
             onDblClick={rename.start}
+            onKeyDown={(event) => {
+              // F2 renames the row that has the focus, like in every file
+              // manager. The event is not passed further: the tree would
+              // read F2 as a letter of the quick jump.
+              if (event.key !== 'F2') return;
+              event.preventDefault();
+              event.stopPropagation();
+              rename.start();
+            }}
           >
             <span class="tree-icon">
-              <Icon name={isOpen ? 'folder-open' : 'folder'} size={16} />
+              <Icon name={isOpen ? 'folder-open' : 'folder'} size={14} />
             </span>
             <TreeName name={node.name} />
           </button>
@@ -503,6 +552,8 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
     <li class={`tree-file${selected ? ' selected' : ''}`}>
       <div
         class={`tree-row${isDragging ? ' dragging' : ''}`}
+        data-tree-path={file.path}
+        data-tree-kind="note"
         style={{ paddingLeft: `${indentOf(props.depth)}px` }}
         draggable
         onDragStart={handleDragStart}
@@ -518,15 +569,24 @@ export function TreeNoteRow(props: TreeNoteRowProps) {
             type="button"
             class="tree-file-button"
             title={file.path}
+            aria-label={file.name}
             aria-current={selected ? 'true' : undefined}
             onClick={() => props.onSelect(file.path)}
             onDblClick={rename.start}
+            onKeyDown={(event) => {
+              // F2 renames the row that has the focus, like in every file
+              // manager. The event is not passed further: the tree would
+              // read F2 as a letter of the quick jump.
+              if (event.key !== 'F2') return;
+              event.preventDefault();
+              event.stopPropagation();
+              rename.start();
+            }}
           >
-            <span class="tree-icon">
-              <Icon name="file-text" size={16} />
-            </span>
+            <span class="tree-icon tree-icon-empty" aria-hidden="true" />
             <span class="tree-file-label">
-              <TreeName name={file.name} />
+              <TreeName name={displayNameOf(file.name)} fullName={file.name} />
+              <HiddenPart text={file.name} />
               {favorite ? (
                 <span class="tree-favorite" aria-hidden="true">
                   <Icon name="star" size={12} />

@@ -300,7 +300,8 @@ DeleteAttachment
 | `src/core/events/eventBus.ts` | 89 (96) | Шина событий приложения (в работе: хост плагинов) |
 | `src/core/commands/commandRegistry.ts` | 80 (87) | Реестр команд (в работе: хост плагинов) |
 | `src/core/commands/appCommands.ts` | 107 (117) | Восемь прикладных команд палитры (`app:new-note`, `app:new-folder`, `app:rename-note`, `app:delete-note`, `app:daily-note`, `app:search`, `app:toggle-theme`, `app:open-trash`) |
-| `src/components/CommandPalette.tsx` | 208 (228) | Глобальная палитра команд: Ctrl+K / Ctrl+P, поиск по командам, навигация стрелками, вклад в режиме ввода |
+| `src/components/CommandPalette.tsx` | 208 (228) | Глобальная палитра команд: Ctrl+K, поиск по командам, навигация стрелками, вклад в режиме ввода |
+| `src/components/FileSwitcher.tsx` | — | Быстрый переключатель файлов: Ctrl+P, фильтр по названию и пути, Enter открывает заметку |
 | `src/core/settings/settingsStore.ts` | 197 (211) | Хранилище настроек (в работе: хост плагинов) |
 | `src/core/diagnostics/logger.ts` | 37 (41) | Логирование для плагинов (в работе) |
 | `src/core/crypto/**` | `kdf.ts`, `keys.ts`, `sealed.ts`, `format.ts`, `errors.ts` | Крипто-ядро: Argon2id (`hash-wasm`, ленивый импорт), вывод KEK, иерархия ключей (KEK → DEK), эпохи и key wrapping, контейнер `NOTOSEAL` (заголовок 28 байт как AAD), AES-256-GCM, ключ восстановления. Ядро не знает о vault и не знает об интерфейсе |
@@ -829,7 +830,8 @@ frontend store/api split, PWA privacy + chunking, plugin extension point»)
 | Модуль | Назначение |
 |---|---|
 | `frontend/src/core/commands/appCommands.ts` | Восемь прикладных команд палитры; каждая команда описана через существующий реестр команд, поэтому команды плагинов попадают в ту же палитру |
-| `frontend/src/components/CommandPalette.tsx` | Палитра: Ctrl+K / Ctrl+P, фильтр по названию и описанию, навигация стрелками, Enter и Escape |
+| `frontend/src/components/CommandPalette.tsx` | Палитра: Ctrl+K, фильтр по названию и описанию, навигация стрелками, Enter и Escape |
+| `frontend/src/components/FileSwitcher.tsx` | Переключатель файлов: Ctrl+P, фильтр по названию и пути заметки, Enter открывает заметку, Escape закрывает |
 | `frontend/src/plugins/builtin/backlinks/` | Третий встроенный плагин; реализован только через `plugins/contract.ts`, права `editor.read`, `notes.read`, `tree.read`, `ui.contribute` |
 | `frontend/public/sw-policy.js` | Политика service worker как чистые функции (`globalThis.NotoSwPolicy`), подключается через `importScripts`; покрыта 20 unit-тестами |
 

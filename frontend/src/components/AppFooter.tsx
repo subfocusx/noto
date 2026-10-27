@@ -1,6 +1,7 @@
 import type { AutosaveStatus } from '../lib/autosave';
 import type { ConnectionState } from '../types';
 import { useT } from '../i18n/useT';
+import { useAppSelector } from '../core/store/hooks';
 import { IconButton } from '../ui/tooltip';
 import { ConnectionIndicator } from './ConnectionIndicator';
 
@@ -91,6 +92,9 @@ function group(value: number): string {
  */
 export function AppFooter(props: AppFooterProps) {
   const t = useT();
+  // The number of the writes that wait for the connection. The counter lives
+  // in the store, so the bar reads it alone: no prop, no wiring in App.tsx.
+  const pendingSync = useAppSelector((state) => state.env.pendingSync) ?? 0;
   return (
     <footer class="app-footer">
       <div class="app-footer-actions" role="group" aria-label={t('footer.globalActions')}>
@@ -129,6 +133,18 @@ export function AppFooter(props: AppFooterProps) {
         </button>
       ) : null}
       <ConnectionIndicator connection={props.connection} onRetry={props.onRetryConnection} />
+      {pendingSync > 0 ? (
+        <span
+          class="footer-pending"
+          data-testid="footer-pending"
+          title={t('app.pendingSync.title', { count: pendingSync })}
+          aria-label={t('app.pendingSync.title', { count: pendingSync })}
+        >
+          {t(pendingSync === 1 ? 'app.pendingSync.one' : 'app.pendingSync.many', {
+            count: pendingSync,
+          })}
+        </span>
+      ) : null}
       <span class="muted" title={props.vaultPath ?? props.currentPath}>
         {props.currentPath}
       </span>

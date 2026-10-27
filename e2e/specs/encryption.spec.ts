@@ -190,7 +190,7 @@ test.describe('the encrypted storage of the notes', () => {
     }
 
     // The storage picker: the quick menu of the storage comes first.
-    await page.getByRole('button', { name: 'Change the storage of the notes' }).click();
+    await page.getByRole('button', { name: /change the storage of the notes/i }).click();
     const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
     await expect(menu).toBeVisible();
     await menu.getByRole('menuitem', { name: 'Choose another folder…' }).click();

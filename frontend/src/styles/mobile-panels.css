@@ -44,20 +44,9 @@
   /* The content of the sheet scrolls with one finger. */
   .panel-wrap .panel-body,
   .panel-wrap .outline-list,
-  .noto-plugin-panels {
+  .right-column-body {
     touch-action: pan-y;
     overscroll-behavior: contain;
-  }
-
-  /*
-   * The panels of the plugins are stacked under the sheet: they give up
-   * their height, and they scroll inside their own box.
-   */
-  .noto-plugin-panels {
-    max-height: 40dvh;
-    overflow-y: auto;
-    border-left: 0;
-    border-top: 1px solid var(--border);
   }
 }
 

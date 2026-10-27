@@ -35,6 +35,8 @@ export interface SettingsDialogProps {
   editorFontSize: number;
   /** True when the editor wraps the long lines. */
   editorWrap: boolean;
+  /** True when the tree shows the counters of the notes. */
+  showTreeCounts?: boolean;
   /** True when the application can reach the server. */
   online: boolean;
   /** The version of the application. */
@@ -51,6 +53,8 @@ export interface SettingsDialogProps {
   onEditorFontSize(size: number): void;
   /** Called when the line wrapping of the editor changes. */
   onEditorWrap(wrap: boolean): void;
+  /** Called when the counters of the notes of the tree are shown or hidden. */
+  onShowTreeCounts?(show: boolean): void;
   /** Called when the language of the interface changes. */
   onLanguage?(language: Language): void;
   /** Called to open the manager of the plugins. */
@@ -99,6 +103,8 @@ type LegacySettingsDialogProps = {
 export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialogProps) {
   const t = useT();
   const language = props.language ?? (getLanguage() as Language);
+  // The counters of the tree are shown by default.
+  const showTreeCounts = props.showTreeCounts ?? true;
 
   /** Changes the language of the interface. */
   const changeLanguage = (value: string): void => {
@@ -235,6 +241,21 @@ export function SettingsDialog(props: SettingsDialogProps & LegacySettingsDialog
             <option value="name">{t('settings.order.name')}</option>
             <option value="modified">{t('settings.order.modified')}</option>
           </select>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-row-label">
+            <span>{t('settings.treeShowCounts')}</span>
+            <span>{t('settings.treeShowCountsHint')}</span>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            aria-checked={showTreeCounts}
+            aria-label={t('settings.treeShowCounts')}
+            onClick={() => props.onShowTreeCounts?.(!showTreeCounts)}
+          />
         </div>
       </section>
 

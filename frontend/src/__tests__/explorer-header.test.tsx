@@ -49,17 +49,16 @@ function renderSidebar(overrides: Record<string, unknown> = {}) {
   );
 }
 
+/** Opens the menu of the actions of the explorer. */
+function openActions(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Explorer actions' }));
+}
+
 describe('the header of the explorer', () => {
-  it('holds the actions of the vault', () => {
+  it('has no title of its own: the name of the storage is the title', () => {
     renderSidebar();
 
-    const title = screen.getByText('Explorer').closest('.sidebar-section-title');
-    expect(title).not.toBeNull();
-
-    for (const name of ['Graph', 'Archive', 'Open command palette', 'Plugins']) {
-      const button = screen.getByRole('button', { name });
-      expect(title?.contains(button)).toBe(true);
-    }
+    expect(screen.queryByText('Explorer')).toBeNull();
   });
 
   it('holds no search of its own: the search is a section of the rail', () => {
@@ -71,9 +70,9 @@ describe('the header of the explorer', () => {
   it('shows no counter of the totals', () => {
     renderSidebar();
 
-    const title = screen.getByText('Explorer').closest('.sidebar-section-title');
-    expect(title?.querySelector('.sidebar-section-counts')).toBeNull();
-    expect(title?.querySelector('.tree-count')).toBeNull();
+    const header = screen.getByText('Noto').closest('.vault-header');
+    expect(header?.querySelector('.sidebar-section-counts')).toBeNull();
+    expect(header?.querySelector('.tree-count')).toBeNull();
   });
 
   it('keeps the counter of a folder of the tree', () => {
@@ -83,26 +82,72 @@ describe('the header of the explorer', () => {
     expect(row?.querySelector('.tree-count')?.textContent).toBe('3');
   });
 
+  it('keeps the actions of the tree on the face of the column', () => {
+    renderSidebar();
+
+    // The actions of the tree are visible: they are the actions of the tree
+    // itself, and a tree that hides the way to make a folder is a tree the
+    // user must guess.
+    for (const name of [
+      'Expand all folders',
+      'Collapse all folders',
+      'New folder',
+      'Refresh tree',
+      'Archive',
+      'Open command palette',
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+
+  it('keeps the rest of the vault in the menu of the header', () => {
+    renderSidebar();
+
+    // The graph and the plugins are not on the face of the column: they live
+    // in the menu.
+    expect(screen.queryByRole('button', { name: 'Graph' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Plugins' })).toBeNull();
+
+    openActions();
+
+    for (const name of ['Graph', 'Plugins']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy();
+    }
+  });
+
   it('offers the graph and the archive as real views', () => {
     renderSidebar();
 
-    const graph = screen.getByRole('button', { name: 'Graph' });
-    expect(graph.getAttribute('aria-disabled')).toBeNull();
-    expect(graph.getAttribute('title')).toBe('Graph');
-
+    // The archive stands in the strip of the actions: it is a real view, not
+    // a grey button.
     const archive = screen.getByRole('button', { name: 'Archive' });
     expect(archive.getAttribute('aria-disabled')).toBeNull();
-    expect(archive.getAttribute('title')).toBe('Archive');
+
+    openActions();
+    const graph = screen.getByRole('button', { name: 'Graph' });
+    expect(graph.getAttribute('aria-disabled')).toBeNull();
+    expect(graph.getAttribute('title')).toBeNull();
   });
 
   it('calls the handlers of the actions', () => {
     const onOpenPalette = vi.fn();
     const onOpenPlugins = vi.fn();
-    renderSidebar({ onOpenPalette, onOpenPlugins });
+    const onCreateFolder = vi.fn();
+    const onRefresh = vi.fn();
+    renderSidebar({ onOpenPalette, onOpenPlugins, onCreateFolder, onRefresh });
 
+    // The palette of the commands stands in the strip of the actions.
     fireEvent.click(screen.getByRole('button', { name: 'Open command palette' }));
     expect(onOpenPalette).toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
+    expect(onCreateFolder).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh tree' }));
+    expect(onRefresh).toHaveBeenCalled();
+
+    // The plugins live in the menu: the user opens it for them.
+    openActions();
     fireEvent.click(screen.getByRole('button', { name: 'Plugins' }));
     expect(onOpenPlugins).toHaveBeenCalled();
   });

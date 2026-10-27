@@ -7,10 +7,12 @@
 // The strip writes into the text of the note, because the text is the only
 // source of truth — in the encrypted storage there is no other place for a
 // tag.
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { extractProps } from '../core/metadata/extract';
 import { useT } from '../i18n/useT';
+import type { TagCount } from '../types';
 import { Icon } from '../ui/icons';
+import { TagPickerDialog } from './TagPickerDialog';
 
 export interface NoteTagsProps {
   /** The text of the open note. */
@@ -21,19 +23,10 @@ export interface NoteTagsProps {
   onAddTag(tag: string): void;
   /** Removes a tag from the note (the token is cut out of the text). */
   onRemoveTag(tag: string): void;
-}
-
-/**
- * Normalises a tag: lower case, without the `#`, with the characters the
- * language of the tags allows.
- */
-export function normalizeTag(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^#+/, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9_/-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  /** The tags of the vault: the window of the tags offers them. */
+  allTags?: TagCount[];
+  /** Called when the window of the tags opens and the list must be read. */
+  onRequestTags?(): void;
 }
 
 /**
@@ -42,54 +35,26 @@ export function normalizeTag(raw: string): string {
  * The strip is always visible when a note is open: it carries the button that
  * adds a tag, so the first tag of a note must be addable too.
  *
+ * The button opens a small window: the window offers the tags of the vault
+ * (so the same name is not written twice) and a field for a new one. A field
+ * in the strip itself would push the tags of the note out of the row, and
+ * the row is a header, not a form.
+ *
  * The row names itself: the label says what the row holds, and the row keeps
  * its own name for the assistive technology. The label itself is decorative —
  * it repeats what the row already says.
  */
 export function NoteTags(props: NoteTagsProps) {
   const t = useT();
-  const [adding, setAdding] = useState(false);
-  const [value, setValue] = useState('');
-  // The field is submitted by the Enter key and by the loss of the focus. The
-  // loss of the focus happens when the field disappears, so the submission
-  // must happen only once: the flag survives the closing of the field.
-  const submitted = useRef(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const tags = useMemo(() => extractProps(props.content).tags, [props.content]);
 
-  // The field takes the focus as soon as it appears: the user types the name
-  // of the tag right away.
-  useEffect(() => {
-    if (adding) inputRef.current?.focus();
-  }, [adding]);
-
-  const submit = (): void => {
-    if (submitted.current) return;
-    submitted.current = true;
-    const tag = normalizeTag(value);
-    if (!tag) {
-      setAdding(false);
-      setValue('');
-      return;
-    }
-    if (!tags.includes(tag)) props.onAddTag(tag);
-    setValue('');
-    setAdding(false);
-  };
-
-  // The escape key cancels the field: the loss of the focus that follows must
-  // not confirm the tag.
-  const cancel = (): void => {
-    submitted.current = true;
-    setAdding(false);
-    setValue('');
-  };
-
+  // The window opens the list of the tags of the vault: the list is read when
+  // it is needed, not when the application starts.
   const open = (): void => {
-    submitted.current = false;
-    setValue('');
-    setAdding(true);
+    setPickerOpen(true);
+    props.onRequestTags?.();
   };
 
   return (
@@ -114,31 +79,7 @@ export function NoteTags(props: NoteTagsProps) {
           )}
         </span>
       ))}
-      {props.readOnly ? null : adding ? (
-        <input
-          ref={inputRef}
-          type="text"
-          class="q9-note-tag-input"
-          value={value}
-          placeholder={t('tags.placeholder')}
-          title={t('tags.fieldHint')}
-          aria-label={t('tags.newName')}
-          spellcheck={false}
-          onInput={(event) => setValue((event.target as HTMLInputElement).value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              submit();
-              return;
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              cancel();
-            }
-          }}
-          onBlur={submit}
-        />
-      ) : (
+      {props.readOnly ? null : (
         <button
           type="button"
           class="q9-note-tag-add"
@@ -149,6 +90,15 @@ export function NoteTags(props: NoteTagsProps) {
           <Icon name="plus" size={12} />
         </button>
       )}
+      <TagPickerDialog
+        open={pickerOpen}
+        tags={props.allTags ?? []}
+        current={tags}
+        onPick={(tag) => {
+          if (!tags.includes(tag)) props.onAddTag(tag);
+        }}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 }

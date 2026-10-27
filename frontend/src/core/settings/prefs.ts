@@ -60,6 +60,14 @@ export interface Prefs {
   rightPanelPinned: boolean;
   /** The width of the right column in pixels. */
   rightPanelWidth: number;
+  /**
+   * The panel of the right column that is open.
+   *
+   * The value is the id of the panel: the id of the core panel (`outline`) or
+   * the id of a panel of a plugin. A panel that is gone falls back to the
+   * core panel, so the column always shows something.
+   */
+  rightPanelTab: string;
   /** True when the list of the recent notes is collapsed. */
   recentCollapsed: boolean;
   /** True when the tree shows the number of the notes of a folder. */
@@ -149,6 +157,7 @@ export const DEFAULT_PREFS: Prefs = {
   rightPanelVisible: true,
   rightPanelPinned: false,
   rightPanelWidth: RIGHT_PANEL_WIDTH_DEFAULT,
+  rightPanelTab: 'outline',
   recentCollapsed: false,
   treeShowCounts: true,
   autoLockMinutes: AUTO_LOCK_MINUTES_DEFAULT,
@@ -256,6 +265,7 @@ export function normalizePrefs(raw: unknown, fallbackTheme?: ThemePreference): P
       typeof source.rightPanelWidth === 'number'
         ? clampRightPanelWidth(source.rightPanelWidth)
         : RIGHT_PANEL_WIDTH_DEFAULT,
+    rightPanelTab: typeof source.rightPanelTab === 'string' ? source.rightPanelTab : 'outline',
     recentCollapsed: source.recentCollapsed === true,
     treeShowCounts: source.treeShowCounts !== false,
     autoLockMinutes: clampAutoLockMinutes(source.autoLockMinutes),

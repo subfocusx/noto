@@ -16,13 +16,7 @@
 // the window itself.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { search } from '../api/client';
-import {
-  PANEL_MAX_HEIGHT,
-  PANEL_WIDTH,
-  closesOnClickOutside,
-  findPanelRect,
-  type Rect,
-} from '../core/find/panel';
+import { closesOnClickOutside, type Rect } from '../core/find/panel';
 import { useAppActions, useAppState } from '../core/store/hooks';
 import type { FindMode } from '../core/store/types';
 import { debounce } from '../lib/debounce';
@@ -75,8 +69,6 @@ export function FindPanel(props: FindPanelProps) {
   const card = useRef<HTMLDivElement | null>(null);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
-  /** The place of the floating window on the screen. */
-  const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
     if (props.open) {
@@ -106,39 +98,12 @@ export function FindPanel(props: FindPanelProps) {
   }, [props.open, props.mode]);
 
   /**
-   * The place of the floating window.
-   *
-   * The window floats over the application: it sits right of the column of the
-   * tree, so the tree behind it stays visible and clickable. The place is
-   * measured again when the window is resized.
-   */
-  useEffect(() => {
-    if (!props.open) {
-      setRect(null);
-      return;
-    }
-    const place = (): void => {
-      if (typeof window === 'undefined') return;
-      const box = card.current?.getBoundingClientRect();
-      const width = box && box.width > 0 ? box.width : PANEL_WIDTH;
-      const height = box && box.height > 0 ? box.height : PANEL_MAX_HEIGHT;
-      setRect(
-        findPanelRect(
-          { width: window.innerWidth, height: window.innerHeight },
-          { x: 0, y: 0, width, height },
-        ),
-      );
-    };
-    place();
-    window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
-  }, [props.open]);
-
-  /**
    * A click outside of the window closes it.
    *
    * The window has no backdrop: the click reaches the tree, and the tree
-   * closes the window on its way.
+   * closes the window on its way. The rectangle of the window is read from
+   * the document at the moment of the click: the window grows with its
+   * content, and a rectangle measured once would be stale.
    */
   useEffect(() => {
     if (!props.open) return;
@@ -146,19 +111,18 @@ export function FindPanel(props: FindPanelProps) {
       const target = event.target as Node | null;
       if (target && card.current?.contains(target)) return;
       const pointer = event as MouseEvent;
-      if (
-        rect &&
-        rect.width > 0 &&
-        rect.height > 0 &&
-        !closesOnClickOutside(rect, { x: pointer.clientX, y: pointer.clientY })
-      ) {
-        return;
+      const box = card.current?.getBoundingClientRect();
+      if (box && box.width > 0 && box.height > 0) {
+        const rect: Rect = { x: box.x, y: box.y, width: box.width, height: box.height };
+        if (!closesOnClickOutside(rect, { x: pointer.clientX, y: pointer.clientY })) {
+          return;
+        }
       }
       props.onClose();
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [props.open, props.onClose, rect]);
+  }, [props.open, props.onClose]);
 
   const run = useRef(
     debounce((value: string) => {
@@ -289,11 +253,9 @@ export function FindPanel(props: FindPanelProps) {
         class="find-window"
         ref={card}
         style={{
-          position: 'absolute',
-          left: rect ? `${rect.x}px` : undefined,
-          top: rect ? `${rect.y}px` : undefined,
-          width: rect ? `${rect.width}px` : undefined,
-          maxHeight: rect ? `${rect.height}px` : undefined,
+          // The place of the window is the rule of the stylesheet: the
+          // component does not measure itself, so the window is painted once
+          // and only once.
           pointerEvents: 'auto',
         }}
       >

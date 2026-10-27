@@ -21,7 +21,9 @@ describe('keyboard shortcuts', () => {
 
   it('keeps the shortcuts of the previous releases', () => {
     expect(shortcutById('palette')?.keys).toBe('Ctrl+K');
-    expect(shortcutById('palette.secondary')?.keys).toBe('Ctrl+P');
+    // Ctrl+P used to open the palette a second time; it opens the quick
+    // file switcher since the phase 20.
+    expect(shortcutById('fileSwitcher')?.keys).toBe('Ctrl+P');
     expect(shortcutById('search')?.keys).toBe('Ctrl+Shift+F');
     expect(shortcutById('save')?.keys).toBe('Ctrl+S');
   });

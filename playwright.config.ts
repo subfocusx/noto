@@ -94,9 +94,12 @@ export default defineConfig({
   ],
   webServer: [
     {
+      // The bundle of the frontend is built before the server is compiled: the
+      // server embeds `backend/internal/web/dist` at compile time, so a server
+      // that starts first would serve the previous bundle.
       // NOTE: this Playwright version only honours `command` for webServer and runs
       // it through a shell, so the arguments have to be part of the command string.
-      command: `"${GO_BIN}" run ./cmd/noto`,
+      command: `node ../e2e/scripts/build-frontend.mjs && "${GO_BIN}" run ./cmd/noto`,
       cwd: path.join(__dirname, 'backend'),
       env: {
         NOTO_ADDR: `127.0.0.1:${PORT}`,
@@ -115,7 +118,7 @@ export default defineConfig({
     {
       // The second server does not fix the storage, so the test of the real
       // change of the storage can run against it.
-      command: `"${GO_BIN}" run ./cmd/noto`,
+      command: `node ../e2e/scripts/build-frontend.mjs && "${GO_BIN}" run ./cmd/noto`,
       cwd: path.join(__dirname, 'backend'),
       env: {
         NOTO_ADDR: `127.0.0.1:${SWITCH_PORT}`,

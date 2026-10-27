@@ -1,0 +1,121 @@
+/* ==========================================================================
+   The zones of the column of the notes.
+
+   The column of the explorer holds three zones, and each of them says what
+   it is: the pinned notes, the quick notes and the notes of the vault. The
+   zones are separated by a hairline, because a quick note is not a place in
+   the structure of the vault: it is a scratch, and it lives above it.
+
+   A zone has a head of its own: a label, a counter and the action of the
+   zone. The labels are in the sentence case and in the font of the
+   application: they are read, not scanned.
+   ========================================================================== */
+
+/* A zone of the column. */
+.tree-zone {
+  margin: 0;
+  padding: var(--space-1) 0 0;
+}
+
+/* The head of a zone: the label, the counter and the action. */
+.tree-zone-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--tree-row-height);
+  padding: 0 var(--space-1) 0 var(--space-1);
+}
+
+/* The head of a zone that the user can fold away. */
+.tree-zone-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The chevron of a zone: it stands in the column of the chevrons of the
+   tree, so that the labels of the zones and the names of the notes start at
+   the same place. */
+.tree-zone-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.tree-zone-toggle:hover .tree-zone-chevron {
+  color: var(--fg);
+}
+
+/* The empty column of a zone without a chevron: it keeps the labels of the
+   zones aligned with each other. */
+.tree-zone-spacer {
+  width: 16px;
+  flex: none;
+}
+
+/* The name of a zone. */
+.tree-zone-label {
+  flex: none;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.01em;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The counter of a zone: the number of the notes it holds. */
+.tree-zone-count {
+  flex: none;
+  margin-left: auto;
+  min-width: 2ch;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  opacity: 0.85;
+}
+
+/* The action of a zone. It is always there: it is the way into the zone,
+   and a way that only appears under the pointer is a way that is missed. */
+.tree-zone-action {
+  color: var(--fg-muted);
+}
+
+.tree-zone-action:hover {
+  color: var(--fg);
+}
+
+.tree-zone-action .icon-button {
+  width: 20px;
+  height: 20px;
+}
+
+/* The list of the notes of a zone. */
+.tree-zone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-1);
+}
+
+/* The head of the tree of the vault: it carries the number of the notes the
+   vault holds. */
+.tree-zone-notes-head {
+  padding-left: 0;
+}
+
+/* The hairline between the zones of the column. */
+.tree-zone-divider {
+  height: 1px;
+  margin: var(--space-2) var(--space-1);
+  background: var(--border);
+}

@@ -25,10 +25,16 @@ export const app: Record<string, string> = {
   'app.switchToEdit': 'Переключить в режим редактирования',
   'app.noNoteSelected': 'Заметка не выбрана',
   'app.noNoteSelectedHint': 'Выберите заметку в боковой панели или создайте новую.',
+  'app.emptyNewNote': 'Создать заметку',
+  'app.emptyDailyNote': 'Заметка дня',
+  'app.emptyRecent': 'Открывали недавно',
   'app.outlineLabel': 'Структура заметки',
   'app.resizeOutline': 'Изменить ширину панели структуры',
   'app.pluginsTitle': 'Плагины',
   'app.pluginSettingsTitle': 'Настройки: {name}',
   'app.pluginSettingsLabel': 'Настройки плагинов',
-  'app.attachmentsTitle': 'Вложения'
+  'app.attachmentsTitle': 'Вложения',
+  'app.pendingSync.one': '1 не отправлено',
+  'app.pendingSync.many': '{count} не отправлено',
+  'app.pendingSync.title': '{count} изменений ждут соединения'
 };

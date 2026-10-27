@@ -23,6 +23,14 @@ export const shell: Record<string, string> = {
   'palette.empty': 'Подходящих команд нет',
   'palette.failed': 'Команда не выполнилась',
 
+  'switcher.title': 'Быстрый переключатель файлов',
+  'switcher.search': 'Поиск заметок',
+  'switcher.placeholder': 'Введите имя заметки…',
+  'switcher.empty': 'Подходящих заметок нет',
+  'switcher.hint': '↑ ↓ — перемещение, Enter — открыть, Esc — закрыть',
+  'switcher.groupNotes': 'Заметки',
+  'switcher.groupPaths': 'Пути',
+
   'tabs.openNotes': 'Открытые заметки',
   'tabs.dirty': 'Несохранённые изменения в {name}',
   'tabs.close': 'Закрыть {name}',
@@ -34,6 +42,7 @@ export const shell: Record<string, string> = {
   'shortcuts.group.view': 'Вид',
   'shortcuts.group.files': 'Файлы',
   'shortcuts.group.system': 'Система',
+  'shortcuts.group.tree': 'Дерево заметок',
 
   'footer.globalActions': 'Общие действия',
   'footer.toggleNavigation': 'Показать или скрыть навигацию',

@@ -137,57 +137,6 @@ describe('the strip of the open notes', () => {
     expect(view.getByTestId('tab-close').getAttribute('style')).toBeNull();
   });
 
-  it('shows one pencil that switches the mode of the note', () => {
-    const onClick = vi.fn();
-    const view = render(
-      <EditorTabs
-        tabs={TABS}
-        activePath="notes/demo.md"
-        onSelect={() => {}}
-        onClose={() => {}}
-        onToggleMode={{
-          label: 'Editing mode',
-          title: 'Switch to the reading mode',
-          pressed: true,
-          onClick,
-        }}
-      />,
-    );
-
-    const pencil = view.getByTestId('tab-mode');
-    // The button is the pencil in both of the modes: one element, two modes.
-    expect(pencil.querySelector('svg')?.getAttribute('class')).toContain('lucide-pencil');
-    expect(pencil.getAttribute('aria-label')).toBe('Editing mode');
-    expect(pencil.getAttribute('title')).toBe('Switch to the reading mode');
-    // The pencil is pressed while the note is edited.
-    expect(pencil.getAttribute('aria-pressed')).toBe('true');
-
-    fireEvent.click(pencil);
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows the pencil unpressed while the note is read', () => {
-    const view = render(
-      <EditorTabs
-        tabs={TABS}
-        activePath="notes/demo.md"
-        onSelect={() => {}}
-        onClose={() => {}}
-        onToggleMode={{
-          label: 'Reading mode',
-          title: 'Switch to the editing mode',
-          pressed: false,
-          onClick: () => {},
-        }}
-      />,
-    );
-
-    const pencil = view.getByTestId('tab-mode');
-    expect(pencil.getAttribute('aria-pressed')).toBe('false');
-    expect(pencil.getAttribute('aria-label')).toBe('Reading mode');
-    expect(pencil.querySelector('svg')?.getAttribute('class')).toContain('lucide-pencil');
-  });
-
   it('keeps the constants of the component and the stylesheet in step', () => {
     const css = readFileSync(TABS_CSS, 'utf8');
 

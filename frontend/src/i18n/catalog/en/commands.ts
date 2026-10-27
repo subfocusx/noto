@@ -38,7 +38,7 @@ export const commands: Record<string, string> = {
     'Hide the tree, the panels and the chrome of the application',
 
   'shortcut.palette.label': 'Open the command palette',
-  'shortcut.palette.secondary.label': 'Open the command palette (alternative)',
+  'shortcut.fileSwitcher.label': 'Open the quick file switcher',
   'shortcut.search.label': 'Search the notes',
   'shortcut.shortcutHelp.label': 'Show the keyboard shortcuts',
   'shortcut.settings.label': 'Open the settings',
@@ -55,5 +55,9 @@ export const commands: Record<string, string> = {
   'shortcut.toggleTheme.label': 'Switch the theme',
   'shortcut.editor.bold.label': 'Bold text',
   'shortcut.editor.italic.label': 'Italic',
-  'shortcut.editor.search.label': 'Search in the text of the note'
+  'shortcut.editor.search.label': 'Search in the text of the note',
+  'shortcut.tree.move.label': 'Move the focus in the tree of the notes',
+  'shortcut.tree.open.label': 'Open the note that has the focus',
+  'shortcut.tree.rename.label': 'Rename the note that has the focus',
+  'shortcut.tree.jump.label': 'Jump to a note by the first letters of its name'
 };

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { gotoApp, openSidebarIfNeeded } from '../helpers/app';
+import { gotoApp, openExplorerActions, openSidebarIfNeeded } from '../helpers/app';
 
 /**
  * The shell of the application: the header bar was dismantled for good. The
@@ -17,18 +17,32 @@ test.describe('the shell of the application', () => {
     await expect(page.locator('.app-title')).toHaveCount(0);
   });
 
-  test('the global actions live in the header of the explorer', async ({ page }) => {
+  test('the actions of the tree live in the strip and the rest of the vault in the menu', async ({
+    page,
+  }) => {
     await gotoApp(page);
     await openSidebarIfNeeded(page);
 
-    const header = page.locator('.sidebar-section-title').filter({ hasText: 'Explorer' });
-    await expect(header).toBeVisible();
+    // The actions of the tree stand in the strip under the header: they are
+    // the actions of the tree itself.
+    for (const name of [
+      'Expand all folders',
+      'Collapse all folders',
+      'New folder',
+      'Refresh tree',
+      'Archive',
+      'Open command palette',
+    ]) {
+      await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+    }
 
-    // The actions are inside the header of the section, not in the status bar.
-    await expect(header.getByRole('button', { name: 'Graph' })).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Archive' })).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Open command palette' })).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Plugins' })).toBeVisible();
+    // The graph and the plugins are not on the face of the column: they live
+    // in the menu of the header.
+    await expect(page.getByRole('button', { name: 'Graph', exact: true })).toHaveCount(0);
+    await openExplorerActions(page);
+
+    await expect(page.getByRole('button', { name: 'Graph' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Plugins' })).toBeVisible();
 
     // The status bar keeps the state of the document and the view.
     const bar = page.locator('.app-footer');
@@ -60,13 +74,14 @@ test.describe('the shell of the application', () => {
     await gotoApp(page);
     await openSidebarIfNeeded(page);
 
-    const graph = page.getByRole('button', { name: 'Graph' });
+    // The archive stands in the strip of the actions of the tree.
     const archive = page.getByRole('button', { name: 'Archive' });
-
-    await expect(graph).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(graph).toHaveAttribute('title', 'Graph');
     await expect(archive).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(archive).toHaveAttribute('title', 'Archive');
+
+    // The graph lives in the menu of the header.
+    await openExplorerActions(page);
+    const graph = page.getByRole('button', { name: 'Graph' });
+    await expect(graph).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   test('the search opens a window over the application', async ({ page }) => {

@@ -7,7 +7,7 @@
 import type { AutosaveStatus } from '../../lib/autosave';
 
 /** The group a shortcut belongs to. */
-export type ShortcutGroup = 'Navigation' | 'Editor' | 'View' | 'Files' | 'System';
+export type ShortcutGroup = 'Navigation' | 'Editor' | 'View' | 'Files' | 'System' | 'Tree';
 
 /** One keyboard shortcut. */
 export interface ShortcutDef {
@@ -33,9 +33,10 @@ export interface ShortcutDef {
 /**
  * The shortcuts of the application.
  *
- * The contract of the previous releases is preserved: `Ctrl+K` and `Ctrl+P`
- * open the command palette, `Ctrl+Shift+F` opens the search and `Ctrl+S`
- * saves the note.
+ * The contract of the previous releases is preserved: `Ctrl+K` opens the
+ * command palette, `Ctrl+Shift+F` opens the search and `Ctrl+S` saves the
+ * note. `Ctrl+P` no longer opens the palette: it opens the quick file
+ * switcher, the dialog that jumps to a note by its name.
  *
  * The sections of the rail have their own shortcuts: the letter of the icon
  * is the letter of the key. The trash takes `Ctrl+Alt+D` (the deleted notes),
@@ -50,10 +51,10 @@ export const SHORTCUTS: ShortcutDef[] = [
     group: 'Navigation',
   },
   {
-    id: 'palette.secondary',
+    id: 'fileSwitcher',
     keys: 'Ctrl+P',
-    label: 'Open the command palette (alternative)',
-    labelKey: 'shortcut.palette.secondary.label',
+    label: 'Open the quick file switcher',
+    labelKey: 'shortcut.fileSwitcher.label',
     group: 'Navigation',
   },
   {
@@ -174,6 +175,34 @@ export const SHORTCUTS: ShortcutDef[] = [
     label: 'Search in the text of the note',
     labelKey: 'shortcut.editor.search.label',
     group: 'Editor',
+  },
+  {
+    id: 'tree.move',
+    keys: '↑ ↓',
+    label: 'Move the focus in the tree of the notes',
+    labelKey: 'shortcut.tree.move.label',
+    group: 'Tree',
+  },
+  {
+    id: 'tree.open',
+    keys: 'Enter',
+    label: 'Open the note that has the focus',
+    labelKey: 'shortcut.tree.open.label',
+    group: 'Tree',
+  },
+  {
+    id: 'tree.rename',
+    keys: 'F2',
+    label: 'Rename the note that has the focus',
+    labelKey: 'shortcut.tree.rename.label',
+    group: 'Tree',
+  },
+  {
+    id: 'tree.jump',
+    keys: 'A–Z',
+    label: 'Jump to a note by the first letters of its name',
+    labelKey: 'shortcut.tree.jump.label',
+    group: 'Tree',
   },
 ];
 

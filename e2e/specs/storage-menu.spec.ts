@@ -52,7 +52,7 @@ test.describe('the menu of the storage', () => {
     await openSidebarIfNeeded(page);
 
     // The path of the storage is the trigger of the menu.
-    await page.getByRole('button', { name: 'Change the storage of the notes' }).click();
+    await page.getByRole('button', { name: /change the storage of the notes/i }).click();
     const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
     await expect(menu).toBeVisible();
 
@@ -93,7 +93,7 @@ test.describe('the menu of the storage', () => {
     await expect(header).toContainText(path.basename(current));
 
     // The recent storage is offered: one click makes it the storage of the notes.
-    await header.getByRole('button', { name: 'Change the storage of the notes' }).click();
+    await header.getByRole('button', { name: /change the storage of the notes/i }).click();
     const menu = page.getByRole('menu', { name: 'Switch the storage of the notes' });
     await expect(menu).toBeVisible();
     await menu.locator('.vault-menu-item-path').filter({ hasText: recent }).click();

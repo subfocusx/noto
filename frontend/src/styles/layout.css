@@ -475,12 +475,4 @@
   .workspace-panes {
     flex-direction: column;
   }
-
-  /* The panels of the plugins live in the right column, so they follow its
-     width: they only give up their height. */
-  .noto-plugin-panels {
-    max-height: 45dvh;
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
 }

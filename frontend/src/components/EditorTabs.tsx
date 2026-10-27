@@ -30,23 +30,6 @@ export interface EditorTabsProps {
   onClose(path: string): void;
   /** Opens an empty tab; the button is not shown when it is missing. */
   onNewTab?(): void;
-  /**
-   * The switch between the editing and the reading of the note.
-   *
-   * It stands in the strip of the tabs, at its right end. One element, two
-   * modes: the pencil is the same in both of them, it is pressed while the
-   * note is edited.
-   */
-  onToggleMode?: {
-    /** The name of the current mode (the label of the button). */
-    label: string;
-    /** The action of the button (the tooltip). */
-    title: string;
-    /** True when the note is edited (the pencil is pressed). */
-    pressed: boolean;
-    /** Switches the mode of the note. */
-    onClick(): void;
-  };
 }
 
 /**
@@ -157,25 +140,6 @@ export function EditorTabs(props: EditorTabsProps) {
           onClick={() => props.onNewTab?.()}
         >
           <Icon name="plus" size={14} />
-        </button>
-      ) : null}
-      {/*
-        The pencil stands in the strip of the tabs: the strip is the header of
-        the column of the editor, and a button beside it (outside the strip)
-        would break the line of the headers of the interface. One button, two
-        modes: the note is either edited or read, never both at once.
-      */}
-      {props.onToggleMode ? (
-        <button
-          type="button"
-          class="icon-button tab-mode"
-          aria-label={props.onToggleMode.label}
-          title={props.onToggleMode.title}
-          aria-pressed={props.onToggleMode.pressed ? 'true' : 'false'}
-          data-testid="tab-mode"
-          onClick={() => props.onToggleMode?.onClick()}
-        >
-          <Icon name="pencil" size={14} />
         </button>
       ) : null}
     </div>

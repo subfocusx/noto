@@ -7,11 +7,9 @@
 // Every contribution is wrapped into a `PluginErrorBoundary`: a plugin that
 // throws while it is rendered must not break the layout of the application.
 import { Component, type ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
 import type {
   PluginCommand,
   PluginContextMenuItem,
-  PluginPanel,
   PluginSidebarItem,
   PluginToolbarItem,
 } from '../plugins/contract';
@@ -109,67 +107,6 @@ export function PluginSidebarSlot(props: PluginSidebarSlotProps) {
         </li>
       ))}
     </ul>
-  );
-}
-
-/* ---------------------------------------------------------------- panels */
-
-export interface PluginPanelSlotProps {
-  panels: PluginPanel[];
-  /** The panel that is shown; the first panel is used when it is missing. */
-  activePanelId?: string | null;
-  onSelectPanel?(id: string): void;
-}
-
-/** Renders the content of a panel inside its own component. */
-function PluginPanelContent(props: { panel: PluginPanel }) {
-  return <>{props.panel.render()}</>;
-}
-
-/** The panels of the plugins, as switchable tabs. */
-export function PluginPanelSlot(props: PluginPanelSlotProps) {
-  const t = useT();
-  const [selected, setSelected] = useState<string | null>(props.activePanelId ?? null);
-  if (props.panels.length === 0) return null;
-
-  const known = selected !== null && props.panels.some((p) => p.id === selected);
-  const activeId = props.activePanelId ?? (known ? selected! : props.panels[0].id);
-  const active = props.panels.find((p) => p.id === activeId) ?? props.panels[0];
-
-  const select = (id: string) => {
-    setSelected(id);
-    props.onSelectPanel?.(id);
-  };
-
-  return (
-    <section class="noto-plugin-panels" aria-label={t('plugins.panelsLabel')}>
-      <div class="noto-plugin-tabs" role="tablist" aria-label={t('plugins.panelsLabel')}>
-        {props.panels.map((panel) => (
-          <button
-            key={panel.id}
-            type="button"
-            role="tab"
-            id={`noto-plugin-tab-${panel.id}`}
-            aria-selected={panel.id === active.id}
-            aria-controls={`noto-plugin-tabpanel-${panel.id}`}
-            class={panel.id === active.id ? 'active' : ''}
-            onClick={() => select(panel.id)}
-          >
-            {panel.title}
-          </button>
-        ))}
-      </div>
-      <div
-        class="noto-plugin-tabpanel"
-        role="tabpanel"
-        id={`noto-plugin-tabpanel-${active.id}`}
-        aria-labelledby={`noto-plugin-tab-${active.id}`}
-      >
-        <PluginErrorBoundary label={active.title}>
-          <PluginPanelContent panel={active} />
-        </PluginErrorBoundary>
-      </div>
-    </section>
   );
 }
 

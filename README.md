@@ -205,10 +205,12 @@ network.
   no horizontal overflow from 360 px to 1920 px and 44 px touch targets on
   mobile.
 - Single static Go binary in production — the frontend is embedded.
-- Global command palette on **Ctrl+K** / **Ctrl+P** with eleven built-in
+- Global command palette on **Ctrl+K** with eleven built-in
   commands (new note, new folder, daily note, search, rename note, delete
   note, toggle theme, open trash, settings, keyboard shortcuts, toggle
   sidebar) plus every command the plugins contribute.
+- Quick file switcher on **Ctrl+P**: the notes of the vault are filtered by
+  their name as the user types, and `Enter` opens the chosen note.
 - Daily note: one command creates or opens `YYYY-MM-DD.md` in the root of the
   library. The local date is used, and an existing file is never overwritten.
 - Settings dialog: theme, the width of the columns, the font size
@@ -251,7 +253,8 @@ network.
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+K` / `Ctrl+P` | Open the command palette. |
+| `Ctrl+K` | Open the command palette. |
+| `Ctrl+P` | Open the quick file switcher (the notes of the vault). |
 | `Ctrl+Shift+F` | Open the note search (also reachable through the search button in the sidebar and through the "Search notes" command of the palette). |
 | `Ctrl+S` | Save the open note explicitly (outside the editor). |
 | `Ctrl+,` | Open the settings. |

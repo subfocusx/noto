@@ -7,11 +7,16 @@
  * test so that the tests do not depend on each other.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
-import { chooseInRowMenu, escapeRegExp, fileRow, folderRow, treeFile } from './app';
+import { chooseInRowMenu, escapeRegExp, fileRow, folderRow, openExplorerActions, treeFile } from './app';
 
 /* ------------------------------------------------------------------- panel */
 
-/** The "Plugins" button in the sidebar (below the tree). */
+/**
+ * The "Plugins" button of the menu of the actions of the explorer.
+ *
+ * The plugin manager is an action of the explorer, so it lives in the menu of
+ * the header of the column.
+ */
 export function pluginsButton(page: Page): Locator {
   return page.getByRole('button', { name: 'Plugins', exact: true });
 }
@@ -40,6 +45,7 @@ export function pluginVersion(page: Page, name: string): Locator {
 
 /** Opens the plugin manager and waits until the list is rendered. */
 export async function openPluginManager(page: Page): Promise<void> {
+  await openExplorerActions(page);
   await pluginsButton(page).click();
   await expect(pluginsDialog(page)).toBeVisible();
   await expect(pluginsDialog(page).locator('li.noto-plugin-list-item').first()).toBeVisible();
@@ -80,14 +86,15 @@ export function wordCountPanel(page: Page): Locator {
 }
 
 /**
- * Activates a tab of the plugin panel area.
+ * Activates a tab of the right column.
  *
- * The panels of the plugins are rendered as tabs ("Plugin panels"), so only the
+ * The panels of the plugins stand next to the core of the application (the
+ * outline) in one strip of tabs ("Panels of the right column"), so only the
  * selected panel is in the DOM. The helper switches to the requested tab and
  * waits until it is rendered.
  */
 export async function selectPluginPanel(page: Page, title: string): Promise<void> {
-  const tablist = page.getByRole('region', { name: 'Plugin panels' });
+  const tablist = page.getByRole('tablist', { name: 'Panels of the right column' });
   await tablist.getByRole('tab', { name: title, exact: true }).click();
   await expect(tablist.getByRole('tab', { name: title, exact: true })).toHaveAttribute(
     'aria-selected',

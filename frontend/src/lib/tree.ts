@@ -23,6 +23,18 @@ export function baseNameOf(path: string): string {
 }
 
 /**
+ * The name of a note as the user reads it in the tree.
+ *
+ * The file keeps its `.md` extension, the tree shows the name without it,
+ * like Obsidian does. Only the final `.md` is removed, and the case does not
+ * matter: `a.md` becomes `a`, `A.MD` becomes `A`. Any other name is left
+ * untouched (`a.txt`, `a.md.md` keeps its last extension).
+ */
+export function displayNameOf(name: string): string {
+  return name.replace(/\.md$/i, '');
+}
+
+/**
  * The sort order of the tree.
  *
  * `name` sorts the entries alphabetically, `modified` puts the recently

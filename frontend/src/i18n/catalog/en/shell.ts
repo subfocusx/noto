@@ -23,6 +23,14 @@ export const shell: Record<string, string> = {
   'palette.empty': 'No matching command',
   'palette.failed': 'The command failed',
 
+  'switcher.title': 'Quick file switcher',
+  'switcher.search': 'Search the notes',
+  'switcher.placeholder': 'Type the name of a note…',
+  'switcher.empty': 'No matching note',
+  'switcher.hint': '↑ ↓ to move, Enter to open, Esc to close',
+  'switcher.groupNotes': 'Notes',
+  'switcher.groupPaths': 'Paths',
+
   'tabs.openNotes': 'Open notes',
   'tabs.dirty': 'Unsaved changes in {name}',
   'tabs.close': 'Close {name}',
@@ -34,6 +42,7 @@ export const shell: Record<string, string> = {
   'shortcuts.group.view': 'View',
   'shortcuts.group.files': 'Files',
   'shortcuts.group.system': 'System',
+  'shortcuts.group.tree': 'Tree of the notes',
 
   'footer.globalActions': 'Global actions',
   'footer.toggleNavigation': 'Toggle navigation',

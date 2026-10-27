@@ -10,11 +10,15 @@ export function treeFolder(page: Page, name: string): Locator {
   return page.locator('.tree-name').filter({ hasText: new RegExp(`^${escapeRegExp(name)}$`) });
 }
 
-/** The note button in the sidebar tree. */
+/**
+ * The note button in the sidebar tree.
+ *
+ * The tree shows the name of a note without its `.md`, so the button is
+ * found by its accessible name: the full name of the file.
+ */
 export function treeFile(page: Page, name: string): Locator {
-  return page
-    .locator('button.tree-file-button')
-    .filter({ hasText: new RegExp(`^${escapeRegExp(name)}$`) });
+  const full = name.replace(/"/g, '\\"');
+  return page.locator(`button.tree-file-button[aria-label="${full}"]`);
 }
 
 /** The row of a folder in the sidebar tree. */
@@ -76,8 +80,25 @@ export async function waitForSaved(page: Page): Promise<void> {
   await expect(saveStatus(page)).toHaveText('Saved', { timeout: 15_000 });
 }
 
+/**
+ * The button that opens the menu of the actions of the explorer.
+ *
+ * The actions of the explorer (the graph, the archive, the plugins, the new
+ * folder) live in the menu of the header of the column, not on its face.
+ */
+export function explorerActionsButton(page: Page): Locator {
+  return page.getByRole('button', { name: 'Explorer actions', exact: true });
+}
+
+/** Opens the menu of the actions of the explorer. */
+export async function openExplorerActions(page: Page): Promise<void> {
+  await explorerActionsButton(page).click();
+}
+
 /** Creates a folder in the sidebar and waits until it shows up in the tree. */
 export async function createFolder(page: Page, name: string): Promise<void> {
+  // The button of a new folder stands in the strip of the actions of the
+  // tree: it is visible without opening a menu.
   await page.getByRole('button', { name: 'New folder', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'New folder' });
   await expect(dialog).toBeVisible();

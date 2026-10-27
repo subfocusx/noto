@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, waitFor } from '@testing-library/preact';
+import { fireEvent, render, waitFor, within } from '@testing-library/preact';
 import { App } from '../App';
 import { setVault } from '../api/client';
 import { appStore } from '../core/store/appStore';
@@ -76,7 +76,7 @@ afterEach(() => {
 async function openNoteInTheTree(view: ReturnType<typeof render>): Promise<void> {
   const expand = view.queryByLabelText('Expand journal');
   if (expand) fireEvent.click(expand);
-  fireEvent.click(view.getByText('a.md'));
+  fireEvent.click(within(view.getByTestId('file-tree')).getByText('a.md'));
   await waitFor(() => expect(view.getByTestId('markdown-editor')).toBeTruthy());
 }
 
@@ -92,7 +92,7 @@ describe('app shell', () => {
     const view = render(<App />);
     await waitFor(() => expect(view.getByText('journal')).toBeTruthy());
     fireEvent.click(view.getByLabelText('Expand journal'));
-    fireEvent.click(view.getByText('a.md'));
+    fireEvent.click(within(view.getByTestId('file-tree')).getByText('a.md'));
     await waitFor(() => expect(view.getByTestId('markdown-editor')).toBeTruthy());
     expect(view.queryByTestId('empty-state')).toBeNull();
   });
@@ -137,7 +137,7 @@ describe('app shell', () => {
     const view = render(<App />);
     await waitFor(() => expect(view.getByTestId('file-tree')).toBeTruthy());
 
-    fireEvent.click(view.getByRole('button', { name: 'Change the storage of the notes' }));
+    fireEvent.click(view.getByRole('button', { name: /change the storage of the notes/i }));
     fireEvent.click(view.getByRole('menuitem', { name: /Choose another folder/ }));
     // The picker lives in a lazy chunk: the import must have the time.
     await waitFor(() => expect(view.getByTestId('vault-picker')).toBeTruthy(), { timeout: 5000 });

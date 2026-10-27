@@ -36,6 +36,8 @@ export const panels: Record<string, string> = {
   'outline.title': 'Структура',
   'outline.empty': 'В этой заметке нет заголовков.',
 
+  'rightColumn.label': 'Панели правой колонки',
+
   'noteCard.path': 'Путь заметки',
   'noteCard.tags': 'Теги заметки',
   'noteCard.createdTitle': 'Создано',
@@ -53,6 +55,12 @@ export const panels: Record<string, string> = {
   'tags.newName': 'Имя нового тега',
   'tags.add': 'Добавить тег к заметке',
   'tags.remove': 'Убрать тег «{tag}»',
+  'tags.pickerTitle': 'Теги хранилища',
+  'tags.pickerPlaceholder': 'Напишите свой тег…',
+  'tags.pickerHint': 'Клавиша Enter подтверждает тег, Escape — закрывает окно.',
+  'tags.pickerEmpty': 'В хранилище пока нет тегов.',
+  'tags.pickerAdd': 'Добавить тег «{tag}»',
+  'tags.pickerAllUsed': 'Заметка уже несёт все теги хранилища.',
 
   'breadcrumbs.label': 'Путь заметки',
 
@@ -75,7 +83,6 @@ export const panels: Record<string, string> = {
   'activity.summaryMany': 'заметок: {count} за {days} дней',
 
   'plugins.label': 'Плагины',
-  'plugins.panelsLabel': 'Панели плагинов',
   'plugins.actionsLabel': 'Действия плагинов',
   'plugins.commandsLabel': 'Команды плагинов',
   'plugins.error': 'Ошибка плагина',

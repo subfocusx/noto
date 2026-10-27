@@ -31,7 +31,7 @@ test.describe('the tree at once', () => {
     // tree.
     await expect(treeFile(page, `${note}.md`)).toBeVisible();
 
-    const actions = page.locator('.sidebar-section-actions');
+    const actions = page.locator('.explorer-actions');
 
     // One click closes every folder of the storage: the note inside the folder
     // is not in the tree any more.

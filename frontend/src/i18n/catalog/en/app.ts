@@ -25,10 +25,16 @@ export const app: Record<string, string> = {
   'app.switchToEdit': 'Switch to the editing mode',
   'app.noNoteSelected': 'No note selected',
   'app.noNoteSelectedHint': 'Pick a note in the sidebar or create a new one.',
+  'app.emptyNewNote': 'Create a note',
+  'app.emptyDailyNote': 'Note of the day',
+  'app.emptyRecent': 'Opened last',
   'app.outlineLabel': 'Outline of the note',
   'app.resizeOutline': 'Resize outline panel',
   'app.pluginsTitle': 'Plugins',
   'app.pluginSettingsTitle': 'Settings: {name}',
   'app.pluginSettingsLabel': 'Plugin settings',
-  'app.attachmentsTitle': 'Attachments'
+  'app.attachmentsTitle': 'Attachments',
+  'app.pendingSync.one': '1 not sent',
+  'app.pendingSync.many': '{count} not sent',
+  'app.pendingSync.title': '{count} changes wait for the connection'
 };

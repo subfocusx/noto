@@ -118,6 +118,7 @@ function persistPrefs(): void {
     rightPanelVisible: state.ui.rightPanelVisible,
     rightPanelPinned: state.ui.rightPanelPinned,
     rightPanelWidth: state.ui.rightPanelWidth,
+    rightPanelTab: state.ui.rightPanelTab,
     recentCollapsed: state.ui.recentCollapsed,
     treeShowCounts: state.ui.treeShowCounts,
     vaultRecents: state.ui.vaultRecents,
@@ -904,6 +905,18 @@ export function setRightPanelWidth(width: number): void {
   persistPrefs();
 }
 
+/**
+ * Opens the panel of the right column with the given id.
+ *
+ * The id is the id of a panel of a plugin or the id of the core panel of the
+ * application (`outline`). The choice is remembered: the column opens on the
+ * panel that was used last.
+ */
+export function setRightPanelTab(id: string): void {
+  update((prev) => ({ ...prev, ui: { ...prev.ui, rightPanelTab: id } }));
+  persistPrefs();
+}
+
 /** Collapses or expands the list of the recent notes. */
 export function setRecentCollapsed(collapsed: boolean): void {
   update((prev) => ({ ...prev, ui: { ...prev.ui, recentCollapsed: collapsed } }));
@@ -1398,6 +1411,7 @@ export interface AppActions {
   toggleRightPanel(): void;
   setRightPanelPinned(pinned: boolean): void;
   setRightPanelWidth(width: number): void;
+  setRightPanelTab(id: string): void;
   setRecentCollapsed(collapsed: boolean): void;
   setTreeShowCounts(show: boolean): void;
   setQuery(text: string): void;
@@ -1486,6 +1500,7 @@ export const actions: AppActions = {
   toggleRightPanel,
   setRightPanelPinned,
   setRightPanelWidth,
+  setRightPanelTab,
   setRecentCollapsed,
   setTreeShowCounts,
   setQuery,

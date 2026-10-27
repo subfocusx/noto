@@ -128,14 +128,12 @@ describe('opening and closing every folder at once', () => {
     appStore.reset();
   });
 
-  it('offers the two actions in the group of the explorer', () => {
+  it('offers the two actions in the menu of the explorer', () => {
     renderSidebar();
 
-    const title = screen.getByText('Explorer').closest('.sidebar-section-title');
-    expect(title).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer actions' }));
     for (const name of ['Expand all folders', 'Collapse all folders']) {
-      const button = screen.getByRole('button', { name });
-      expect(title?.contains(button)).toBe(true);
+      expect(screen.getByRole('button', { name })).toBeTruthy();
     }
   });
 
@@ -144,9 +142,11 @@ describe('opening and closing every folder at once', () => {
     const onCollapseAll = vi.fn();
     renderSidebar({ onExpandAll, onCollapseAll });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer actions' }));
     fireEvent.click(screen.getByRole('button', { name: 'Expand all folders' }));
     expect(onExpandAll).toHaveBeenCalled();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Explorer actions' }));
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all folders' }));
     expect(onCollapseAll).toHaveBeenCalled();
   });

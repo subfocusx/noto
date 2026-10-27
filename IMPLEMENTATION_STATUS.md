@@ -72,6 +72,11 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | 15 | Phase 15: the drag and drop of the tree | done | see "Phase 15 status" below |
 | 16 | The batch of the features of 2026-10-25: the versions of the notes, the regular expressions of the query language, the authentication, the webhooks, the MCP, the localisation, the offline queue | done | see "Phase 16 status" below |
 | 17 | Phase 17: the sound as an element of the interface, the toolbar of the editor, the window of the search in the middle of the screen | done | see "Phase 17 status" below |
+| 18 | Phase 18: the redesign of the left column (the zones of the tree, the quick notes, the density of the rows) | done | see "Phase 18 status" below |
+| 19 | Phase 19: the keyboard of the tree and the living empty state of the plane | done | see "Phase 19 status" below |
+| 20 | Phase 20: the quick file switcher, the right column as neighbours, the counters of the tree, the indicator of the unsent | done | see "Phase 20 status" below |
+| 21 | Phase 21: the header of the storage (one line, the name opens the menu, the path leaves the header) | done | see "Phase 21 status" below |
+| 22 | Phase 22: the window of the search does not jump, the actions of the tree on the face of the column, the pencil in the corner of the tags, the window of the tags | done | see "Phase 22 status" below |
 
 ## Phase 2 status (plugin platform)
 
@@ -102,7 +107,7 @@ imports the SQLite driver, so the storage engine is replaceable and testable.
 | P3-3 | Reconciliation of the file system and the database: `notes.Reconcile` / `notes.ReconcileWithOptions{Apply, DropGhosts, DryRun}`, the CLI `noto reconcile` and the HTTP endpoint `POST /api/maintenance/reconcile` (registered only with `NOTO_MAINTENANCE=1`). Without an explicit flag nothing is changed. The SQLite schema was not changed | done | `backend/internal/notes/reconcile.go`, `backend/internal/api/handlers_maintenance.go`, `backend/cmd/noto/main.go` |
 | P3-4 | Tests: fuzz targets `FuzzNormalizeRel` / `FuzzJoinRel` / `FuzzValidateName`, the tests of the LIKE fallback of the search, and the race tests of concurrent writes to the same path | done | `backend/internal/notes/paths_fuzz_test.go`, `backend/internal/sqlitestore/search_fallback_test.go`, `backend/internal/notes/concurrency_test.go` |
 | P3-5 | The service worker policy was moved into pure functions in `frontend/public/sw-policy.js` (20 unit tests) and the offline E2E scenario was extended. A real defect was fixed: a fixed base origin sent the private `/api/*` requests into the cache-first branch | done | `frontend/public/sw-policy.js`, `frontend/src/__tests__/sw-policy.test.ts`, `e2e/specs/offline.spec.ts` |
-| P3-6 | Global command palette on Ctrl+K / Ctrl+P. The search moved to **Ctrl+Shift+F** and stays reachable through the button in the sidebar and the "Search notes" command of the palette. Eight built-in commands (`app:new-note`, `app:new-folder`, `app:rename-note`, `app:delete-note`, `app:daily-note`, `app:search`, `app:toggle-theme`, `app:open-trash`); the daily note creates or opens `YYYY-MM-DD.md` in the root of the library and never overwrites an existing file | done | `frontend/src/components/CommandPalette.tsx`, `frontend/src/core/commands/appCommands.ts`, `frontend/src/App.tsx` |
+| P3-6 | Global command palette on Ctrl+K (the second combination, Ctrl+P, opened the palette too; it opens the quick file switcher since the phase 20). The search moved to **Ctrl+Shift+F** and stays reachable through the button in the sidebar and the "Search notes" command of the palette. Eight built-in commands (`app:new-note`, `app:new-folder`, `app:rename-note`, `app:delete-note`, `app:daily-note`, `app:search`, `app:toggle-theme`, `app:open-trash`); the daily note creates or opens `YYYY-MM-DD.md` in the root of the library and never overwrites an existing file | done | `frontend/src/components/CommandPalette.tsx`, `frontend/src/core/commands/appCommands.ts`, `frontend/src/App.tsx` |
 | P3-7 | Third built-in plugin `backlinks`: incoming links (`[[Wiki Link]]`) and mentions. It is implemented through the public contract only (it imports nothing but `plugins/contract.ts`) and declares `editor.read`, `notes.read`, `tree.read`, `ui.contribute`. It cannot open a note — the contract was not extended | done | `frontend/src/plugins/builtin/backlinks/index.ts`, `frontend/src/plugins/loader.ts` |
 | P3-8 | DX: `scripts/verify.ps1` got `-ReportPath` (a markdown report with the summary and the tool versions) and `-Bench`; the npm scripts `verify` in the frontend and in the root; the outdated comments about FTS5 were corrected (in `modernc.org/sqlite` FTS5 is enabled by default, the build tag `sqlite_fts5` is not needed) | done | `scripts/verify.ps1`, `scripts/measure-perf.ps1`, `frontend/package.json`, `package.json` |
 
@@ -800,6 +805,143 @@ between the editing and the reading, the way Obsidian does it.
 | Card | What was done | Status | Evidence |
 |------|---------------|--------|----------|
 | P17-6 | **One pencil, two modes.** The eye of the strip of the tabs is gone: the pencil takes its place and switches the pane of the note between the editor and the reading. The mode is the state of the store (`ui.mode`), it goes into the preferences and survives a reload. The modes `editor`, `split` and `preview` of the earlier releases are gone — a stored value that is not a mode any more falls back to the editing | done | `frontend/src/components/EditorTabs.tsx`, `frontend/src/App.tsx`, `frontend/src/core/store/{types,actions}.ts`, `frontend/src/core/settings/prefs.ts`, `frontend/src/__tests__/{app,editorTabs,prefs,store}.test.*`, `e2e/specs/editor.spec.ts` |
+
+---
+
+## Phase 18 status (the left column: the zones of the tree)
+
+The user reported the explorer and the quick notes of the left column as
+«unacceptable» and asked for a redesign of that column only (the footer of the
+column is out of the scope). The references were the explorers of the strong
+note-taking applications: Obsidian, Logseq, Notion, Craft, Bear, Apple Notes,
+Zettlr, Joplin, VS Code, Linear and Anytype. The common rule of all of them:
+the tree is a dense list of files, the zones above it say what they are, and the
+actions of the tree stand next to the tree.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P18-1 | **The quick notes are a zone of their own, above the tree.** They were a row of the tree with a pencil, and the row looked like an action instead of a container. Now the zone has a head of its own (the name, the number of the notes, the button `+`), and a hairline separates it from the tree: a quick note is a scratch, not a place in the structure of the vault | done | `frontend/src/components/sections/QuickNotesZone.tsx`, `frontend/src/styles/tree-zones.css`, `frontend/src/__tests__/quick-notes-zone.test.tsx` |
+| P18-2 | **The leaf of a note has no icon.** Every note carried the icon of a file that repeated its own name and ate 24 px of a 240 px column. The folders keep their icon: it tells a container from its content | done | `frontend/src/components/TreeRow.tsx`, `frontend/src/styles/components.css` |
+| P18-3 | **The tree has the density of a list of files.** The rows of the tree are 24 px and the names are 12 px (`--tree-row-height`, `--tree-text-size`): the global `--row-height` (32 px) belongs to the forms and to the navigation and was left alone | done | `frontend/src/styles/tokens.css`, `frontend/src/components/TreeRow.tsx` |
+| P18-4 | **The selected row is visible.** The background of the selected row (`--tree-selected-bg`) differs from the background of the row under the mouse: before, the two were indistinguishable | done | `frontend/src/styles/tokens.css`, `frontend/src/styles/components.css` |
+| P18-5 | **The header of the column was rebuilt.** The name of the storage, the path (the trigger of the switch of the storage), the new note, the lock and the menu of the actions. The menu holds the rest (the graph, the archive, the plugins, the palette, the new folder, the refresh), so the header is not a row of six small targets | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/components/sections/ExplorerMenu.tsx`, `frontend/src/styles/components.css` |
+| P18-6 | **The actions of the tree stand next to the tree.** The strip of the actions under the header holds the expand-all, the collapse-all and the command palette; they are always visible, because a way to open every folder that is hidden is a way that is missed | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/styles/components.css` |
+| P18-7 | **The tree of the vault has its own head.** The zone of the notes says what it is and how many notes the vault holds; the hint of the drag lives under the tree and explains what the tree can do | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/styles/tree-zones.css` |
+| P18-8 | **The documentation follows the code.** The rules of the zones, the density of the tree and the placement of the actions are written in `docs/DESIGN_SYSTEM.md` (§2.4, §3.1, §6, §6.1, §6.8) | done | `docs/DESIGN_SYSTEM.md` |
+| P18-9 | **The end-to-end suite speaks the new contract.** The actions of the explorer live in the menu of the header, so the specs open that menu (`openExplorerActions`) before they click `New folder`, `Plugins`, `Graph`, `Archive` or `Refresh tree`; the strip of the actions of the tree is found through `.explorer-actions`. The build of the bundle moved from the global setup into `e2e/scripts/build-frontend.mjs`: Playwright starts the servers **before** the global setup, and the Go server embeds `backend/internal/web/dist` at compile time, so a build in the global setup always came too late and the suite tested the previous bundle | done | `e2e/helpers/app.ts`, `e2e/helpers/plugins.ts`, `e2e/specs/{shell,shell-actions,tree-bulk}.spec.ts`, `e2e/scripts/build-frontend.mjs`, `playwright.config.ts`, `e2e/global-setup.ts` |
+
+The verification of the phase: `npm run typecheck` (exit 0), `npm test`
+(1399 tests, 135 files, all passed), `npm run build` (exit 0),
+`npm run check:boundaries` (359 files, no violation), `go build ./...`,
+`go vet ./...` and the end-to-end suite (`npx playwright test`: 162 passed,
+56 skipped, 0 failed) with a screenshot of the running application at
+`http://localhost:5173`.
+
+---
+
+## Phase 19 status (the keyboard of the tree, the living empty state)
+
+The user asked where the interface lags behind the strong note-taking
+applications. The two gaps that cost the most every day were chosen: the
+tree could not be walked with the keyboard, and the empty plane of the editor
+was a void. Both are fixed; the rest of the gaps (the multi-selection of the
+tree, the live preview of the Markdown, the split view, the recent notes in
+the column) are not started.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P19-1 | **The tree is walked with the keyboard.** The rows of the tree are a list, and a list is walked with the arrow keys: `↑`/`↓` move the focus, `Home`/`End` jump to the ends, `→` unfolds a folder (and enters it), `←` folds it (and goes to the parent), `Enter`/`Space` open the note (and fold the folder), `F2` renames the row that has the focus, and the letters jump to a note by the first letters of its name (the buffer lives for 800 ms). The order of the rows is the order of the drawing: the folders, then their content, then the notes of the root | done | `frontend/src/lib/treeRows.ts`, `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/components/TreeRow.tsx` |
+| P19-2 | **One stop of the tab order in the tree.** Every button of a row leaves the tab order, and the button of the name of the active row is the only one that keeps it: the chevron of a folder is not a field of its own, the row is | done | `frontend/src/components/sections/ExplorerSection.tsx` |
+| P19-3 | **The keyboard is documented where the shortcuts live.** The list of the shortcuts is the single source of the help dialog, so the four new entries (the move, the open, the rename, the jump) are in it under the group «Tree of the notes» | done | `frontend/src/core/commands/shortcuts.ts`, `frontend/src/i18n/catalog/{en,ru}/{commands,shell}.ts` |
+| P19-4 | **The empty plane is alive.** It is no longer a picture of a file: it offers the two actions that start a note («Create a note» and «Note of the day») and the notes that were opened last. A note that was deleted in the meantime is not offered: the list is a way back into the vault | done | `frontend/src/components/EmptyNoteState.tsx`, `frontend/src/styles/empty-note-state.css`, `frontend/src/App.tsx` |
+| P19-5 | **The tests speak the new contract.** The unit tests of the tree (7) and of the empty state (5), and the end-to-end scenarios of the keyboard of the tree and of the empty state | done | `frontend/src/__tests__/{tree-keyboard,empty-note-state}.test.tsx`, `e2e/specs/{tree-keyboard,empty-state}.spec.ts` |
+| P19-6 | **The lock of the build of the bundle does not deadlock.** A crashed run left the lock of the build in the temporary directory, and every later run waited for a process that did not exist any more: the lock is now taken over when it is older than a minute, and the process that owns it refreshes it while it builds | done | `e2e/scripts/build-frontend.mjs` |
+
+The verification of the phase: `npm run typecheck` (exit 0), `npm test`
+(1411 tests, 137 files, all passed), `npm run build` (exit 0),
+`npm run check:boundaries` (363 files, no violation) and the end-to-end suite
+(`npx playwright test`: 170 passed, 58 skipped, 0 failed).
+
+---
+
+## Phase 20 status (the quick file switcher, the right column, the counters)
+
+The owner asked where the interface still lags behind, and the answer was
+given as a list of gaps. The owner chose the direction: the right column is
+split (the core and the panels of the plugins become neighbours) and the
+split view of the editor is **not** built — the code says that the editor and
+the preview do not stand next to each other, and that decision was not
+overturned. The rest of the cards of this phase are the gaps that cost the
+least code and the most noise.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P20-1 | **The quick switcher of the files (`Ctrl+P`).** A dialog over the editor filters the notes of the vault by the name and by the path (the notes whose name begins with the query come first, then the notes that contain it, then the matches of the paths), `↑`/`↓` walk the list, `Enter` opens the note, `Escape` closes it, the focus goes to the field and comes back to the trigger. The palette of the commands keeps `Ctrl+K` — the second combination used to open the same palette | done | `frontend/src/components/FileSwitcher.tsx`, `frontend/src/styles/file-switcher.css`, `frontend/src/core/commands/shortcuts.ts`, `frontend/src/App.tsx` |
+| P20-2 | **The right column is split.** The outline of the note and the panels of the plugins stand in one strip of tabs: the core is the first tab, the panels of the plugins follow it. The active tab lives in the store (`ui.rightPanelTab`, remembered between the runs), and a panel whose plugin was switched off falls back to the core. The error boundary of the plugin platform still holds the panels | done | `frontend/src/components/RightColumn.tsx`, `frontend/src/components/OutlinePanel.tsx`, `frontend/src/components/PluginSlots.tsx`, `frontend/src/styles/right-column.css`, `frontend/src/core/store/{types,state,actions}.ts`, `frontend/src/core/settings/prefs.ts` |
+| P20-3 | **The name of a note in the tree lost its extension.** Every note is a `.md`, so the extension in the name was noise. The full name stays in the tooltip, in the accessible name of the button and in the field of the rename (the server is still asked to rename `a.md`) | done | `frontend/src/lib/tree.ts` (`displayNameOf`), `frontend/src/components/TreeRow.tsx`, `frontend/src/__tests__/tree-display-name.test.tsx` |
+| P20-4 | **The counters of the folders are a setting.** The number of the notes of every folder is shown by default and can be switched off in the settings («Show the counters of the notes») | done | `frontend/src/components/SettingsDialog.tsx`, `frontend/src/core/settings/prefs.ts` (`treeShowCounts`), `frontend/src/__tests__/settings-tree-counts.test.tsx` |
+| P20-5 | **The unsent changes are visible.** The size of the offline queue (`env.pendingSync`) was known to the store and to nobody else; now it is a badge in the footer, next to the indicator of the connection | done | `frontend/src/components/AppFooter.tsx`, `frontend/src/styles/components.css`, `frontend/src/__tests__/app-footer-pending.test.tsx` |
+| P20-6 | **The tests speak the new contract.** The unit tests of the switcher (8), of the right column (5), of the name of a note (12), of the counters (5) and of the badge (4); the end-to-end scenario of the switcher (`e2e/specs/file-switcher.spec.ts`). The helper of the tree finds a note by its accessible name (the tree shows the name without the extension) | done | `frontend/src/__tests__/{file-switcher,right-column,tree-display-name,settings-tree-counts,app-footer-pending}.test.tsx`, `e2e/specs/file-switcher.spec.ts`, `e2e/helpers/{app,plugins}.ts` |
+
+### What was deliberately not built
+
+* **The split view of the editor and the live preview of the Markdown.** The
+  code says that the editor and the preview do not stand next to each other;
+  the owner confirmed that this decision stands.
+* **The multi-selection of the tree.** It is a big change of the store and of
+  the tree; it is not started.
+
+The verification of the phase: `npm run typecheck` (exit 0), `npm test`
+(1445 tests, 142 files, all passed), `npm run build` (exit 0),
+`npm run check:boundaries` (370 files, no violation) and the end-to-end suite
+(`npx playwright test`: 174 passed, 58 skipped, 0 failed).
+
+---
+
+## Phase 21 status (the header of the storage)
+
+The owner sent a screenshot of the header of the left column and asked to take
+the block into work: it looked bad, and the question was how the other
+applications do it. The plan of the change is in
+`docs/plans/2026-10-27-vault-header.md`.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P21-1 | **The header is one line.** It was two lines in 40 px: the name of the storage with a coloured tile of the icon above, the monospaced absolute path under it. Now: the icon (16 px, muted), the name, the actions of the column | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/styles/components.css` |
+| P21-2 | **The path left the header.** It is a detail: it lives in the tooltip of the name and in the menu of the storage (`.vault-menu-current-path`) | done | `frontend/src/components/VaultSwitchMenu.tsx` |
+| P21-3 | **The name of the storage is the button of the menu of the storage**, the way Obsidian and Notion do it. The chevron appears on hover (its place is reserved, so the line never jumps), and the accessible name holds the visible name (WCAG 2.5.3) | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/i18n/catalog/{en,ru}/sections.ts` (`explorer.changeStorageNamed`) |
+| P21-4 | **The two cases of the storage are spoken about.** A storage that is fixed by the environment keeps the button with `aria-disabled` and the reason in the tooltip; a storage that is not chosen yet shows the invitation «Choose a folder…» in the name of the header | done | `frontend/src/components/sections/ExplorerSection.tsx` |
+| P21-5 | **The tests and the documentation speak the new contract.** The unit tests of the header (5) and of the menu of the storage, the end-to-end scenarios of the storage, the menu and the encryption; the rule of the design system §3.1 and the new §6.11 | done | `frontend/src/__tests__/vault-header.test.tsx`, `frontend/src/__tests__/vault-switch.test.tsx`, `e2e/specs/{storage-menu,vault,encryption}.spec.ts`, `docs/DESIGN_SYSTEM.md` |
+
+The verification of the phase: `npm run typecheck` (exit 0), `npm test`
+(1450 tests, 143 files, all passed), `npm run build` (exit 0),
+`npm run check:boundaries` (371 files, no violation) and the end-to-end suite
+(`npx playwright test`: 174 passed, 58 skipped, 0 failed).
+
+---
+
+## Phase 22 status (the actions of the tree, the pencil and the window of the tags)
+
+The owner sent three screenshots and four remarks: the windows of the search
+and of the filters jump when they are opened; the buttons of a new folder, of
+the refresh of the tree and of the archive can live on the face of the column
+(the button of the palette was a double); the pencil of the mode can move to
+the far corner of the strip of the tags; the tags can be redone — a small
+window with the tags of the vault and a field for a new one. The plan of the
+change is in `docs/plans/2026-10-27-explorer-actions-and-tags.md`.
+
+| Card | What was done | Status | Evidence |
+|------|---------------|--------|----------|
+| P22-1 | **The window of the search does not jump any more.** It measured itself and centred itself by the measured height: on the first frame the rectangle was empty, so the window appeared in the corner and then jumped to the centre. Now the position is CSS (`fixed`, `top: 12vh`, `left: 50%`, `translateX(-50%)`) and the size is a frame (`min(620px, …)`, `min(70dvh, …)`). The panel also left the lazy set with the crypto core: it is a chunk of its own, loaded by the request | done | `frontend/src/styles/find.css`, `frontend/src/components/FindPanel.tsx`, `frontend/src/core/find/panel.ts`, `frontend/src/components/LazyOverlays.tsx`, `frontend/src/App.tsx` |
+| P22-2 | **The actions of the tree live on the face of the column.** The strip under the header of the storage now holds: expand all, collapse all, a new folder, the refresh of the tree, the archive and the command palette. The menu of the header keeps what is rare: the graph and the plugins. The button of the palette is not a double any more | done | `frontend/src/components/sections/ExplorerSection.tsx`, `frontend/src/components/sections/ExplorerMenu.tsx` |
+| P22-3 | **The pencil of the mode moved to the far corner of the strip of the tags.** The mode belongs to the note, not to a tab; the strip of the tags is the row of the properties of the note | done | `frontend/src/components/EditorModeButton.tsx`, `frontend/src/components/EditorTabs.tsx`, `frontend/src/App.tsx`, `frontend/src/styles/tags.css` |
+| P22-4 | **The tags were redone.** The button opens a small modal window: it offers the tags of the vault (read at the moment of the opening) and a field for a new name; the Enter key confirms the name, the Escape key closes the window. The field that stood in the row is gone: the row is a header, not a form. The tags that the note already carries are not offered again | done | `frontend/src/components/TagPickerDialog.tsx`, `frontend/src/components/NoteTags.tsx`, `frontend/src/lib/tags.ts`, `frontend/src/components/Dialog.tsx`, `frontend/src/i18n/catalog/{en,ru}/panels.ts` |
+| P22-5 | **The tests and the documentation speak the new contract.** The unit tests of the tags (18), of the pencil (3) and of the header of the tree, the rewritten test of the position of the window (it reads the CSS), the end-to-end scenario of the tags and the scenario that watches the window of the search frame after frame; the rule of the design system §6.12 and the corrections of §6.1 | done | `frontend/src/__tests__/note-tags.test.tsx`, `frontend/src/__tests__/editor-mode-button.test.tsx`, `frontend/src/__tests__/explorer-header.test.tsx`, `frontend/src/__tests__/find-panel-position.test.ts`, `e2e/specs/note-tags.spec.ts`, `e2e/specs/search.spec.ts`, `docs/DESIGN_SYSTEM.md` |
+
+The verification of the phase: `npm run typecheck` (exit 0), `npm test`
+(1451 tests, 144 files, all passed), `npm run build` (exit 0),
+`npm run check:boundaries` (375 files, no violation) and the end-to-end suite
+(`npx playwright test`: 177 passed, 61 skipped, 0 failed).
 
 ---
 

@@ -230,6 +230,14 @@ export interface UiState {
   rightPanelPinned: boolean;
   /** The width of the right column in pixels. */
   rightPanelWidth: number;
+  /**
+   * The panel of the right column that is open.
+   *
+   * The core of the application (the outline of the note) and the panels of
+   * the plugins are peers: one strip of tabs chooses which one is shown, so
+   * the column never mixes the core with the plugins.
+   */
+  rightPanelTab: string;
   /** True when the list of the recent notes is collapsed. */
   recentCollapsed: boolean;
   /** True when the tree shows the number of the notes of a folder. */

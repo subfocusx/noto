@@ -101,6 +101,7 @@ export function createInitialState(): AppState {
       rightPanelVisible: prefs.rightPanelVisible,
       rightPanelPinned: prefs.rightPanelPinned,
       rightPanelWidth: prefs.rightPanelWidth,
+      rightPanelTab: prefs.rightPanelTab,
       recentCollapsed: prefs.recentCollapsed,
       treeShowCounts: prefs.treeShowCounts,
       vaultConfigured: false,

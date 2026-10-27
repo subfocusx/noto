@@ -7,7 +7,8 @@
 // crypto core (and the WASM of the key derivation) with them, and an open
 // storage must not pay for them.
 export { CommandPalette } from './CommandPalette';
-export { FindPanel } from './FindPanel';
+// The window of the search has a chunk of its own: it is small, and it must
+// not wait for the crypto core of the encrypted storage.
 // The panel of the attachments is opened in a dialog: it is loaded with the
 // other overlays.
 export { AttachmentsPanel } from './AttachmentsPanel';

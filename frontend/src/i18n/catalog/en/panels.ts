@@ -36,6 +36,8 @@ export const panels: Record<string, string> = {
   'outline.title': 'Outline',
   'outline.empty': 'No headings in this note.',
 
+  'rightColumn.label': 'Panels of the right column',
+
   'noteCard.path': 'Path of the note',
   'noteCard.tags': 'Tags of the note',
   'noteCard.createdTitle': 'Created',
@@ -53,6 +55,12 @@ export const panels: Record<string, string> = {
   'tags.newName': 'Name of the new tag',
   'tags.add': 'Add a tag to the note',
   'tags.remove': 'Remove the tag {tag}',
+  'tags.pickerTitle': 'Tags of the vault',
+  'tags.pickerPlaceholder': 'Write your own tag…',
+  'tags.pickerHint': 'The Enter key confirms the tag, the Escape key closes the window.',
+  'tags.pickerEmpty': 'The vault has no tags yet.',
+  'tags.pickerAdd': 'Add the tag {tag}',
+  'tags.pickerAllUsed': 'The note already carries every tag of the vault.',
 
   'breadcrumbs.label': 'Note path',
 
@@ -75,7 +83,6 @@ export const panels: Record<string, string> = {
   'activity.summaryMany': '{count} notes in {days} days',
 
   'plugins.label': 'Plugins',
-  'plugins.panelsLabel': 'Plugin panels',
   'plugins.actionsLabel': 'Plugin actions',
   'plugins.commandsLabel': 'Plugin commands',
   'plugins.error': 'Plugin error',

@@ -1,0 +1,136 @@
+/* ==========================================================================
+   The quick file switcher.
+
+   The switcher is a modal dialog like the command palette: a dimmed backdrop
+   over the application and a card in the upper third of the screen. The card
+   never grows past `70dvh`: the list of the notes is the part that scrolls.
+
+   The rules of the switcher live in their own file: they are the styles of a
+   single component and they do not belong to the shell.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- backdrop */
+
+.noto-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-palette);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: rgb(0 0 0 / 55%);
+}
+
+/* ------------------------------------------------------------------- card */
+
+.noto-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(620px, 100%);
+  max-height: 70dvh;
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ field */
+
+.noto-switcher-input {
+  width: 100%;
+  min-height: var(--control-lg);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.noto-switcher-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* ------------------------------------------------------------------- list */
+
+.noto-switcher-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+/* ------------------------------------------------------------------ group */
+
+.noto-switcher-group {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ----------------------------------------------------------------- option */
+
+/*
+ * The option is a grid: the name of the note is the first line, its path is
+ * the second one. The path is dimmed, because the name is what the user
+ * searches for.
+ */
+.noto-switcher-option {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas: 'name' 'path';
+  align-items: center;
+  row-gap: 2px;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.noto-switcher-option.is-active {
+  background: var(--accent-subtle);
+}
+
+.noto-switcher-option-name {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+
+.noto-switcher-option-path {
+  grid-area: path;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+/* ------------------------------------------------------ empty state, hint */
+
+.noto-switcher-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  font-size: var(--text-base);
+}
+
+.noto-switcher-hint {
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}

@@ -23,6 +23,8 @@ export const settings: Record<string, string> = {
   'settings.orderHint': 'Как сортируется дерево заметок',
   'settings.order.name': 'По имени',
   'settings.order.modified': 'По последнему изменению',
+  'settings.treeShowCounts': 'Показывать счётчики заметок',
+  'settings.treeShowCountsHint': 'Количество заметок в каждой папке дерева',
   'settings.language': 'Язык',
   'settings.languageHint': 'Язык интерфейса',
   'settings.shortcuts': 'Горячие клавиши',

@@ -2,10 +2,11 @@
 //
 // A quick note is a note the user starts without naming it and without
 // choosing a folder for it: one command creates it, and the user renames it
-// later.
+// later. The quick notes stand at the top of the tree, in a zone of their
+// own: a note is never shown twice.
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/preact';
-import { QuickNotesSection } from '../components/sections/QuickNotesSection';
+import { QuickNotesZone } from '../components/sections/QuickNotesZone';
 import {
   isQuickNoteName,
   quickNoteName,
@@ -79,29 +80,29 @@ describe('the quick notes', () => {
   });
 });
 
-describe('the section of the quick notes', () => {
-  const files = [file('Untitled.md'), file('Ideas.md')];
+describe('the zone of the quick notes', () => {
+  const notes = [file('Untitled.md')];
 
-  it('lists the quick notes of the vault', () => {
+  it('shows the name of the zone and the quick notes of the vault', () => {
     render(
-      <QuickNotesSection
-        files={files}
+      <QuickNotesZone
+        notes={notes}
+        currentPath=""
         onOpenNote={() => undefined}
-        onRename={() => undefined}
         onCreate={() => undefined}
       />,
     );
+    expect(screen.getByText('Quick notes')).toBeTruthy();
     expect(screen.getByText('Untitled.md')).toBeTruthy();
-    expect(screen.queryByText('Ideas.md')).toBeNull();
   });
 
   it('opens the quick note the user chooses', () => {
     const onOpenNote = vi.fn();
     render(
-      <QuickNotesSection
-        files={files}
+      <QuickNotesZone
+        notes={notes}
+        currentPath=""
         onOpenNote={onOpenNote}
-        onRename={() => undefined}
         onCreate={() => undefined}
       />,
     );
@@ -112,10 +113,10 @@ describe('the section of the quick notes', () => {
   it('asks for a new quick note', () => {
     const onCreate = vi.fn();
     render(
-      <QuickNotesSection
-        files={files}
+      <QuickNotesZone
+        notes={notes}
+        currentPath=""
         onOpenNote={() => undefined}
-        onRename={() => undefined}
         onCreate={onCreate}
       />,
     );
@@ -123,15 +124,46 @@ describe('the section of the quick notes', () => {
     expect(onCreate).toHaveBeenCalled();
   });
 
-  it('says that the user has no quick note yet', () => {
+  it('can be folded away', () => {
     render(
-      <QuickNotesSection
-        files={[]}
+      <QuickNotesZone
+        notes={notes}
+        currentPath=""
         onOpenNote={() => undefined}
-        onRename={() => undefined}
         onCreate={() => undefined}
       />,
     );
-    expect(screen.getByText('No quick note yet.')).toBeTruthy();
+    const toggle = screen.getByRole('button', { name: 'Hide the quick notes' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(toggle);
+    expect(screen.queryByText('Untitled.md')).toBeNull();
+    const folded = screen.getByRole('button', { name: 'Show the quick notes' });
+    expect(folded.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows the zone of the quick notes even when it is empty', () => {
+    render(
+      <QuickNotesZone
+        notes={[]}
+        currentPath=""
+        onOpenNote={() => undefined}
+        onCreate={() => undefined}
+      />,
+    );
+    expect(screen.getByText('Quick notes')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New quick note' })).toBeTruthy();
+    expect(screen.queryByRole('list')).toBeNull();
+  });
+
+  it('counts the quick notes of the zone', () => {
+    render(
+      <QuickNotesZone
+        notes={[file('Untitled.md'), file('Untitled 2.md')]}
+        currentPath=""
+        onOpenNote={() => undefined}
+        onCreate={() => undefined}
+      />,
+    );
+    expect(screen.getByText('2')).toBeTruthy();
   });
 });

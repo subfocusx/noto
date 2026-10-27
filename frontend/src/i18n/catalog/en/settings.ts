@@ -23,6 +23,8 @@ export const settings: Record<string, string> = {
   'settings.orderHint': 'How the tree of the notes is sorted',
   'settings.order.name': 'By name',
   'settings.order.modified': 'By last change',
+  'settings.treeShowCounts': 'Show the counters of the notes',
+  'settings.treeShowCountsHint': 'The number of the notes of every folder of the tree',
   'settings.language': 'Language',
   'settings.languageHint': 'The language of the interface',
   'settings.shortcuts': 'Keyboard shortcuts',

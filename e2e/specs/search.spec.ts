@@ -48,3 +48,22 @@ test.describe('search', () => {
     await expect(treeFile(page, note)).toBeVisible();
   });
 });
+
+  test('the window of the search does not jump when it opens', async ({ page }) => {
+    await gotoApp(page);
+
+    // The window is placed by the CSS, not by the measurement of itself:
+    // it must stand in the same place from the first frame.
+    await page.keyboard.press('Control+Shift+F');
+    const window = page.getByRole('dialog', { name: 'Search notes' });
+
+    const boxes: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const box = await window.boundingBox();
+      if (box) boxes.push(`${Math.round(box.x)},${Math.round(box.y)},${Math.round(box.width)}`);
+      await page.waitForTimeout(60);
+    }
+
+    expect(new Set(boxes).size).toBe(1);
+    await expect(window).toBeVisible();
+  });

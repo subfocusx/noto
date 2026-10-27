@@ -46,12 +46,20 @@ driven through one origin**: `http://127.0.0.1:8099`.
 `playwright.config.ts` therefore starts a single `webServer`:
 
 ```
-"E:\Code\Software\noto\.tools\goroot\go\bin\go.exe" run ./cmd/noto
+node ../e2e/scripts/build-frontend.mjs && "E:\Code\Software\noto\.tools\goroot\go\bin\go.exe" run ./cmd/noto
   cwd: backend
   NOTO_ADDR=127.0.0.1:8099
   NOTO_DATA_DIR=%TEMP%\noto-e2e\<run id>   (a fresh directory per run)
   NOTO_ALLOW_PUBLIC=false
 ```
+
+The build of the bundle is part of the command of the server, and not a step of the
+global setup: Playwright starts the servers **before** the global setup, and the Go
+server embeds `backend/internal/web/dist` at compile time. A build that happens later
+therefore leaves the running server with the *previous* bundle, and the suite reports
+failures that have nothing to do with the change under test. `e2e/scripts/build-frontend.mjs`
+guards the build with a lock in the temporary folder, because the two servers of the
+configuration may start at the same time.
 
 > Note: the Playwright version used here only honours the `command` property of
 > `webServer` (it is executed through a shell), so the arguments are part of the command

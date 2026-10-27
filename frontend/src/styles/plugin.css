@@ -123,65 +123,9 @@
   overflow: auto;
 }
 
-/* The panels of the plugins live at the bottom of the right column, under the
-   outline of the note. */
-.noto-plugin-panels {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  width: auto;
-  min-width: 0;
-  min-height: 0;
-  max-height: 45%;
-  border-left: 0;
-  border-top: 1px solid var(--border);
-  background: var(--bg-surface);
-  overflow: hidden;
-}
-
-.noto-plugin-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  flex: none;
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--divider);
-}
-
-.noto-plugin-tabs button {
-  min-height: var(--control-md);
-  padding: 0 var(--space-2);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: var(--text-base);
-  cursor: pointer;
-}
-
-.noto-plugin-tabs button:hover {
-  color: var(--fg);
-  background: var(--bg-hover);
-}
-
-.noto-plugin-tabs button.active {
-  background: var(--bg-elevated);
-  border-color: var(--border);
-  color: var(--fg);
-}
-
-.noto-plugin-tabs button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.noto-plugin-tabpanel {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
+/* The panels of the plugins live in the right column, next to the core of
+   the application: the strip of the tabs of the column chooses which one is
+   open (see `right-column.css`). */
 
 .noto-plugin-context-menu,
 .noto-plugin-commands {

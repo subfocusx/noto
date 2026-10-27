@@ -84,12 +84,12 @@ describe('the command palette', () => {
     view.unmount();
   });
 
-  it('opens with Ctrl+P as well', async () => {
+  it('opens the quick file switcher with Ctrl+P', async () => {
     const view = render(<App />);
 
     fireEvent.keyDown(window, { key: 'p', ctrlKey: true });
 
-    await waitFor(() => expect(view.getByRole('dialog', { name: 'Command palette' })).toBeTruthy());
+    await waitFor(() => expect(view.getByRole('dialog', { name: 'Quick file switcher' })).toBeTruthy());
 
     view.unmount();
   });

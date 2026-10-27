@@ -37,7 +37,7 @@ export const commands: Record<string, string> = {
   'command.focusMode.description': 'Скрывает дерево, панели и обвязку приложения',
 
   'shortcut.palette.label': 'Открыть палитру команд',
-  'shortcut.palette.secondary.label': 'Открыть палитру команд (альтернатива)',
+  'shortcut.fileSwitcher.label': 'Открыть быстрый переключатель файлов',
   'shortcut.search.label': 'Искать по заметкам',
   'shortcut.shortcutHelp.label': 'Показать горячие клавиши',
   'shortcut.settings.label': 'Открыть настройки',
@@ -54,5 +54,9 @@ export const commands: Record<string, string> = {
   'shortcut.toggleTheme.label': 'Сменить тему',
   'shortcut.editor.bold.label': 'Полужирный текст',
   'shortcut.editor.italic.label': 'Курсив',
-  'shortcut.editor.search.label': 'Искать в тексте заметки'
+  'shortcut.editor.search.label': 'Искать в тексте заметки',
+  'shortcut.tree.move.label': 'Перемещать фокус по дереву заметок',
+  'shortcut.tree.open.label': 'Открыть заметку, у которой фокус',
+  'shortcut.tree.rename.label': 'Переименовать заметку, у которой фокус',
+  'shortcut.tree.jump.label': 'Перейти к заметке по первым буквам имени'
 };

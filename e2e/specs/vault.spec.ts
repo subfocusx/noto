@@ -62,7 +62,7 @@ test.describe('the storage of the notes', () => {
     await openSidebarIfNeeded(page);
 
     // The button of the storage stays, but it cannot change anything.
-    const change = page.getByRole('button', { name: 'Change the storage of the notes' });
+    const change = page.getByRole('button', { name: /change the storage of the notes/i });
     await expect(change).toBeVisible();
     await expect(change).toHaveAttribute('aria-disabled', 'true');
 
@@ -91,7 +91,7 @@ test.describe('the change of the storage', () => {
     await expect(page.getByTestId('file-tree')).toBeVisible();
 
     await openSidebarIfNeeded(page);
-    const change = page.getByRole('button', { name: 'Change the storage of the notes' });
+    const change = page.getByRole('button', { name: /change the storage of the notes/i });
     await expect(change).toBeVisible();
     await change.click();
 

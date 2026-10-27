@@ -16,6 +16,7 @@ import './styles/notifications.css';
 import './styles/favorites.css';
 import './styles/markdown.css';
 import './styles/plugin.css';
+import './styles/right-column.css';
 import './styles/vault.css';
 import './styles/storages.css';
 import './styles/mobile-drawer.css';

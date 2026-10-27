@@ -3,9 +3,12 @@ import type { ComponentType } from 'preact';
 import { AppFooter } from './components/AppFooter';
 import type { AttachmentsPanelProps } from './components/AttachmentsPanel';
 import { CommandPalette } from './components/CommandPalette';
+import { FileSwitcher, type SwitcherFile } from './components/FileSwitcher';
 import { ColumnResizer } from './components/ColumnResizer';
 import { Dialog } from './components/Dialog';
+import { EmptyNoteState } from './components/EmptyNoteState';
 import { EditorTabs } from './components/EditorTabs';
+import { EditorModeButton } from './components/EditorModeButton';
 import { EditorToolbar } from './components/EditorToolbar';
 import { MarkdownEditor, type EditorHandle } from './components/Editor';
 import { NoteBreadcrumbs } from './components/NoteBreadcrumbs';
@@ -15,10 +18,10 @@ import type { PreviewProps } from './components/Preview';
 import { createWikiResolver } from './lib/wiki';
 import { useT } from './i18n/useT';
 import { OutlinePanel } from './components/OutlinePanel';
+import { RightColumn } from './components/RightColumn';
 import { NoteDialogs } from './components/NoteDialogs';
 import {
   PluginCommandSlot,
-  PluginPanelSlot,
   PluginSidebarSlot,
   PluginToolbarSlot,
 } from './components/PluginSlots';
@@ -58,7 +61,6 @@ import { localDateOf } from './core/store/actions';
 import { countUnread } from './core/notifications/types';
 import { extractHeadings } from './lib/outline';
 import { buildTree } from './lib/tree';
-import { Icon } from './ui/icons';
 import type { Node } from './types';
 import type { PluginEditor, PluginEventMap, PluginState } from './plugins/contract';
 import { PluginHost } from './plugins/host';
@@ -527,6 +529,9 @@ export function App() {
    */
   const [panelOverlayOpen, setPanelOverlayOpen] = useState(false);
 
+  /** True when the quick switcher of the files is open (Ctrl+P). */
+  const [fileSwitcherOpen, setFileSwitcherOpen] = useState(false);
+
   /**
    * True on a narrow screen, where the left and the right columns are
    * drawers over the editor instead of columns next to it.
@@ -741,9 +746,12 @@ export function App() {
         if (shortcut.group === 'Editor') return;
         switch (shortcut.id) {
           case 'palette':
-          case 'palette.secondary':
             event.preventDefault();
             actions.togglePalette();
+            return;
+          case 'fileSwitcher':
+            event.preventDefault();
+            setFileSwitcherOpen(true);
             return;
           case 'search':
             event.preventDefault();
@@ -836,7 +844,6 @@ export function App() {
   }, [needLazyPanels, lazyPanels]);
 
   const [lazyOverlays, setLazyOverlays] = useState<{
-    FindPanel: ComponentType<FindPanelProps>;
     AttachmentsPanel: ComponentType<AttachmentsPanelProps>;
     VaultPicker: ComponentType<VaultPickerProps>;
     VaultSetupDialog: ComponentType<VaultSetupDialogProps>;
@@ -849,7 +856,6 @@ export function App() {
     // overlays: they drag the crypto core with them, and an open storage must
     // not pay for it.
     const needed =
-      ui.findOpen ||
       dialog.kind === 'attachments' ||
       vaultPickerOpen ||
       vaultSetupOpen ||
@@ -860,7 +866,6 @@ export function App() {
     void import('./components/LazyOverlays').then((module) => {
       if (cancelled) return;
       setLazyOverlays({
-        FindPanel: module.FindPanel,
         AttachmentsPanel: module.AttachmentsPanel,
         VaultPicker: module.VaultPicker,
         VaultSetupDialog: module.VaultSetupDialog,
@@ -872,7 +877,6 @@ export function App() {
       cancelled = true;
     };
   }, [
-    ui.findOpen,
     dialog.kind,
     vaultPickerOpen,
     vaultSetupOpen,
@@ -880,6 +884,37 @@ export function App() {
     vaultSession.mode,
     lazyOverlays,
   ]);
+
+  /**
+   * The window of the search has a chunk of its own.
+   *
+   * The chunk of the overlays drags the crypto core of the encrypted storage
+   * with it: the search must not wait for it. The chunk is small, and it is
+   * read when the browser is idle, so the first click opens the window at
+   * once.
+   */
+  const [FindPanelComponent, setFindPanelComponent] = useState<
+    ComponentType<FindPanelProps> | null
+  >(null);
+
+  useEffect(() => {
+    if (!ui.findOpen || FindPanelComponent) return;
+    let cancelled = false;
+    void import('./components/FindPanel').then((module) => {
+      if (cancelled) return;
+      setFindPanelComponent(() => module.FindPanel);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ui.findOpen, FindPanelComponent]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import('./components/FindPanel');
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const [SettingsDialogComponent, setSettingsDialogComponent] = useState<
     ComponentType<SettingsDialogProps> | null
@@ -942,6 +977,21 @@ export function App() {
     if (!ui.query.trim()) return null;
     return new Set(ui.queryHits.map((hit) => hit.path));
   }, [ui.query, ui.queryHits]);
+
+  /**
+   * The paths of the notes that exist in the vault.
+   *
+   * The empty state offers the notes that were opened last, but a note that
+   * was deleted in the meantime must not be offered: the list is a way back
+   * into the vault, and the vault is the list of the paths that exist.
+   */
+  const knownPaths = useMemo(() => tree.files.map((file) => file.path), [tree.files]);
+
+  /** The notes of the vault: the list of the quick switcher of the files. */
+  const switcherFiles: SwitcherFile[] = useMemo(
+    () => tree.files.map((file) => ({ path: file.path, name: file.name })),
+    [tree.files],
+  );
 
   /** The headings of the open note: the outline of the right column. */
   const headings = useMemo(() => extractHeadings(note.content), [note.content]);
@@ -1271,12 +1321,6 @@ export function App() {
               // leave the note (and its name) on the screen.
               if (path === note.path && rest.length === 0) void actions.closeNote();
             }}
-            onToggleMode={{
-              label: viewMode === 'edit' ? t('app.editMode') : t('app.viewMode'),
-              title: viewMode === 'edit' ? t('app.switchToView') : t('app.switchToEdit'),
-              pressed: viewMode === 'edit',
-              onClick: () => actions.toggleMode(),
-            }}
           />
 
           <div class="breadcrumb-strip">
@@ -1289,6 +1333,19 @@ export function App() {
                 content={note.content}
                 onAddTag={addTag}
                 onRemoveTag={removeTag}
+                allTags={ui.tags}
+                onRequestTags={() => void actions.loadTags()}
+              />
+              {/*
+                The pencil stands in the far corner of the strip of the tags:
+                the strip is the last row of the header of the editor, and the
+                mode of the note belongs to the whole note, not to one tab.
+              */}
+              <EditorModeButton
+                label={viewMode === 'edit' ? t('app.editMode') : t('app.viewMode')}
+                title={viewMode === 'edit' ? t('app.switchToView') : t('app.switchToEdit')}
+                pressed={viewMode === 'edit'}
+                onClick={() => actions.toggleMode()}
               />
             </div>
           ) : null}
@@ -1335,11 +1392,13 @@ export function App() {
                   }}
                 />
                 {!note.path ? (
-                  <div class="empty-state" data-testid="empty-state">
-                    <Icon name="file-text" size={32} class="empty-state-icon" />
-                    <h2>{t('app.noNoteSelected')}</h2>
-                    <p>{t('app.noNoteSelectedHint')}</p>
-                  </div>
+                  <EmptyNoteState
+                    recentPaths={ui.recentPaths}
+                    knownPaths={knownPaths}
+                    onOpen={(path) => void openNote(path)}
+                    onCreate={() => actions.openDialog({ kind: 'create-file', parentPath: '', value: '' })}
+                    onDaily={() => void actions.openOrCreateDailyNote()}
+                  />
                 ) : null}
               </div>
             )}
@@ -1351,15 +1410,27 @@ export function App() {
           aria-label={t('app.outlineLabel')}
           style={{ '--panel-width': `${ui.rightPanelWidth}px` }}
         >
-          <OutlinePanel
-            headings={headings}
-            activeId={activeHeadingId}
-            onSelect={(id) => {
-              const heading = headings.find((item) => item.id === id);
-              if (heading?.line) editorRef.current?.scrollToLine(heading.line);
-            }}
+          {/*
+            The right column shows one panel at a time: the core of the
+            application (the outline of the note) and the panels of the
+            plugins are peers, chosen by the strip of the tabs.
+          */}
+          <RightColumn
+            outline={
+              <OutlinePanel
+                showTitle={false}
+                headings={headings}
+                activeId={activeHeadingId}
+                onSelect={(id) => {
+                  const heading = headings.find((item) => item.id === id);
+                  if (heading?.line) editorRef.current?.scrollToLine(heading.line);
+                }}
+              />
+            }
+            panels={pluginPanels}
+            activeId={ui.rightPanelTab}
+            onSelect={actions.setRightPanelTab}
           />
-          <PluginPanelSlot panels={pluginPanels} />
           {narrow ? null : (
             <ColumnResizer
               side="right"
@@ -1403,8 +1474,8 @@ export function App() {
         onClearFilter={actions.clearQuery}
       />
 
-      {lazyOverlays && ui.findOpen ? (
-        <lazyOverlays.FindPanel
+      {FindPanelComponent && ui.findOpen ? (
+        <FindPanelComponent
           open={ui.findOpen}
           mode={ui.findMode}
           onModeChange={actions.setFindMode}
@@ -1482,6 +1553,16 @@ export function App() {
         shortcuts={PALETTE_SHORTCUTS}
         onClose={() => actions.setPaletteOpen(false)}
         onError={(message) => actions.showBanner(message)}
+      />
+
+      <FileSwitcher
+        open={fileSwitcherOpen}
+        files={switcherFiles}
+        onOpen={(path) => {
+          setFileSwitcherOpen(false);
+          void actions.openNote(path);
+        }}
+        onClose={() => setFileSwitcherOpen(false)}
       />
 
       <NoteDialogs
@@ -1572,6 +1653,8 @@ export function App() {
         onTreeSort={(sort) => actions.setTreeSort(sort)}
         onEditorFontSize={(size) => actions.setEditorFontSize(size)}
         onEditorWrap={(wrap) => actions.setEditorWrap(wrap)}
+        showTreeCounts={ui.treeShowCounts}
+        onShowTreeCounts={(show) => actions.setTreeShowCounts(show)}
         onOpenPlugins={() => {
           actions.setSettingsOpen(false);
           setPluginsOpen(true);

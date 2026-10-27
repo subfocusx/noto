@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { useState } from 'preact/hooks';
 import { fireEvent, render, screen } from '@testing-library/preact';
 import { EditorView } from '@codemirror/view';
 import { MarkdownEditor, type EditorHandle } from '../components/Editor';
@@ -6,10 +7,10 @@ import { PluginManagerPanel, type PluginManagerEntry } from '../components/Plugi
 import {
   PluginCommandSlot,
   PluginContextMenuSlot,
-  PluginPanelSlot,
   PluginSidebarSlot,
   PluginToolbarSlot,
 } from '../components/PluginSlots';
+import { RightColumn, RIGHT_COLUMN_OUTLINE_ID } from '../components/RightColumn';
 import type { PluginManifest } from '../plugins/contract';
 
 /* --------------------------------------------------------------- fixtures */
@@ -227,16 +228,23 @@ describe('plugin slots', () => {
   });
 
   it('renders the panels of the plugins', () => {
-    render(
-      <PluginPanelSlot
-        panels={[
-          { id: 'p1', title: 'First', render: () => <p>first panel</p> },
-          { id: 'p2', title: 'Second', render: () => <p>second panel</p> },
-        ]}
-      />,
-    );
+    function Harness() {
+      const [active, setActive] = useState(RIGHT_COLUMN_OUTLINE_ID);
+      return (
+        <RightColumn
+          outline={<p>the outline of the note</p>}
+          activeId={active}
+          onSelect={setActive}
+          panels={[
+            { id: 'p1', title: 'First', render: () => <p>first panel</p> },
+            { id: 'p2', title: 'Second', render: () => <p>second panel</p> },
+          ]}
+        />
+      );
+    }
+    render(<Harness />);
 
-    expect(screen.getByText('first panel')).toBeTruthy();
+    expect(screen.getByText('the outline of the note')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Second' }));
     expect(screen.getByText('second panel')).toBeTruthy();
   });
@@ -244,7 +252,10 @@ describe('plugin slots', () => {
   it('keeps the page alive when a panel throws', () => {
     render(
       <div>
-        <PluginPanelSlot
+        <RightColumn
+          outline={<p>the outline of the note</p>}
+          activeId="bad"
+          onSelect={() => {}}
           panels={[
             {
               id: 'bad',

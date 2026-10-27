@@ -22,6 +22,13 @@ export interface DialogProps {
   footer?: ComponentChildren;
   /** An optional sentence shown at the top of the body. */
   description?: string;
+  /**
+   * The element that takes the focus when the dialog opens.
+   *
+   * Without it the focus goes to the first control of the dialog, which is
+   * the button that closes it.
+   */
+  initialFocus?: { current: HTMLElement | null };
 }
 
 /** The elements the focus can move to. */
@@ -60,7 +67,7 @@ export function Dialog(props: DialogProps) {
     // The focus goes to the first control of the dialog, or to the dialog
     // itself when it has none.
     const items = node ? focusableWithin(node) : [];
-    const target = items[0] ?? node;
+    const target = props.initialFocus?.current ?? items[0] ?? node;
     target?.focus();
 
     const onKey = (event: KeyboardEvent) => {

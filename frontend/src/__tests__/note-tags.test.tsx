@@ -1,7 +1,8 @@
 // Tests of the tags of the open note and of the dialog of a conflict.
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/preact';
-import { NoteTags, normalizeTag } from '../components/NoteTags';
+import { NoteTags } from '../components/NoteTags';
+import { normalizeTag } from '../lib/tags';
 import { NoteConflictDialog } from '../components/NoteConflictDialog';
 import type { NoteConflict } from '../core/store/types';
 
@@ -46,31 +47,31 @@ describe('the tags of the open note', () => {
     expect(view.getByLabelText('Remove the tag urgent')).toBeTruthy();
   });
 
-  it('keeps the field inside the row of the tags', () => {
+  it('opens the window of the tags instead of a field in the row', () => {
     const view = render(<NoteTags content="#work" onAddTag={() => {}} onRemoveTag={() => {}} />);
 
     const row = view.getByTestId('note-tags');
     expect(row.querySelector('.q9-note-tag-add')).toBeTruthy();
+    // The window is not in the row: the row is a header, not a form.
+    expect(row.querySelector('.tag-picker')).toBeNull();
 
     fireEvent.click(view.getByLabelText('Add a tag to the note'));
-    // The field takes the place of the button inside the same row: the row
-    // does not grow and does not shrink.
-    expect(row.querySelector('.q9-note-tag-input')).toBeTruthy();
-    expect(row.querySelector('.q9-note-tag-add')).toBeNull();
+    expect(view.getByRole('dialog')).toBeTruthy();
+    expect(view.getByLabelText('Name of the new tag')).toBeTruthy();
   });
 
-  it('opens the field with a placeholder and an accessible name', () => {
+  it('opens the window with a placeholder and an accessible name', () => {
     const view = render(<NoteTags content="" onAddTag={() => {}} onRemoveTag={() => {}} />);
 
     expect(view.queryByLabelText('Name of the new tag')).toBeNull();
     fireEvent.click(view.getByLabelText('Add a tag to the note'));
 
     const field = view.getByLabelText('Name of the new tag');
-    expect(field.getAttribute('placeholder')).toBe('Add a tag…');
-    expect(view.getByPlaceholderText('Add a tag…')).toBe(field);
+    expect(field.getAttribute('placeholder')).toBe('Write your own tag…');
+    expect(view.getByPlaceholderText('Write your own tag…')).toBe(field);
   });
 
-  it('adds a tag through the field', () => {
+  it('adds a tag through the field of the window', () => {
     const onAddTag = vi.fn();
     const view = render(<NoteTags content="#work" onAddTag={onAddTag} onRemoveTag={() => {}} />);
 
@@ -81,7 +82,7 @@ describe('the tags of the open note', () => {
     expect(onAddTag).toHaveBeenCalledWith('idea');
   });
 
-  it('normalises the tag and closes the field on the Enter key', () => {
+  it('normalises the tag and closes the window on the Enter key', () => {
     const onAddTag = vi.fn();
     const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
 
@@ -92,12 +93,12 @@ describe('the tags of the open note', () => {
 
     expect(onAddTag).toHaveBeenCalledTimes(1);
     expect(onAddTag).toHaveBeenCalledWith('idea');
-    // The field is closed: the button is back in the row.
-    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
+    // The window is closed: the button is back in the row.
+    expect(view.queryByRole('dialog')).toBeNull();
     expect(view.getByLabelText('Add a tag to the note')).toBeTruthy();
   });
 
-  it('closes the field on the Escape key without adding anything', () => {
+  it('closes the window on the Escape key without adding anything', () => {
     const onAddTag = vi.fn();
     const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
 
@@ -107,45 +108,67 @@ describe('the tags of the open note', () => {
     fireEvent.keyDown(field, { key: 'Escape' });
 
     expect(onAddTag).not.toHaveBeenCalled();
-    expect(view.queryByLabelText('Name of the new tag')).toBeNull();
+    expect(view.queryByRole('dialog')).toBeNull();
   });
 
-  it('confirms the tag when the field loses the focus', () => {
+  it('offers the tags of the vault and adds the one the user chooses', () => {
     const onAddTag = vi.fn();
-    const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
+    const view = render(
+      <NoteTags
+        content="#work"
+        onAddTag={onAddTag}
+        onRemoveTag={() => {}}
+        allTags={[
+          { tag: 'idea', count: 3 },
+          { tag: 'work', count: 1 },
+        ]}
+      />,
+    );
 
     fireEvent.click(view.getByLabelText('Add a tag to the note'));
-    const field = view.getByLabelText('Name of the new tag');
-    fireEvent.input(field, { target: { value: 'idea' } });
-    fireEvent.blur(field);
+    // The list of the vault is in the window.
+    expect(view.getByTestId('tag-picker-list')).toBeTruthy();
+    // The tag of the note is not offered again.
+    expect(view.queryByLabelText('Add the tag work')).toBeNull();
 
-    expect(onAddTag).toHaveBeenCalledTimes(1);
+    fireEvent.click(view.getByLabelText('Add the tag idea'));
     expect(onAddTag).toHaveBeenCalledWith('idea');
+    expect(view.queryByRole('dialog')).toBeNull();
   });
 
-  it('hides the button and the field in the read-only mode', () => {
+  it('says that the note already carries every tag of the vault', () => {
+    const view = render(
+      <NoteTags
+        content="#work"
+        onAddTag={() => {}}
+        onRemoveTag={() => {}}
+        allTags={[{ tag: 'work', count: 1 }]}
+      />,
+    );
+
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    expect(view.queryByTestId('tag-picker-list')).toBeNull();
+    expect(view.getByText('The note already carries every tag of the vault.')).toBeTruthy();
+  });
+
+  it('asks for the tags of the vault when the window opens', () => {
+    const onRequestTags = vi.fn();
+    const view = render(
+      <NoteTags content="" onAddTag={() => {}} onRemoveTag={() => {}} onRequestTags={onRequestTags} />,
+    );
+
+    expect(onRequestTags).not.toHaveBeenCalled();
+    fireEvent.click(view.getByLabelText('Add a tag to the note'));
+    expect(onRequestTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the button and the window in the read-only mode', () => {
     const view = render(
       <NoteTags content="#work" readOnly onAddTag={() => {}} onRemoveTag={() => {}} />,
     );
 
     expect(view.queryByLabelText('Add a tag to the note')).toBeNull();
     expect(view.queryByLabelText('Name of the new tag')).toBeNull();
-  });
-
-  it('adds the tag only once when the field is submitted twice', () => {
-    const onAddTag = vi.fn();
-    const view = render(<NoteTags content="" onAddTag={onAddTag} onRemoveTag={() => {}} />);
-
-    fireEvent.click(view.getByLabelText('Add a tag to the note'));
-    const field = view.getByLabelText('Name of the new tag');
-    fireEvent.input(field, { target: { value: 'idea' } });
-    fireEvent.keyDown(field, { key: 'Enter' });
-    // The field disappears and loses the focus: the second submission must not
-    // add the tag a second time.
-    fireEvent.blur(field);
-
-    expect(onAddTag).toHaveBeenCalledTimes(1);
-    expect(onAddTag).toHaveBeenCalledWith('idea');
   });
 
   it('does not add the same tag twice', () => {

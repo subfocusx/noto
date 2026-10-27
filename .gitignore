@@ -30,6 +30,9 @@ e2e/scratch/
 # --- Local toolchains ---
 .tools/
 
+# --- The results of the calls of the local tools ---
+.nanobot/
+
 # --- Local data (never commit notes or databases) ---
 noto-data/
 data/
